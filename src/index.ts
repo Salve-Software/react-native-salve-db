@@ -1,5 +1,5 @@
 // Public API
-export { Database, db } from './Database'
+export * from './database';
 
 // Schema types
 export type { IColumnDefinition } from './types/schema/column-definition'
