@@ -1,0 +1,81 @@
+name: Run React Native Harness iOS
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/harness-ios.yml'
+      - 'example/**'
+      - 'android/**'
+      - 'ios/**'
+      - 'cpp/**'
+      - 'src/**'
+      - 'nitrogen/**'
+      - '*.podspec'
+      - 'package.json'
+      - 'bun.lock'
+      - 'pnpm-lock.yaml'
+      - 'package-lock.json'
+      - 'yarn.lock'
+      - 'react-native.config.js'
+      - 'nitro.json'
+  pull_request:
+    paths:
+      - '.github/workflows/harness-ios.yml'
+      - 'example/**'
+      - 'android/**'
+      - 'ios/**'
+      - 'cpp/**'
+      - 'src/**'
+      - 'nitrogen/**'
+      - '*.podspec'
+      - 'package.json'
+      - 'bun.lock'
+      - 'pnpm-lock.yaml'
+      - 'package-lock.json'
+      - 'yarn.lock'
+      - 'react-native.config.js'
+      - 'nitro.json'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test iOS Harness
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+
+      - name: Install Pods
+        working-directory: example
+        run: npm run pod
+
+      - name: Build iOS app
+        working-directory: example/ios
+        run: |
+          set -o pipefail && xcodebuild             CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++             -derivedDataPath build -UseModernBuildSystem=YES             -workspace SalveDbExample.xcworkspace             -scheme SalveDbExample             -sdk iphonesimulator             -configuration Debug             build             CODE_SIGNING_ALLOWED=NO
+
+      - name: Run React Native Harness
+        uses: callstackincubator/react-native-harness@v1.0.0
+        with:
+          app: example/ios/build/Build/Products/Debug-iphonesimulator/SalveDbExample.app
+          runner: ios
+          projectRoot: example
+          packageManager: npm
