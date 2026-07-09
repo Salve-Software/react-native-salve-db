@@ -35,7 +35,7 @@ struct Value {
 
   bool               asBool()   const { return std::get<bool>(data); }
   double             asNumber() const { return std::get<double>(data); }
-  const std::string& asString() const { return std::get<const std::string>(data); }
+  const std::string& asString() const { return std::get<std::string>(data); }
   const Array&       asArray()  const { return std::get<Array>(data); }
   const Object&      asObject() const { return std::get<Object>(data); }
 
