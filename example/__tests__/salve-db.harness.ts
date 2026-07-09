@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'react-native-harness'
-import { salveDb } from 'react-native-salve-db'
+import { salveDatabase, salveQuery, salveSync } from 'react-native-salve-db'
 
 describe('SalveDb', () => {
-  it('calls the native implementation', () => {
-    expect(salveDb.sum(1, 2)).toBe(3)
+  it('exposes SalveDatabase HybridObject', () => {
+    expect(salveDatabase).toBeDefined()
+  })
+
+  it('exposes SalveQuery HybridObject', () => {
+    expect(salveQuery).toBeDefined()
+  })
+
+  it('exposes SalveSync HybridObject', () => {
+    expect(salveSync).toBeDefined()
   })
 })
