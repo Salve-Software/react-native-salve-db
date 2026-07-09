@@ -11,7 +11,11 @@ add_compile_options(-DRN_SERIALIZABLE_STATE=1)
 # Define C++ library and add all sources
 add_library(${PACKAGE_NAME} SHARED
 	src/main/cpp/cpp-adapter.cpp
+	src/main/cpp/platform_android.cpp
 	../cpp/database/HybridSalveDatabase.cpp
+	../cpp/database/SQLiteConnection.cpp
+	../cpp/database/DatabaseManager.cpp
+	../cpp/database/MigrationEngine.cpp
 	../cpp/query/HybridSalveQuery.cpp
 	../cpp/sync/HybridSalveSync.cpp
 )
@@ -29,10 +33,12 @@ include_directories(
 )
 
 find_library(LOG_LIB log)
+find_library(SQLITE_LIB sqlite3)
 
 # Link all libraries together
 target_link_libraries(
         ${PACKAGE_NAME}
         ${LOG_LIB}
-        android                                   # <-- Android core
+        android
+        ${SQLITE_LIB}
 )

@@ -16,11 +16,13 @@ Pod::Spec.new do |s|
   s.source_files = [
     # Implementation (Swift)
     "ios/**/*.{swift}",
-    # Autolinking/Registration (Objective-C++)
+    # Autolinking/Registration + platform init (Objective-C++)
     "ios/**/*.{m,mm}",
     # Implementation (C++ objects)
     "cpp/**/*.{hpp,cpp}",
   ]
+
+  s.libraries = "sqlite3"
 
   load 'nitrogen/generated/ios/SalveDb+autolinking.rb'
   add_nitrogen_files(s)

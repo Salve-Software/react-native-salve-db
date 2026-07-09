@@ -8,11 +8,21 @@ import com.margelo.nitro.salvedb.SalveDbOnLoad;
 
 
 public class SalveDbPackage : BaseReactPackage() {
-  override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? = null
+  private var documentsDirectorySet = false
+
+  override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? {
+    if (!documentsDirectorySet) {
+      documentsDirectorySet = true
+      nativeSetDocumentsDir(reactContext.filesDir.absolutePath)
+    }
+    return null
+  }
 
   override fun getReactModuleInfoProvider(): ReactModuleInfoProvider = ReactModuleInfoProvider { emptyMap() }
 
   companion object {
+    @JvmStatic external fun nativeSetDocumentsDir(path: String)
+
     init {
       SalveDbOnLoad.initializeNative();
     }
