@@ -9,10 +9,11 @@ set (CMAKE_CXX_STANDARD 20)
 add_compile_options(-DRN_SERIALIZABLE_STATE=1)
 
 # Define C++ library and add all sources
-add_library(${PACKAGE_NAME} SHARED 
+add_library(${PACKAGE_NAME} SHARED
 	src/main/cpp/cpp-adapter.cpp
-	../cpp/HybridSalveDb.cpp
-        
+	../cpp/HybridSalveDatabase.cpp
+	../cpp/HybridSalveQuery.cpp
+	../cpp/HybridSalveSync.cpp
 )
 
 # Add Nitrogen specs :)
