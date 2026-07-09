@@ -11,9 +11,9 @@ add_compile_options(-DRN_SERIALIZABLE_STATE=1)
 # Define C++ library and add all sources
 add_library(${PACKAGE_NAME} SHARED
 	src/main/cpp/cpp-adapter.cpp
-	../cpp/HybridSalveDatabase.cpp
-	../cpp/HybridSalveQuery.cpp
-	../cpp/HybridSalveSync.cpp
+	../cpp/database/HybridSalveDatabase.cpp
+	../cpp/query/HybridSalveQuery.cpp
+	../cpp/sync/HybridSalveSync.cpp
 )
 
 # Add Nitrogen specs :)
@@ -23,6 +23,9 @@ include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/SalveDb+autolinking.cm
 include_directories(
         "src/main/cpp"
         "../cpp"
+        "../cpp/database"
+        "../cpp/query"
+        "../cpp/sync"
 )
 
 find_library(LOG_LIB log)
