@@ -12,7 +12,26 @@
     ],
     "androidCxxLibName": "NitroSalveDb"
   },
-  "autolinking": {},
+  "autolinking": {
+    "DatabaseBridge": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridDatabaseBridge"
+      }
+    },
+    "QueryBridge": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridQueryBridge"
+      }
+    },
+    "SyncBridge": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridSyncBridge"
+      }
+    }
+  },
   "ignorePaths": [
     "**/node_modules"
   ]

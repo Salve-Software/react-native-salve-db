@@ -53,4 +53,23 @@ export type {
 // Operator values (declared functions — not types)
 export { eq, ne, gt, gte, lt, lte, like, inArray, isNull, isNotNull, and, or, not } from "./contracts/query/operators";
 
-// TODO: Export all HybridObjects here for the user
+// Native query contract (JSI boundary shape)
+export type { NativeCompiledQuery } from './contracts/query/native-compiled-query'
+
+// HybridObject specs
+export type { DatabaseBridge } from './specs/DatabaseBridge.nitro'
+export type { QueryBridge } from './specs/QueryBridge.nitro'
+export type { SyncBridge } from './specs/SyncBridge.nitro'
+
+// HybridObject runtime instances (JSI singletons — one global DB in MVP)
+import { NitroModules } from 'react-native-nitro-modules'
+import type { DatabaseBridge } from './specs/DatabaseBridge.nitro'
+import type { QueryBridge } from './specs/QueryBridge.nitro'
+import type { SyncBridge } from './specs/SyncBridge.nitro'
+
+export const databaseBridge =
+  NitroModules.createHybridObject<DatabaseBridge>('DatabaseBridge')
+export const queryBridge =
+  NitroModules.createHybridObject<QueryBridge>('QueryBridge')
+export const syncBridge =
+  NitroModules.createHybridObject<SyncBridge>('SyncBridge')
