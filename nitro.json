@@ -1,0 +1,19 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": [
+    "salvedb"
+  ],
+  "ios": {
+    "iosModuleName": "NitroSalveDb"
+  },
+  "android": {
+    "androidNamespace": [
+      "salvedb"
+    ],
+    "androidCxxLibName": "NitroSalveDb"
+  },
+  "autolinking": {},
+  "ignorePaths": [
+    "**/node_modules"
+  ]
+}
