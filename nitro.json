@@ -4,13 +4,13 @@
     "salvedb"
   ],
   "ios": {
-    "iosModuleName": "NitroSalveDb"
+    "iosModuleName": "SalveDb"
   },
   "android": {
     "androidNamespace": [
       "salvedb"
     ],
-    "androidCxxLibName": "NitroSalveDb"
+    "androidCxxLibName": "SalveDb"
   },
   "autolinking": {
     "SalveDatabase": {

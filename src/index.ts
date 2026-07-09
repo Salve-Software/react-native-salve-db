@@ -59,6 +59,9 @@ export type {
 // Operator values (declared functions — not types)
 export { eq, ne, gt, gte, lt, lte, like, inArray, isNull, isNotNull, and, or, not } from "./contracts/query/operators";
 
+// Native query contract (JSI boundary shape)
+export type { NativeCompiledQuery } from "./contracts/query/native-compiled-query";
+
 // Nitro marshaling types
 export type { SqlValue, QueryResult } from "./specs/types/sql-value";
 
