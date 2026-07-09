@@ -75,7 +75,7 @@ jobs:
       - name: Run React Native Harness
         uses: callstackincubator/react-native-harness@v1.2.0
         with:
-          app: example/ios/build/Build/Products/Debug-iphonesimulator/SalveDbExample.app
+          app: ios/build/Build/Products/Debug-iphonesimulator/SalveDbExample.app
           runner: ios
           projectRoot: example
           packageManager: npm
