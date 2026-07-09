@@ -73,7 +73,7 @@ jobs:
           set -o pipefail && xcodebuild             CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++             -derivedDataPath build -UseModernBuildSystem=YES             -workspace SalveDbExample.xcworkspace             -scheme SalveDbExample             -sdk iphonesimulator             -configuration Debug             build             CODE_SIGNING_ALLOWED=NO
 
       - name: Run React Native Harness
-        uses: callstackincubator/react-native-harness@v1.0.0
+        uses: callstackincubator/react-native-harness@v1.2.0
         with:
           app: example/ios/build/Build/Products/Debug-iphonesimulator/SalveDbExample.app
           runner: ios
