@@ -3,7 +3,6 @@
 <!-- One sentence. e.g. "Adds SQLite core with connection pool" -->
 
 **Task:** TASK-XXX — [name]
-**Area:** `TS` | `C++` | `Android` | `iOS` | `Tooling` | `Docs`
 
 ---
 
@@ -22,7 +21,6 @@
 
 <!-- What changes in the bridge? Any new or modified HybridObject? -->
 <!-- Did you run `npm run codegen`? -->
-<!-- Any MVP fixed decision that was respected or needed an exception? -->
 
 ---
 
@@ -31,5 +29,4 @@
 - [ ] `npm run codegen` passes without errors
 - [ ] TypeScript compiles without errors (`tsc --noEmit`)
 - [ ] iOS and Android harness passes (or not applicable)
-- [ ] No MVP fixed decision was broken without discussion
 - [ ] `nitrogen/generated/` is up to date in the commit (if applicable)
