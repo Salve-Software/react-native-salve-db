@@ -33,7 +33,9 @@ target_sources(
   # Autolinking Setup
   ../nitrogen/generated/android/SalveDbOnLoad.cpp
   # Shared Nitrogen C++ sources
-  ../nitrogen/generated/shared/c++/HybridSalveDbSpec.cpp
+  ../nitrogen/generated/shared/c++/HybridSalveDatabaseSpec.cpp
+  ../nitrogen/generated/shared/c++/HybridSalveQuerySpec.cpp
+  ../nitrogen/generated/shared/c++/HybridSalveSyncSpec.cpp
   # Android-specific Nitrogen C++ sources
   
 )

@@ -10,7 +10,9 @@
 
 #import <type_traits>
 
-#include "HybridSalveDb.hpp"
+#include "HybridSalveDatabase.hpp"
+#include "HybridSalveQuery.hpp"
+#include "HybridSalveSync.hpp"
 
 @interface SalveDbAutolinking : NSObject
 @end
@@ -22,12 +24,30 @@
   using namespace margelo::nitro::salvedb;
 
   HybridObjectRegistry::registerHybridObjectConstructor(
-    "SalveDb",
+    "SalveDatabase",
     []() -> std::shared_ptr<HybridObject> {
-      static_assert(std::is_default_constructible_v<HybridSalveDb>,
-                    "The HybridObject \"HybridSalveDb\" is not default-constructible! "
+      static_assert(std::is_default_constructible_v<HybridSalveDatabase>,
+                    "The HybridObject \"HybridSalveDatabase\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
-      return std::make_shared<HybridSalveDb>();
+      return std::make_shared<HybridSalveDatabase>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "SalveQuery",
+    []() -> std::shared_ptr<HybridObject> {
+      static_assert(std::is_default_constructible_v<HybridSalveQuery>,
+                    "The HybridObject \"HybridSalveQuery\" is not default-constructible! "
+                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
+      return std::make_shared<HybridSalveQuery>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "SalveSync",
+    []() -> std::shared_ptr<HybridObject> {
+      static_assert(std::is_default_constructible_v<HybridSalveSync>,
+                    "The HybridObject \"HybridSalveSync\" is not default-constructible! "
+                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
+      return std::make_shared<HybridSalveSync>();
     }
   );
 }

@@ -13,10 +13,22 @@
     "androidCxxLibName": "SalveDb"
   },
   "autolinking": {
-    "SalveDb": {
+    "SalveDatabase": {
       "all": {
         "language": "c++",
-        "implementationClassName": "HybridSalveDb"
+        "implementationClassName": "HybridSalveDatabase"
+      }
+    },
+    "SalveQuery": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridSalveQuery"
+      }
+    },
+    "SalveSync": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridSalveSync"
       }
     }
   },
