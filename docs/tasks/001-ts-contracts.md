@@ -1,6 +1,6 @@
 # TASK-001 — Contratos TypeScript
 
-**Status:** ⬜ Não iniciado
+**Status:** ✅ Finalizado
 **Prioridade:** P0 (bloqueante)
 **Área:** TS
 **Depende de:** Nenhuma — pode começar imediatamente
@@ -31,11 +31,11 @@ Onde `mvp-scope.md` já restringiu uma union pra 1 membro fixo no MVP (ex: `Sync
 
 ## Critérios de aceite
 
-- [ ] Todo type/interface listado acima existe em `.ts` real dentro de `src/`, organizado em arquivos por domínio (ex: `sync-contracts.ts`, `query-contracts.ts`, `schema-contracts.ts`) — não um único arquivo gigante, e sem virar barrel file (convenção de `.agents/skills/build-nitro-modules/references/spec-hybrid-object.md`).
-- [ ] `npm run typecheck` passa sem erro.
-- [ ] Nenhum `any` implícito ou explícito nos types públicos.
-- [ ] Os comentários `// MVP:` de `architecture.md` foram preservados como JSDoc nos arquivos `.ts` (documentação, não só no doc markdown).
-- [ ] `InferSelectModel`/`InferInsertModel` testados manualmente contra o `CustomerSchema` de exemplo de `docs/project.md` — o tipo inferido bate com o esperado (checar via `// @ts-expect-error` ou type-level test).
+- [x] Todo type/interface listado acima existe em `.ts` real dentro de `src/`, organizado em arquivos por domínio (ex: `sync-contracts.ts`, `query-contracts.ts`, `schema-contracts.ts`) — não um único arquivo gigante, e sem virar barrel file (convenção de `.agents/skills/build-nitro-modules/references/spec-hybrid-object.md`).
+- [x] `npm run typecheck` passa sem erro.
+- [x] Nenhum `any` implícito ou explícito nos types públicos.
+- [x] Os comentários `// MVP:` de `architecture.md` foram preservados como JSDoc nos arquivos `.ts` (documentação, não só no doc markdown).
+- [x] `InferSelectModel`/`InferInsertModel` testados manualmente contra o `CustomerSchema` de exemplo de `docs/project.md` — o tipo inferido bate com o esperado (checar via `// @ts-expect-error` ou type-level test).
 
 ## Fora de escopo
 
