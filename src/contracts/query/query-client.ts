@@ -50,7 +50,7 @@ export interface UpdateQueryBuilder<TSchema extends AnySchema> {
 }
 
 /** Builder de `delete`, obtido via `QueryClient.delete()`. */
-export interface DeleteQueryBuilder<TSchema extends AnySchema> {
+export interface DeleteQueryBuilder<_TSchema extends AnySchema> {
   where(condition: Condition): this;
   execute(): Promise<void>;
 }

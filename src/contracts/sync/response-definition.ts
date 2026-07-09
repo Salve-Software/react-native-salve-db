@@ -1,7 +1,7 @@
 import type { JsonPath } from "../json-path";
 
 /** Extração declarativa de campos da resposta HTTP de sync. */
-export interface ResponseDefinition<TEntity> {
+export interface ResponseDefinition<_TEntity> {
   cursor?: JsonPath;
 
   operations?: JsonPath;
