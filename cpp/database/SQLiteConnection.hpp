@@ -2,6 +2,8 @@
 
 #include "QueryResult.hpp"
 
+#include <NitroModules/Null.hpp>
+#include <NitroModules/ArrayBuffer.hpp>
 #include <sqlite3.h>
 #include <string>
 #include <vector>
