@@ -4,31 +4,19 @@
     "salvedb"
   ],
   "ios": {
-    "iosModuleName": "NitroSalveDb"
+    "iosModuleName": "SalveDb"
   },
   "android": {
     "androidNamespace": [
       "salvedb"
     ],
-    "androidCxxLibName": "NitroSalveDb"
+    "androidCxxLibName": "SalveDb"
   },
   "autolinking": {
-    "DatabaseBridge": {
+    "SalveDb": {
       "all": {
         "language": "c++",
-        "implementationClassName": "HybridDatabaseBridge"
-      }
-    },
-    "QueryBridge": {
-      "all": {
-        "language": "c++",
-        "implementationClassName": "HybridQueryBridge"
-      }
-    },
-    "SyncBridge": {
-      "all": {
-        "language": "c++",
-        "implementationClassName": "HybridSyncBridge"
+        "implementationClassName": "HybridSalveDb"
       }
     }
   },

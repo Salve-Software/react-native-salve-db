@@ -3,7 +3,7 @@ require "json"
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 
 Pod::Spec.new do |s|
-  s.name         = "NitroSalveDb"
+  s.name         = "SalveDb"
   s.version      = package["version"]
   s.summary      = package["description"]
   s.homepage     = package["homepage"]
@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.authors      = package["author"]
 
   s.platforms    = { :ios => min_ios_version_supported, :visionos => 1.0 }
-  s.source       = { :git => "https://github.com/mrousavy/nitro.git", :tag => "#{s.version}" }
+  s.source       = { :git => "https://github.com/eumaninho54/react-native-salve-db.git", :tag => "#{s.version}" }
 
   s.source_files = [
     # Implementation (Swift)
@@ -22,7 +22,7 @@ Pod::Spec.new do |s|
     "cpp/**/*.{hpp,cpp}",
   ]
 
-  load 'nitrogen/generated/ios/NitroSalveDb+autolinking.rb'
+  load 'nitrogen/generated/ios/SalveDb+autolinking.rb'
   add_nitrogen_files(s)
 
   s.dependency 'React-jsi'
