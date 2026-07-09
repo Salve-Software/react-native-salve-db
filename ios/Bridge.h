@@ -1,8 +1,8 @@
 //
 //  Bridge.h
-//  NitroSalveDb
+//  salve-db
 //
-//  Created by Marc Rousavy on 22.07.24.
+//  Created by salvesoftware on 7/9/2026
 //
 
 #pragma once
