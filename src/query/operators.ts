@@ -1,6 +1,6 @@
-import type { Condition } from '../types/query/condition'
-import type { SqlValue } from '../specs/types/sql-value'
-import type { ConditionNode } from './condition-node'
+import type { Condition } from '../types/query/condition';
+import type { SqlValue } from '../specs/types/sql-value';
+import type { ConditionNode } from '../types/ConditionNode';
 
 // ConditionNode is secretly the runtime representation of the opaque Condition type.
 const node = (n: ConditionNode): Condition => n as unknown as Condition
