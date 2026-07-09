@@ -1,0 +1,22 @@
+CompileFlags:
+  Add:
+    - -std=c++20
+    # Project headers
+    - -I./cpp
+    - -I./nitrogen/generated/shared/c++
+    - -I./.clangd-headers
+    - -I./.clangd-headers/NitroModules
+    # Nitro Modules
+    - -I./node_modules/react-native-nitro-modules/cpp/core
+    - -I./node_modules/react-native-nitro-modules/cpp/jsi
+    - -I./node_modules/react-native-nitro-modules/cpp/utils
+    - -I./node_modules/react-native-nitro-modules/cpp/platform
+    - -I./node_modules/react-native-nitro-modules/cpp/prototype
+    - -I./node_modules/react-native-nitro-modules/cpp/threading
+    - -I./node_modules/react-native-nitro-modules/cpp/entrypoint
+    - -I./node_modules/react-native-nitro-modules/cpp/registry
+    - -I./node_modules/react-native-nitro-modules/cpp/templates
+    # JSI
+    - -I./node_modules/react-native/ReactCommon/jsi
+    # Defines
+    - -DANDROID

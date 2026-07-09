@@ -1,0 +1,7 @@
+-std=c++20
+-I./cpp
+-I./nitrogen/generated/shared/c++
+-I./.clangd-headers
+-I./.clangd-headers/NitroModules
+-Inode_modules/react-native/ReactCommon/jsi
+-Inode_modules/react-native/ReactCommon
