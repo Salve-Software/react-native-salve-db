@@ -1,13 +1,13 @@
 import type { HybridObject } from "react-native-nitro-modules";
-import type { SqlValue, QueryResult } from "./types/sql-value";
-import type { CompiledQuery } from "../contracts/query/compiled-query";
+import type { SqlValue, IQueryResult } from "./types/sql-value";
+import type { ICompiledQuery } from "../types/query/compiled-query";
 
 /**
  * JSI bridge for query execution and transactions. Calls the native Query
  * Executor.
  *
  * Marshaling decision: raw SQL + params cross as `string` +
- * {@linkcode SqlValue}`[]` (not an AST, not a full {@linkcode CompiledQuery})
+ * {@linkcode SqlValue}`[]` (not an AST, not a full {@linkcode ICompiledQuery})
  * because the real bottleneck is disk I/O, not string assembly in JS — see
  * `docs/query-layer.md`. This format also enables a native prepared
  * statement cache keyed by SQL text. `SqlValue`, not `unknown`, because it
@@ -27,7 +27,7 @@ export interface SalveQuery extends HybridObject<{ ios: "c++"; android: "c++" }>
    * @param sql SQL text, used as the native prepared statement cache key.
    * @param params One {@linkcode SqlValue} per positional placeholder in `sql`.
    */
-  execute(sql: string, params: SqlValue[]): Promise<QueryResult>;
+  execute(sql: string, params: SqlValue[]): Promise<IQueryResult>;
 
   /** Starts a native transaction (`BEGIN`). Subsequent {@linkcode execute} calls stay inside it until {@linkcode commit} or {@linkcode rollback}. */
   beginTransaction(): Promise<void>;

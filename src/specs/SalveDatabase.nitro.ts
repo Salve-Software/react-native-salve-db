@@ -1,14 +1,14 @@
 import type { HybridObject } from "react-native-nitro-modules";
-import type { DatabaseConfigDefinition } from "../contracts/sync/database-config-definition";
-import type { SchemaDefinition } from "../contracts/schema/schema-definition";
-import type { RequestExpression } from "../contracts/sync/request-expression";
+import type { IDatabaseConfigDefinition } from "../types/sync/database-config-definition";
+import type { ISchemaDefinition } from "../types/schema/schema-definition";
+import type { RequestExpression } from "../types/sync/request-expression";
 
 /**
  * JSI bridge for database lifecycle: global configuration and schema
  * registration. Triggers the native Migration Engine in {@linkcode registerSchema}.
  *
  * Both methods accept a JSON `string` payload, not a Nitro struct:
- * {@linkcode DatabaseConfigDefinition} and {@linkcode SchemaDefinition} use
+ * {@linkcode IDatabaseConfigDefinition} and {@linkcode ISchemaDefinition} use
  * generics, `keyof`, a dynamic-key `Record`, and recursive unions
  * ({@linkcode RequestExpression}) that Nitrogen can't generate as a native
  * struct. Both calls are cold-path (once per app / once per schema), so the
@@ -18,14 +18,14 @@ import type { RequestExpression } from "../contracts/sync/request-expression";
 export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++" }> {
   /**
    * Configures the global connection (baseUrl, credentials, network timeout).
-   * @param configJson `JSON.stringify` of a {@linkcode DatabaseConfigDefinition}.
+   * @param configJson `JSON.stringify` of a {@linkcode IDatabaseConfigDefinition}.
    */
   configure(configJson: string): void;
 
   /**
    * Registers a declarative schema, triggering the native Migration Engine
    * (version diff, automatic `ADD COLUMN`).
-   * @param schemaJson `JSON.stringify` of a {@linkcode SchemaDefinition}.
+   * @param schemaJson `JSON.stringify` of a {@linkcode ISchemaDefinition}.
    */
   registerSchema(schemaJson: string): Promise<void>;
 }

@@ -1,6 +1,6 @@
 import type { HybridObject } from "react-native-nitro-modules";
-import type { NativeSyncResult } from "../contracts/sync/native-sync-result";
-import type { SchemaDefinition } from "../contracts/schema/schema-definition";
+import type { INativeSyncResult } from "../types/sync/native-sync-result";
+import type { ISchemaDefinition } from "../types/schema/schema-definition";
 
 /**
  * JSI bridge for manual/on-open sync. Calls the native Sync Orchestrator,
@@ -10,7 +10,7 @@ import type { SchemaDefinition } from "../contracts/schema/schema-definition";
 export interface SalveSync extends HybridObject<{ ios: "c++"; android: "c++" }> {
   /**
    * Triggers a sync session for the given schema.
-   * @param schemaName Name of an already-registered {@linkcode SchemaDefinition} (see `SalveDatabase.registerSchema`).
+   * @param schemaName Name of an already-registered {@linkcode ISchemaDefinition} (see `SalveDatabase.registerSchema`).
    */
-  triggerSync(schemaName: string): Promise<NativeSyncResult>;
+  triggerSync(schemaName: string): Promise<INativeSyncResult>;
 }

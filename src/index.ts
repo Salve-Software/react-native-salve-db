@@ -3,73 +3,38 @@ import type { SalveDatabase } from "./specs/SalveDatabase.nitro";
 import type { SalveQuery } from "./specs/SalveQuery.nitro";
 import type { SalveSync } from "./specs/SalveSync.nitro";
 
-// Shared
-export type { JsonPath } from "./contracts/json-path";
+// Schema
+export type { IColumnDefinition } from "./types/schema/column-definition";
+export type { IIndexDefinition } from "./types/schema/index-definition";
+export type { ISchemaDefinition } from "./types/schema/schema-definition";
 
-// Schema contracts
-export type { AnySchema } from "./contracts/schema/any-schema";
-export type { ColumnDefinition, ColumnTsType } from "./contracts/schema/column-definition";
-export type { IndexDefinition } from "./contracts/schema/index-definition";
-export type { SchemaDefinition } from "./contracts/schema/schema-definition";
+// Sync
+export type { IAuthenticationDefinition } from "./types/sync/authentication-definition";
+export type { ICredentialsDefinition } from "./types/sync/credentials-definition";
+export type { IDatabaseConfigDefinition } from "./types/sync/database-config-definition";
+export type { IEndpointDefinition } from "./types/sync/endpoint-definition";
+export type { IBackgroundDefinition } from "./types/sync/background-definition";
+export type { IPaginationDefinition } from "./types/sync/pagination-definition";
+export type { IRequestDefinition } from "./types/sync/request-definition";
+export type { IResponseDefinition } from "./types/sync/response-definition";
+export type { ISyncDefinition } from "./types/sync/sync-definition";
+export type { IRetryDefinition } from "./types/sync/retry-definition";
+export type { ICompressionDefinition } from "./types/sync/compression-definition";
+export type { IEncryptionDefinition } from "./types/sync/encryption-definition";
 
-// Sync primitives
-export type { HttpMethod } from "./contracts/sync/http-method";
-export type { SyncDirection } from "./contracts/sync/sync-direction";
-export type { SyncStrategy } from "./contracts/sync/sync-strategy";
-export type { ConflictStrategy } from "./contracts/sync/conflict-strategy";
-export type { AuthStrategy } from "./contracts/sync/auth-strategy";
-export type { Transport } from "./contracts/sync/transport";
-export type { AuthProvider } from "./contracts/sync/auth-provider";
-
-// Sync definitions
-export type { AuthenticationDefinition } from "./contracts/sync/authentication-definition";
-export type { CredentialsDefinition } from "./contracts/sync/credentials-definition";
-export type { DatabaseConfigDefinition } from "./contracts/sync/database-config-definition";
-export type { EndpointDefinition } from "./contracts/sync/endpoint-definition";
-export type { BackgroundDefinition } from "./contracts/sync/background-definition";
-export type { PaginationDefinition } from "./contracts/sync/pagination-definition";
+// Query
+export type { Condition } from "./types/query/condition";
+export type { InferSelectModel, InferInsertModel } from "./types/query/infer-model";
 export type {
-  RequestExpression,
-  VariableExpression,
-  ConstantExpression,
-  ObjectExpression,
-  ArrayExpression,
-} from "./contracts/sync/request-expression";
-export type { RequestDefinition } from "./contracts/sync/request-definition";
-export type { ResponseDefinition } from "./contracts/sync/response-definition";
-export type { SyncDefinition } from "./contracts/sync/sync-definition";
-export type { SyncOperation } from "./contracts/sync/sync-operation";
-export type { NativeSyncResult } from "./contracts/sync/native-sync-result";
-export type { RetryDefinition } from "./contracts/sync/retry-definition";
-export type { CompressionDefinition } from "./contracts/sync/compression-definition";
-export type { EncryptionDefinition } from "./contracts/sync/encryption-definition";
-
-// Query / ORM contracts
-export type { CompiledQuery } from "./contracts/query/compiled-query";
-export type { Condition } from "./contracts/query/condition";
-export type { InferSelectModel, InferInsertModel } from "./contracts/query/infer-model";
-export type {
-  QueryClient,
-  SelectQueryBuilder,
-  InsertQueryBuilder,
-  UpdateQueryBuilder,
-  DeleteQueryBuilder,
-} from "./contracts/query/query-client";
-
-// Operator values (declared functions — not types)
-export { eq, ne, gt, gte, lt, lte, like, inArray, isNull, isNotNull, and, or, not } from "./contracts/query/operators";
-
-// Native query contract (JSI boundary shape)
-export type { NativeCompiledQuery } from "./contracts/query/native-compiled-query";
-
-// Nitro marshaling types
-export type { SqlValue, QueryResult } from "./specs/types/sql-value";
+  IQueryClient,
+  ISelectQueryBuilder,
+  IInsertQueryBuilder,
+  IUpdateQueryBuilder,
+  IDeleteQueryBuilder,
+} from "./types/query/query-client";
+export { eq, ne, gt, gte, lt, lte, like, inArray, isNull, isNotNull, and, or, not } from "./types/query/operators";
 
 // HybridObjects
 export const salveDatabase = NitroModules.createHybridObject<SalveDatabase>("SalveDatabase");
 export const salveQuery = NitroModules.createHybridObject<SalveQuery>("SalveQuery");
 export const salveSync = NitroModules.createHybridObject<SalveSync>("SalveSync");
-
-export type { SalveDatabase } from "./specs/SalveDatabase.nitro";
-export type { SalveQuery } from "./specs/SalveQuery.nitro";
-export type { SalveSync } from "./specs/SalveSync.nitro";
