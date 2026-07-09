@@ -105,9 +105,15 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
       std::ostringstream alter;
       alter << "ALTER TABLE \"" << schema.name << "\" ADD COLUMN \""
             << colName << "\" " << sqliteType(col.type);
-      // New columns must be nullable or have a DEFAULT in SQLite
+      // New NOT NULL columns require a DEFAULT in SQLite; pick a type-safe literal
       if (!col.nullable && !col.hasDef) {
-        alter << " DEFAULT ''";
+        const std::string& t = col.type;
+        if (t == "integer" || t == "boolean" || t == "datetime" || t == "real")
+          alter << " DEFAULT 0";
+        else if (t == "blob")
+          alter << " DEFAULT (X'')";
+        else
+          alter << " DEFAULT ''";
       }
       _conn->exec(alter.str());
     }
