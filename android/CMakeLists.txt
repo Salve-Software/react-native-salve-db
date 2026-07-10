@@ -18,6 +18,9 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/MigrationEngine.cpp
 	../cpp/query/HybridSalveQuery.cpp
 	../cpp/sync/HybridSalveSync.cpp
+	# Vendored: the NDK ships no linkable libsqlite3, unlike iOS which links
+	# Apple's system library. Compile the amalgamation directly instead.
+	../cpp/third_party/sqlite3/sqlite3.c
 )
 
 # Add Nitrogen specs :)
@@ -30,15 +33,14 @@ include_directories(
         "../cpp/database"
         "../cpp/query"
         "../cpp/sync"
+        "../cpp/third_party/sqlite3"
 )
 
 find_library(LOG_LIB log)
-find_library(SQLITE_LIB sqlite3)
 
 # Link all libraries together
 target_link_libraries(
         ${PACKAGE_NAME}
         ${LOG_LIB}
         android
-        ${SQLITE_LIB}
 )
