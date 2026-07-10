@@ -1,28 +1,19 @@
-import type { JsonPath } from "../../../../types/json-path";
-import type { AuthProvider } from "../../../../types/sync/auth-provider";
+import type { JsonPath } from "../../../../types";
 
-/** Single global app credential (see {@link IDatabaseConfigDefinition}). */
-export interface ICredentialsDefinition {
-  provider: AuthProvider;
-
-  /** Where the access token travels in sync requests. */
-  accessToken: {
-    /** @default "Authorization" */
+interface OAuth2CredentialsDefinition {
+  provider: 'oauth2';
+  /** Where the access token travels in sync requests. @default "Authorization" */
+  accessToken?: {
     headerName?: string;
   };
-
-  /**
-   * Refresh contract. Triggered by the Native Sync Engine when a sync request
-   * receives 401 — JavaScript never participates.
-   */
+  /** Triggered by the native engine on 401 — JS never participates. */
   refresh: {
     endpoint: string;
-    request: {
-      refreshToken: { $ref: "refreshToken" };
-    };
     response: {
       accessToken: JsonPath;
       refreshToken: JsonPath;
     };
   };
 }
+
+export type ICredentialsDefinition = OAuth2CredentialsDefinition;
