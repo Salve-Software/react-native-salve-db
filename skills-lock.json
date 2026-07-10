@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "react-native-harness": {
+      "source": "callstackincubator/react-native-harness",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-harness/SKILL.md",
+      "computedHash": "37c4b9c6c0be73fed40d3e527df8d84bacd20f1f175717ae2921b649fd64d104"
+    }
+  }
+}
