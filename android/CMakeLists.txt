@@ -16,8 +16,8 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
 	../cpp/database/MigrationEngine.cpp
-	../cpp/query/HybridSalveQuery.cpp
-	../cpp/sync/HybridSalveSync.cpp
+	../cpp/query/QueryExecutor.cpp
+	../cpp/sync/SyncOrchestrator.cpp
 	# Vendored: the NDK ships no linkable libsqlite3, unlike iOS which links
 	# Apple's system library. Compile the amalgamation directly instead.
 	../cpp/third_party/sqlite3/sqlite3.c
