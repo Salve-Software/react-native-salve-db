@@ -1,1 +1,2 @@
-export * from './InsertQueryBuilder.class'
+export type * from './types';
+export * from './InsertQueryBuilder.class';

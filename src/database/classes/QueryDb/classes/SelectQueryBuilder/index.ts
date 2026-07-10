@@ -1,1 +1,2 @@
-export * from './SelectQueryBuilder.class'
+export type * from './types';
+export * from './SelectQueryBuilder.class';

@@ -1,1 +1,2 @@
-export * from './QueryDb.class'
+export type * from './types';
+export * from './QueryDb.class';

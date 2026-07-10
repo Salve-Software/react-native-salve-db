@@ -1,10 +1,10 @@
-import type { AnySchema } from '../../../../../types/schema/any-schema';
-import type { Condition } from '../../../../../types/query/condition';
-import type { IDeleteQueryBuilder } from '../../../../../types/query/query-client';
-import type { SalveQuery } from '../../../../../specs/SalveQuery.nitro';
-import type { SqlValue } from '../../../../../specs/types/sql-value';
+import type { Condition } from '../../../../../types/query/Condition';
+import type { ConditionNode } from '../../../../../types/query/ConditionNode';
+import type { SalveDatabase } from '../../../../../specs/SalveDatabase.nitro';
+import type { SqlValue } from '../../../../../specs/types';
+import type { AnySchema } from '../../../../../types';
+import type { IDeleteQueryBuilder } from '../../types';
 import { compileCondition } from '../../library';
-import { _unwrap } from '../../../../../query/operators';
 
 export class DeleteQueryBuilder<TSchema extends AnySchema>
   implements IDeleteQueryBuilder<TSchema>
@@ -13,7 +13,7 @@ export class DeleteQueryBuilder<TSchema extends AnySchema>
 
   constructor(
     private readonly _schema: TSchema,
-    private readonly _bridge: SalveQuery,
+    private readonly _bridge: SalveDatabase,
   ) {}
 
   where(condition: Condition): this {
@@ -26,7 +26,7 @@ export class DeleteQueryBuilder<TSchema extends AnySchema>
     let sql = `DELETE FROM "${this._schema.name}"`;
     
     if (this._condition) {;
-      sql += ` WHERE ${compileCondition(_unwrap(this._condition), params)}`;
+      sql += ` WHERE ${compileCondition(this._condition as unknown as ConditionNode, params)}`;
     };
     
     await this._bridge.execute(sql, params);

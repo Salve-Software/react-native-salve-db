@@ -1,11 +1,11 @@
-import type { AnySchema } from '../../../../../types/schema/any-schema';
-import type { Condition } from '../../../../../types/query/condition';
-import type { InferInsertModel } from '../../../../../types/query/infer-model';
-import type { IUpdateQueryBuilder } from '../../../../../types/query/query-client';
-import type { SalveQuery } from '../../../../../specs/SalveQuery.nitro';
-import type { SqlValue } from '../../../../../specs/types/sql-value';
+import type { Condition } from '../../../../../types/query/Condition';
+import type { ConditionNode } from '../../../../../types/query/ConditionNode';
+import type { SalveDatabase } from '../../../../../specs/SalveDatabase.nitro';
+import type { SqlValue } from '../../../../../specs/types';
+import type { IUpdateQueryBuilder } from '../../types';
+import type { AnySchema } from '../../../../../types';
+import type { InferInsertModel } from '../InsertQueryBuilder';
 import { compileCondition } from '../../library';
-import { _unwrap } from '../../../../../query/operators';
 
 export class UpdateQueryBuilder<TSchema extends AnySchema>
   implements IUpdateQueryBuilder<TSchema>
@@ -15,7 +15,7 @@ export class UpdateQueryBuilder<TSchema extends AnySchema>
 
   constructor(
     private readonly _schema: TSchema,
-    private readonly _bridge: SalveQuery,
+    private readonly _bridge: SalveDatabase,
   ) {}
 
   set(patch: Partial<InferInsertModel<TSchema>>): this {
@@ -44,7 +44,7 @@ export class UpdateQueryBuilder<TSchema extends AnySchema>
 
     let sql = `UPDATE "${this._schema.name}" SET ${setClause}`;
     if (this._condition) {
-      sql += ` WHERE ${compileCondition(_unwrap(this._condition), params)}`;
+      sql += ` WHERE ${compileCondition(this._condition as unknown as ConditionNode, params)}`;
     }
 
     await this._bridge.execute(sql, params);

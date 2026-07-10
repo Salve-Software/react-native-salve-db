@@ -1,8 +1,8 @@
-import type { AnySchema } from '../../../../../types/schema/any-schema';
-import type { InferInsertModel } from '../../../../../types/query/infer-model';
-import type { IInsertQueryBuilder } from '../../../../../types/query/query-client';
-import type { SalveQuery } from '../../../../../specs/SalveQuery.nitro';
-import type { SqlValue } from '../../../../../specs/types/sql-value';
+import type { SalveDatabase } from '../../../../../specs/SalveDatabase.nitro';
+import type { SqlValue } from '../../../../../specs/types';
+import type { AnySchema } from '../../../../../types';
+import type { IInsertQueryBuilder } from '../../types';
+import type { InferInsertModel } from './types';
 
 export class InsertQueryBuilder<TSchema extends AnySchema>
   implements IInsertQueryBuilder<TSchema>
@@ -11,7 +11,7 @@ export class InsertQueryBuilder<TSchema extends AnySchema>
 
   constructor(
     private readonly _schema: TSchema,
-    private readonly _bridge: SalveQuery,
+    private readonly _bridge: SalveDatabase,
   ) {}
 
   values(row: InferInsertModel<TSchema>): this {
