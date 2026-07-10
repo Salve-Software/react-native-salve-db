@@ -27,6 +27,7 @@
     "lib",
     "nitrogen",
     "cpp",
+    "!cpp/tests",
     "nitro.json",
     "android/build.gradle",
     "android/fix-prefab.gradle",

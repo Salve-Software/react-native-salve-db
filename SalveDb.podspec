@@ -23,6 +23,7 @@ Pod::Spec.new do |s|
     # Vendored SQLite amalgamation (same source used on Android)
     "cpp/third_party/sqlite3/*.{c,h}",
   ]
+  s.exclude_files = "cpp/tests/**/*"
 
   load 'nitrogen/generated/ios/SalveDb+autolinking.rb'
   add_nitrogen_files(s)
