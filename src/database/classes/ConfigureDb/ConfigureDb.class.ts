@@ -9,7 +9,7 @@ function mapCredentials(creds: ICredentialsDefinition): IConfigureParams['creden
   switch (creds.provider) {
     case 'oauth2':
       return {
-        provider: 'oauth2',
+        provider: creds.provider,
         accessTokenHeaderName: creds.accessToken?.headerName ?? 'Authorization',
         refresh: {
           endpoint: creds.refresh.endpoint,
