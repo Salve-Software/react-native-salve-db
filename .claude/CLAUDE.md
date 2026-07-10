@@ -1,5 +1,7 @@
 # Salve DB
 
+@rules/native-tests.md
+
 SQLite offline-first library for React Native. The core differentiator is that the **sync engine runs 100% natively** (Swift/Kotlin + C++) — no JS initialization required in background.
 
 ## Architecture
