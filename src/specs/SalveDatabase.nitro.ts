@@ -1,6 +1,5 @@
 import type { HybridObject } from "react-native-nitro-modules";
-import type { IConfigureParams } from "./types/IConfigureParams";
-import type { SqlValue, IQueryResult } from "./types";
+import type { IConfigureParams, SqlValue, IQueryResult } from "./types";
 import type { INativeSyncResult } from "../types/sync/INativeSyncResult";
 
 export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++" }> {

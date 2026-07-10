@@ -14,7 +14,7 @@ interface RefreshParams {
 
 interface CredentialsParams {
   /** Auth provider. Determines how the native engine authenticates sync requests. */
-  provider: 'oauth2';
+  provider: string;
   /** Header used to send the access token in sync requests (e.g. `"Authorization"`). */
   accessTokenHeaderName: string;
   /** Token refresh contract. Executed natively on 401 — JS never participates. */
