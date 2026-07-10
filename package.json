@@ -57,7 +57,7 @@
     "@jamesacarr/eslint-formatter-github-actions": "^0.2.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
-    "@types/jest": "^29.5.14",
+    "@types/jest": "^30.0.0",
     "@types/react": "19.2.0",
     "conventional-changelog-conventionalcommits": "^10.2.1",
     "jest": "^30.4.2",
