@@ -2258,7 +2258,7 @@ SPEC CHECKSUMS:
   ReactCodegen: db8e2836b82f6f4c3ef1463cb6f6cd61a25b8cc8
   ReactCommon: 4d01bfb533b93a2103329dfefc74db6a9e272888
   ReactNativeDependencies: fa0a54b3f5319ae0e3b9aff32bfee7a424b88e66
-  SalveDb: 957b51d4f87bc39d87e2bc8b6313068675cb2593
+  SalveDb: 7107a13a0a43dc842a7848bcdf2aa451e9faded4
   Yoga: fe50ab299e578f397fef753cf309c6703a4db29b
 
 PODFILE CHECKSUM: e1823b20150f420cb2568adef65d05a5d5c7241b

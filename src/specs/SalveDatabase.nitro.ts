@@ -1,12 +1,11 @@
 import type { HybridObject } from "react-native-nitro-modules";
-import type { IConfigureParams } from "./types/IConfigureParams";
-import type { SqlValue, IQueryResult } from "./types";
-import type { INativeSyncResult } from "../types/sync/INativeSyncResult";
+import type { ConfigureParams, SqlValue, QueryResult } from "./types";
+import type { NativeSyncResult } from "../types/sync/NativeSyncResult";
 
 export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++" }> {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
-  configure(params: IConfigureParams): void;
+  configure(params: ConfigureParams): void;
 
   /**
    * Registers a declarative schema, triggering the native Migration Engine
@@ -22,7 +21,7 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
    * @param sql SQL text, used as the native prepared statement cache key.
    * @param params One SqlValue per positional placeholder in sql.
    */
-  execute(sql: string, params: SqlValue[]): Promise<IQueryResult>;
+  execute(sql: string, params: SqlValue[]): Promise<QueryResult>;
 
   /** Starts a native transaction (BEGIN). */
   beginTransaction(): Promise<void>;
@@ -39,5 +38,5 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
    * Triggers a sync session for the given schema (foreground / on-open).
    * @param schemaName Name of an already-registered schema.
    */
-  triggerSync(schemaName: string): Promise<INativeSyncResult>;
+  triggerSync(schemaName: string): Promise<NativeSyncResult>;
 }

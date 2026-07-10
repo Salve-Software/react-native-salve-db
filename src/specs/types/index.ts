@@ -1,3 +1,3 @@
-export type * from './IConfigureParams';
-export type * from './IQueryResult';
+export type * from './ConfigureParams';
+export type * from './QueryResult';
 export type * from './SqlValue';

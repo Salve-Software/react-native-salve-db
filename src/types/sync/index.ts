@@ -4,7 +4,7 @@ export type * from './IBackgroundDefinition';
 export type * from './ConflictStrategy';
 export type * from './IEndpointDefinition';
 export type * from './HttpMethod';
-export type * from './INativeSyncResult';
+export type * from './NativeSyncResult';
 export type * from './IPaginationDefinition';
 export type * from './IRequestDefinition';
 export type * from './RequestExpression';

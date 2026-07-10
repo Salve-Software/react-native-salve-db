@@ -13,10 +13,22 @@
 #error NitroModules cannot be found! Are you sure you installed NitroModules properly?
 #endif
 
+// Forward declaration of `ConfigureParams` to properly resolve imports.
+namespace margelo::nitro::salvedb { struct ConfigureParams; }
+// Forward declaration of `QueryResult` to properly resolve imports.
+namespace margelo::nitro::salvedb { struct QueryResult; }
+// Forward declaration of `NativeSyncResult` to properly resolve imports.
+namespace margelo::nitro::salvedb { struct NativeSyncResult; }
 
-
-#include <string>
+#include "ConfigureParams.hpp"
 #include <NitroModules/Promise.hpp>
+#include <string>
+#include "QueryResult.hpp"
+#include <NitroModules/Null.hpp>
+#include <NitroModules/ArrayBuffer.hpp>
+#include <variant>
+#include <vector>
+#include "NativeSyncResult.hpp"
 
 namespace margelo::nitro::salvedb {
 
@@ -49,8 +61,13 @@ namespace margelo::nitro::salvedb {
 
     public:
       // Methods
-      virtual void configure(const std::string& configJson) = 0;
+      virtual void configure(const ConfigureParams& params) = 0;
       virtual std::shared_ptr<Promise<void>> registerSchema(const std::string& schemaJson) = 0;
+      virtual std::shared_ptr<Promise<QueryResult>> execute(const std::string& sql, const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) = 0;
+      virtual std::shared_ptr<Promise<void>> beginTransaction() = 0;
+      virtual std::shared_ptr<Promise<void>> commit() = 0;
+      virtual std::shared_ptr<Promise<void>> rollback() = 0;
+      virtual std::shared_ptr<Promise<NativeSyncResult>> triggerSync(const std::string& schemaName) = 0;
 
     protected:
       // Hybrid Setup

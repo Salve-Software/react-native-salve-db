@@ -7,8 +7,8 @@ Quebra do MVP (ver [`../mvp-scope.md`](../mvp-scope.md)) em tarefas independente
 | # | Tarefa | Status | Prioridade | Área | Depende de | Skills |
 |---|---|---|---|---|---|---|
 | [001](./001-ts-contracts.md) | Contratos TypeScript | ✅ | P0 | TS | — | `api-design` |
-| [002](./002-nitro-hybrid-spec.md) | Nitro HybridObject Spec | ⬜ | P0 | TS | 001 | `build-nitro-modules`, `api-design` |
-| [003](./003-test-harness-bootstrap.md) | Bootstrap de test harness | ⬜ | P1 | Tooling | — | — |
+| [002](./002-nitro-hybrid-spec.md) | Nitro HybridObject Spec | ✅ | P0 | TS | 001 | `build-nitro-modules`, `api-design` |
+| [003](./003-test-harness-bootstrap.md) | Bootstrap de test harness | ✅ | P1 | Tooling | — | — |
 | [004](./004-sqlite-core.md) | SQLite Core & Connection Management | ⬜ | P0 | C++ (core) | 002 | `cpp` |
 | [005](./005-migration-engine.md) | Schema Registration & Migration Engine | ⬜ | P0 | C++ (core) | 004 | `cpp` |
 | [006](./006-trigger-engine-sync-queue.md) | Trigger Engine & Sync Queue | ⬜ | P0 | C++ (core) | 005 | `cpp` |

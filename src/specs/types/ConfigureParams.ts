@@ -14,14 +14,14 @@ interface RefreshParams {
 
 interface CredentialsParams {
   /** Auth provider. Determines how the native engine authenticates sync requests. */
-  provider: 'oauth2';
+  provider: string;
   /** Header used to send the access token in sync requests (e.g. `"Authorization"`). */
   accessTokenHeaderName: string;
   /** Token refresh contract. Executed natively on 401 — JS never participates. */
   refresh: RefreshParams;
 }
 
-export interface IConfigureParams {
+export interface ConfigureParams {
   /** SQLite file name (without extension). The native layer places it in the platform documents directory. */
   name: string;
   /** Base URL of the sync server (e.g. `"https://api.myapp.com"`). Required when sync is used. */

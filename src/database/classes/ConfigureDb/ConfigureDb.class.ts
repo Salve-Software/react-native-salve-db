@@ -1,15 +1,15 @@
 import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { IConfigureProps, ICredentialsDefinition, IRegisterProps } from './types';
-import type { IConfigureParams } from '../../../specs/types/IConfigureParams';
+import type { ConfigureParams } from '../../../specs/types/ConfigureParams';
 import { NitroModules } from 'react-native-nitro-modules';
 
 const _bridge = NitroModules.createHybridObject<SalveDatabase>('SalveDatabase');
 
-function mapCredentials(creds: ICredentialsDefinition): IConfigureParams['credentials'] {
+function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credentials'] {
   switch (creds.provider) {
     case 'oauth2':
       return {
-        provider: 'oauth2',
+        provider: creds.provider,
         accessTokenHeaderName: creds.accessToken?.headerName ?? 'Authorization',
         refresh: {
           endpoint: creds.refresh.endpoint,

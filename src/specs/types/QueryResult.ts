@@ -7,7 +7,7 @@ import type { SqlValue } from "./SqlValue";
  * keys vary per query), so the result travels as columns + a value matrix
  * instead of one object per row.
  */
-export interface IQueryResult {
+export interface QueryResult {
   columns: string[];
   rows: SqlValue[][];
 }
