@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IQueryResult.hpp"
+#include "QueryResult.hpp"
 
 #include <NitroModules/Null.hpp>
 #include <NitroModules/ArrayBuffer.hpp>
@@ -25,7 +25,7 @@ public:
   SQLiteConnection(const SQLiteConnection&) = delete;
   SQLiteConnection& operator=(const SQLiteConnection&) = delete;
 
-  IQueryResult execute(const std::string& sql, const std::vector<SqlValue>& params);
+  QueryResult execute(const std::string& sql, const std::vector<SqlValue>& params);
 
   void beginTransaction();
   void commit();

@@ -5,7 +5,7 @@
 
 namespace margelo::nitro::salvedb {
 
-void HybridSalveDatabase::configure(const IConfigureParams& params) {
+void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.name.empty())
     throw std::runtime_error("Database.configure: 'name' is required");
   DatabaseManager::shared().open(params.name);
@@ -22,10 +22,10 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::st
   });
 }
 
-std::shared_ptr<Promise<IQueryResult>> HybridSalveDatabase::execute(
+std::shared_ptr<Promise<QueryResult>> HybridSalveDatabase::execute(
     const std::string& sql,
     const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) {
-  return Promise<IQueryResult>::async([sql, params]() {
+  return Promise<QueryResult>::async([sql, params]() {
     return DatabaseManager::shared().connection()->execute(sql, params);
   });
 }
@@ -48,7 +48,7 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::rollback() {
   });
 }
 
-std::shared_ptr<Promise<INativeSyncResult>> HybridSalveDatabase::triggerSync(const std::string& schemaName) {
+std::shared_ptr<Promise<NativeSyncResult>> HybridSalveDatabase::triggerSync(const std::string& schemaName) {
   throw std::runtime_error("HybridSalveDatabase::triggerSync not yet implemented (TASK-012)");
 }
 

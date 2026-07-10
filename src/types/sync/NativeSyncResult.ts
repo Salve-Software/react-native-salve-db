@@ -1,5 +1,5 @@
 /** Result of a sync run returned by the Native Sync Engine. */
-export interface INativeSyncResult {
+export interface NativeSyncResult {
   cursor?: string;
   operationsApplied: number;
   inserted: number;

@@ -1,7 +1,7 @@
 import { SelectQueryBuilder } from '../SelectQueryBuilder.class';
 import { eq, and, gt, isNull } from '../../../../../../utils';
 import type { SalveDatabase } from '../../../../../../specs/SalveDatabase.nitro';
-import type { IQueryResult } from '../../../../../../specs/types';
+import type { QueryResult } from '../../../../../../specs/types';
 import type { AnySchema } from '../../../../../../types';
 
 const schema: AnySchema = {
@@ -16,7 +16,7 @@ const schema: AnySchema = {
   },
 };
 
-function makeBridge(result: IQueryResult = { columns: [], rows: [] }) {
+function makeBridge(result: QueryResult = { columns: [], rows: [] }) {
   return { execute: jest.fn().mockResolvedValue(result) } as unknown as SalveDatabase;
 }
 

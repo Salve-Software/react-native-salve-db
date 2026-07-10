@@ -59,7 +59,7 @@ void SQLiteConnection::evictLRU() {
   _lru.erase(last);
 }
 
-IQueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<SqlValue>& params) {
+QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<SqlValue>& params) {
   sqlite3_stmt* stmt = getOrPrepare(sql);
   sqlite3_reset(stmt);
   sqlite3_clear_bindings(stmt);
@@ -137,7 +137,7 @@ IQueryResult SQLiteConnection::execute(const std::string& sql, const std::vector
     throw std::runtime_error(std::string("SQLite execute error: ") + sqlite3_errmsg(_db));
   }
 
-  return IQueryResult{std::move(columns), std::move(rows)};
+  return QueryResult{std::move(columns), std::move(rows)};
 }
 
 void SQLiteConnection::beginTransaction() {
