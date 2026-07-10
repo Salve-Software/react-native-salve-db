@@ -1,2 +1,2 @@
-/** HTTP method used by an {@link IEndpointDefinition}. */
+/** HTTP method */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";

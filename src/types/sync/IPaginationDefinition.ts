@@ -1,4 +1,4 @@
-/** Pagination config for an {@link ISyncDefinition}. */
+/** Pagination config */
 export interface IPaginationDefinition {
   /**
    * Items per page. Used both in the `$ref: "pageSize"` of the request (pull)

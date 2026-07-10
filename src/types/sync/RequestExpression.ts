@@ -1,7 +1,3 @@
-/**
- * Expression used to build the body of an {@link IRequestDefinition} declaratively,
- * without arbitrary JavaScript — interpreted by the Native Sync Engine.
- */
 export type RequestExpression =
   | IVariableExpression
   | IConstantExpression
@@ -11,9 +7,9 @@ export type RequestExpression =
 /** References a variable known to the Native Sync Engine. */
 export interface IVariableExpression {
   $ref:
-    | "cursor" // MVP
-    | "operations" // MVP
-    | "pageSize" // MVP — from IPaginationDefinition.pageSize
+    | "cursor"
+    | "operations"
+    | "pageSize"
     | "changes"
     | "deviceId"
     | "platform"
