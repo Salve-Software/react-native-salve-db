@@ -22,6 +22,11 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
 }
 
 SQLiteConnection::~SQLiteConnection() {
+  // Best-effort rollback of a dangling transaction; can't throw from a destructor.
+  if (_inTransaction && _db) {
+    sqlite3_exec(_db, "ROLLBACK", nullptr, nullptr, nullptr);
+  }
+
   for (auto& [key, stmt] : _cache) {
     sqlite3_finalize(stmt->second);
   }
@@ -45,6 +50,7 @@ sqlite3_stmt* SQLiteConnection::getOrPrepare(const std::string& sql) {
   if (rc != SQLITE_OK) {
     throw std::runtime_error(std::string("SQLite prepare error: ") + sqlite3_errmsg(_db) + " — SQL: " + sql);
   }
+  _prepareCount++;
 
   _lru.emplace_front(sql, stmt);
   _cache[sql] = _lru.begin();
@@ -141,15 +147,21 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
 }
 
 void SQLiteConnection::beginTransaction() {
+  if (_inTransaction) {
+    throw std::runtime_error("Nested transactions are not supported — commit() or rollback() first.");
+  }
   exec("BEGIN");
+  _inTransaction = true;
 }
 
 void SQLiteConnection::commit() {
   exec("COMMIT");
+  _inTransaction = false;
 }
 
 void SQLiteConnection::rollback() {
   exec("ROLLBACK");
+  _inTransaction = false;
 }
 
 void SQLiteConnection::exec(const std::string& sql) {
