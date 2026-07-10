@@ -16,8 +16,6 @@
 #include <NitroModules/HybridObjectRegistry.hpp>
 
 #include "HybridSalveDatabase.hpp"
-#include "HybridSalveQuery.hpp"
-#include "HybridSalveSync.hpp"
 
 namespace margelo::nitro::salvedb {
 
@@ -44,24 +42,6 @@ void registerAllNatives() {
                     "The HybridObject \"HybridSalveDatabase\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<HybridSalveDatabase>();
-    }
-  );
-  HybridObjectRegistry::registerHybridObjectConstructor(
-    "SalveQuery",
-    []() -> std::shared_ptr<HybridObject> {
-      static_assert(std::is_default_constructible_v<HybridSalveQuery>,
-                    "The HybridObject \"HybridSalveQuery\" is not default-constructible! "
-                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
-      return std::make_shared<HybridSalveQuery>();
-    }
-  );
-  HybridObjectRegistry::registerHybridObjectConstructor(
-    "SalveSync",
-    []() -> std::shared_ptr<HybridObject> {
-      static_assert(std::is_default_constructible_v<HybridSalveSync>,
-                    "The HybridObject \"HybridSalveSync\" is not default-constructible! "
-                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
-      return std::make_shared<HybridSalveSync>();
     }
   );
 }
