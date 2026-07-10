@@ -12,7 +12,6 @@ add_compile_options(-DRN_SERIALIZABLE_STATE=1)
 add_library(${PACKAGE_NAME} SHARED
 	src/main/cpp/cpp-adapter.cpp
 	src/main/cpp/platform_android.cpp
-	../cpp/sqlite/sqlite3.c
 	../cpp/database/HybridSalveDatabase.cpp
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
@@ -28,7 +27,6 @@ include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/SalveDb+autolinking.cm
 include_directories(
         "src/main/cpp"
         "../cpp"
-        "../cpp/sqlite"
         "../cpp/database"
         "../cpp/query"
         "../cpp/sync"
@@ -41,4 +39,5 @@ target_link_libraries(
         ${PACKAGE_NAME}
         ${LOG_LIB}
         android
+        sqlite3
 )
