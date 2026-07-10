@@ -5,6 +5,25 @@
 
 namespace margelo::nitro::salvedb {
 
+namespace {
+
+// ArrayBuffer::data()/size() may only be touched on the JS thread that created
+// them, so blob params must be copied here before crossing into Promise::async.
+std::vector<SqlValue> copyBlobParams(const std::vector<SqlValue>& params) {
+  std::vector<SqlValue> safe;
+  safe.reserve(params.size());
+  for (const auto& param : params) {
+    if (auto* blob = std::get_if<std::shared_ptr<ArrayBuffer>>(&param)) {
+      safe.emplace_back(ArrayBuffer::copy(*blob));
+    } else {
+      safe.push_back(param);
+    }
+  }
+  return safe;
+}
+
+} // namespace
+
 void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.name.empty())
     throw std::runtime_error("Database.configure: 'name' is required");
@@ -25,31 +44,38 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::st
 std::shared_ptr<Promise<QueryResult>> HybridSalveDatabase::execute(
     const std::string& sql,
     const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) {
-  return Promise<QueryResult>::async([sql, params]() {
-    return DatabaseManager::shared().connection()->execute(sql, params);
+  auto safeParams = copyBlobParams(params);
+  return Promise<QueryResult>::async([this, sql, safeParams]() {
+    return _queryExecutor.execute(sql, safeParams);
   });
 }
 
 std::shared_ptr<Promise<void>> HybridSalveDatabase::beginTransaction() {
-  return Promise<void>::async([]() {
-    DatabaseManager::shared().connection()->beginTransaction();
+  return Promise<void>::async([this]() {
+    _queryExecutor.beginTransaction();
   });
 }
 
 std::shared_ptr<Promise<void>> HybridSalveDatabase::commit() {
-  return Promise<void>::async([]() {
-    DatabaseManager::shared().connection()->commit();
+  return Promise<void>::async([this]() {
+    _queryExecutor.commit();
   });
 }
 
 std::shared_ptr<Promise<void>> HybridSalveDatabase::rollback() {
-  return Promise<void>::async([]() {
-    DatabaseManager::shared().connection()->rollback();
+  return Promise<void>::async([this]() {
+    _queryExecutor.rollback();
   });
 }
 
 std::shared_ptr<Promise<NativeSyncResult>> HybridSalveDatabase::triggerSync(const std::string& schemaName) {
-  throw std::runtime_error("HybridSalveDatabase::triggerSync not yet implemented (TASK-012)");
+  return Promise<NativeSyncResult>::async([this, schemaName]() {
+    return _syncOrchestrator.triggerSync(schemaName);
+  });
+}
+
+double HybridSalveDatabase::debugPreparedStatementCount() {
+  return static_cast<double>(DatabaseManager::shared().connection()->prepareCount());
 }
 
 } // namespace margelo::nitro::salvedb

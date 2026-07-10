@@ -17,6 +17,8 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
 	../cpp/database/MigrationEngine.cpp
+	../cpp/query/QueryExecutor.cpp
+	../cpp/sync/SyncOrchestrator.cpp
 )
 
 # Add Nitrogen specs :)
