@@ -9,6 +9,7 @@
   "source": "src/index",
   "scripts": {
     "test": "jest",
+    "test:native": "bash cpp/tests/run.sh",
     "typecheck": "tsc --noEmit",
     "clean": "git clean -dfX",
     "release": "semantic-release",
