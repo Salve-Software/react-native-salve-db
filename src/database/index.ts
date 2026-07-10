@@ -1,1 +1,4 @@
-export* from './Database.class';
+export type {
+  IQueryClient,
+} from './classes';
+export * from './Database.class';

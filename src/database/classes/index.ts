@@ -1,2 +1,2 @@
-export * from './ConfigureDb'
-export * from './QueryDb'
+export * from './ConfigureDb';
+export * from './QueryDb';

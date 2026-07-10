@@ -1,6 +1,5 @@
-import type { IConfigureProps, IRegisterProps } from './classes';
-import type { IQueryClient } from '../types/query/query-client';
-import type { AnySchema } from '../types/schema/any-schema';
+import type { AnySchema } from '../types';
+import type { IConfigureProps, IQueryClient, IRegisterProps } from './classes';
 import { ConfigureDb, QueryDb } from './classes';
 
 export class Database {
