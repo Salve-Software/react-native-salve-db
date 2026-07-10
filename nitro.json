@@ -18,18 +18,6 @@
         "language": "c++",
         "implementationClassName": "HybridSalveDatabase"
       }
-    },
-    "SalveQuery": {
-      "all": {
-        "language": "c++",
-        "implementationClassName": "HybridSalveQuery"
-      }
-    },
-    "SalveSync": {
-      "all": {
-        "language": "c++",
-        "implementationClassName": "HybridSalveSync"
-      }
     }
   },
   "ignorePaths": [
