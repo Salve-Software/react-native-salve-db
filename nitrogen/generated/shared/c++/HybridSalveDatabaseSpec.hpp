@@ -68,6 +68,7 @@ namespace margelo::nitro::salvedb {
       virtual std::shared_ptr<Promise<void>> commit() = 0;
       virtual std::shared_ptr<Promise<void>> rollback() = 0;
       virtual std::shared_ptr<Promise<NativeSyncResult>> triggerSync(const std::string& schemaName) = 0;
+      virtual double debugPreparedStatementCount() = 0;
 
     protected:
       // Hybrid Setup
