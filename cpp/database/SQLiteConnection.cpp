@@ -120,7 +120,7 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
         case SQLITE_BLOB: {
           const auto* data = static_cast<const uint8_t*>(sqlite3_column_blob(stmt, i));
           int sz = sqlite3_column_bytes(stmt, i);
-          row.emplace_back(ArrayBuffer::copyBuffer(data, static_cast<size_t>(sz)));
+          row.emplace_back(ArrayBuffer::copy(data, static_cast<size_t>(sz)));
           break;
         }
         default:
