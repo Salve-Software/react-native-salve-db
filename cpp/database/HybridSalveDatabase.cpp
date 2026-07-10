@@ -30,4 +30,36 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::st
   });
 }
 
+std::shared_ptr<Promise<IQueryResult>> HybridSalveDatabase::execute(
+    const std::string& sql,
+    const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) {
+  return Promise<IQueryResult>::async([this, sql, params]() {
+    return _queryExecutor.execute(sql, params);
+  });
+}
+
+std::shared_ptr<Promise<void>> HybridSalveDatabase::beginTransaction() {
+  return Promise<void>::async([this]() {
+    _queryExecutor.beginTransaction();
+  });
+}
+
+std::shared_ptr<Promise<void>> HybridSalveDatabase::commit() {
+  return Promise<void>::async([this]() {
+    _queryExecutor.commit();
+  });
+}
+
+std::shared_ptr<Promise<void>> HybridSalveDatabase::rollback() {
+  return Promise<void>::async([this]() {
+    _queryExecutor.rollback();
+  });
+}
+
+std::shared_ptr<Promise<INativeSyncResult>> HybridSalveDatabase::triggerSync(const std::string& schemaName) {
+  return Promise<INativeSyncResult>::async([this, schemaName]() {
+    return _syncOrchestrator.triggerSync(schemaName);
+  });
+}
+
 } // namespace margelo::nitro::salvedb
