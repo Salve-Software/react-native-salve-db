@@ -34,13 +34,20 @@ public:
   // Utility: execute SQL without returning results (DDL, PRAGMA)
   void exec(const std::string& sql);
 
+  // Number of times a SQL string actually went through sqlite3_prepare_v2
+  // (i.e. cache misses). Used to prove the LRU cache reuses prepared
+  // statements instead of re-preparing on every call with the same SQL text.
+  size_t prepareCount() const { return _prepareCount; }
+
 private:
   sqlite3* _db = nullptr;
+  bool _inTransaction = false;
 
-  // LRU prepared statement cache (max 50 entries)
-  static constexpr size_t kCacheCapacity = 50;
+  // LRU prepared statement cache (max 100 entries)
+  static constexpr size_t kCacheCapacity = 100;
   std::list<std::pair<std::string, sqlite3_stmt*>> _lru;
   std::unordered_map<std::string, decltype(_lru)::iterator> _cache;
+  size_t _prepareCount = 0;
 
   sqlite3_stmt* getOrPrepare(const std::string& sql);
   void evictLRU();

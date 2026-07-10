@@ -39,4 +39,9 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
    * @param schemaName Name of an already-registered schema.
    */
   triggerSync(schemaName: string): Promise<NativeSyncResult>;
+
+  // ── Debug ──────────────────────────────────────────────────────────────────
+
+  /** Test-only: number of sqlite3_prepare_v2 calls, i.e. LRU cache misses. */
+  debugPreparedStatementCount(): number;
 }

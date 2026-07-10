@@ -1,8 +1,8 @@
 #pragma once
 
 #include "HybridSalveDatabaseSpec.hpp"
-#include "QueryResult.hpp"
-#include "NativeSyncResult.hpp"
+#include "../query/QueryExecutor.hpp"
+#include "../sync/SyncOrchestrator.hpp"
 
 namespace margelo::nitro::salvedb {
 
@@ -18,6 +18,11 @@ public:
   std::shared_ptr<Promise<void>> commit() override;
   std::shared_ptr<Promise<void>> rollback() override;
   std::shared_ptr<Promise<NativeSyncResult>> triggerSync(const std::string& schemaName) override;
+  double debugPreparedStatementCount() override;
+
+private:
+  QueryExecutor _queryExecutor;
+  SyncOrchestrator _syncOrchestrator;
 };
 
 } // namespace margelo::nitro::salvedb
