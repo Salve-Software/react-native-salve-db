@@ -20,9 +20,9 @@ Pod::Spec.new do |s|
     "ios/**/*.{m,mm}",
     # Implementation (C++ objects)
     "cpp/**/*.{hpp,cpp}",
+    # Vendored SQLite amalgamation (same source used on Android)
+    "packages/sqlite3/*.{c,h}",
   ]
-
-  s.libraries = "sqlite3"
 
   load 'nitrogen/generated/ios/SalveDb+autolinking.rb'
   add_nitrogen_files(s)
