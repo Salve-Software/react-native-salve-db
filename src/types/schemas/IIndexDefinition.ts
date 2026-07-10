@@ -1,4 +1,3 @@
-/** Index definition inside an {@link ISchemaDefinition}. */
 export interface IIndexDefinition {
   /** Unique index name. */
   name: string;

@@ -1,4 +1,4 @@
-import type { ISchemaDefinition } from "./schema-definition";
+import type { ISchemaDefinition } from "./ISchemaDefinition";
 
 /**
  * Generic constraint that accepts any {@link ISchemaDefinition}.

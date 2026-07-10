@@ -1,6 +1,6 @@
-import type { IColumnDefinition } from "./column-definition";
-import type { IIndexDefinition } from "./index-definition";
-import type { ISyncDefinition } from "../sync/sync-definition";
+import type { ISyncDefinition } from "../sync";
+import type { IColumnDefinition } from "./IColumnDefinition";
+import type { IIndexDefinition } from "./IIndexDefinition";
 
 /** Declarative definition of a local schema (table). */
 export interface ISchemaDefinition<TEntity> {
