@@ -1,6 +1,6 @@
 import React from 'react';
 import {Text, View, StyleSheet } from 'react-native';
-import { SalveDb } from 'react-native-salve-db';
+import { SalveDb } from '@salve-software/react-native-salve-db';
 
 function App(): React.JSX.Element {
   return (

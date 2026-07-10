@@ -10,10 +10,15 @@ add_compile_options(-DRN_SERIALIZABLE_STATE=1)
 
 # Define C++ library and add all sources
 add_library(${PACKAGE_NAME} SHARED
+	../cpp/third_party/sqlite3/sqlite3.c
 	src/main/cpp/cpp-adapter.cpp
-	../cpp/HybridSalveDatabase.cpp
-	../cpp/HybridSalveQuery.cpp
-	../cpp/HybridSalveSync.cpp
+	src/main/cpp/platform_android.cpp
+	../cpp/database/HybridSalveDatabase.cpp
+	../cpp/database/SQLiteConnection.cpp
+	../cpp/database/DatabaseManager.cpp
+	../cpp/database/MigrationEngine.cpp
+	../cpp/query/HybridSalveQuery.cpp
+	../cpp/sync/HybridSalveSync.cpp
 )
 
 # Add Nitrogen specs :)
@@ -23,6 +28,10 @@ include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/SalveDb+autolinking.cm
 include_directories(
         "src/main/cpp"
         "../cpp"
+        "../cpp/database"
+        "../cpp/query"
+        "../cpp/sync"
+        "../cpp/third_party/sqlite3"
 )
 
 find_library(LOG_LIB log)
@@ -31,5 +40,5 @@ find_library(LOG_LIB log)
 target_link_libraries(
         ${PACKAGE_NAME}
         ${LOG_LIB}
-        android                                   # <-- Android core
+        android
 )

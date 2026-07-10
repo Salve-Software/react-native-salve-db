@@ -6,7 +6,7 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "react-native-salve-db": ["../src"]
+      "@salve-software/react-native-salve-db": ["../src"]
     }
   }
 }
