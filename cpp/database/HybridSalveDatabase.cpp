@@ -2,9 +2,28 @@
 #include "DatabaseManager.hpp"
 #include "MigrationEngine.hpp"
 #include "json_parser.hpp"
+#include <NitroModules/ArrayBuffer.hpp>
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
+
+namespace {
+
+// Blob params are JS-owned; copy them before crossing into the async worker thread.
+std::vector<SqlValue> copyBlobParams(const std::vector<SqlValue>& params) {
+  std::vector<SqlValue> copied;
+  copied.reserve(params.size());
+  for (const auto& param : params) {
+    if (const auto* buffer = std::get_if<std::shared_ptr<ArrayBuffer>>(&param)) {
+      copied.push_back(ArrayBuffer::copy(*buffer));
+    } else {
+      copied.push_back(param);
+    }
+  }
+  return copied;
+}
+
+} // namespace
 
 void HybridSalveDatabase::configure(const std::string& configJson) {
   auto root = json::parse(configJson);
@@ -33,8 +52,9 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::st
 std::shared_ptr<Promise<IQueryResult>> HybridSalveDatabase::execute(
     const std::string& sql,
     const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) {
-  return Promise<IQueryResult>::async([this, sql, params]() {
-    return _queryExecutor.execute(sql, params);
+  auto safeParams = copyBlobParams(params);
+  return Promise<IQueryResult>::async([this, sql, safeParams]() {
+    return _queryExecutor.execute(sql, safeParams);
   });
 }
 
