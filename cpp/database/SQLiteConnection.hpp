@@ -36,9 +36,10 @@ public:
 
 private:
   sqlite3* _db = nullptr;
+  bool _inTransaction = false;
 
-  // LRU prepared statement cache (max 50 entries)
-  static constexpr size_t kCacheCapacity = 50;
+  // LRU prepared statement cache (max 100 entries)
+  static constexpr size_t kCacheCapacity = 100;
   std::list<std::pair<std::string, sqlite3_stmt*>> _lru;
   std::unordered_map<std::string, decltype(_lru)::iterator> _cache;
 

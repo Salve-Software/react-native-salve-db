@@ -22,6 +22,12 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
 }
 
 SQLiteConnection::~SQLiteConnection() {
+  // Best-effort rollback of a dangling transaction (e.g. an exception thrown
+  // between beginTransaction() and commit()/rollback() from the JS side) —
+  // errors are swallowed since we're already tearing down the connection.
+  if (_inTransaction) {
+    sqlite3_exec(_db, "ROLLBACK", nullptr, nullptr, nullptr);
+  }
   for (auto& [key, stmt] : _cache) {
     sqlite3_finalize(stmt->second);
   }
@@ -141,15 +147,21 @@ IQueryResult SQLiteConnection::execute(const std::string& sql, const std::vector
 }
 
 void SQLiteConnection::beginTransaction() {
+  if (_inTransaction) {
+    throw std::runtime_error("SQLite: nested transactions are not supported — commit or rollback the current one first");
+  }
   exec("BEGIN");
+  _inTransaction = true;
 }
 
 void SQLiteConnection::commit() {
   exec("COMMIT");
+  _inTransaction = false;
 }
 
 void SQLiteConnection::rollback() {
   exec("ROLLBACK");
+  _inTransaction = false;
 }
 
 void SQLiteConnection::exec(const std::string& sql) {
