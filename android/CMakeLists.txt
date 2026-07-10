@@ -10,7 +10,7 @@ add_compile_options(-DRN_SERIALIZABLE_STATE=1)
 
 # Define C++ library and add all sources
 add_library(${PACKAGE_NAME} SHARED
-	../packages/sqlite3/sqlite3.c
+	../cpp/third_party/sqlite3/sqlite3.c
 	src/main/cpp/cpp-adapter.cpp
 	src/main/cpp/platform_android.cpp
 	../cpp/database/HybridSalveDatabase.cpp
@@ -31,7 +31,7 @@ include_directories(
         "../cpp/database"
         "../cpp/query"
         "../cpp/sync"
-        "../packages/sqlite3"
+        "../cpp/third_party/sqlite3"
 )
 
 find_library(LOG_LIB log)
