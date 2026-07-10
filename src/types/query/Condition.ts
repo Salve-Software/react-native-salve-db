@@ -1,5 +1,4 @@
-/**
- * `where` condition, built by the operator functions in {@link ./operators}.
- * Opaque to the consumer — must not be inspected or constructed manually.
- */
-export type Condition = unknown;
+declare const _brand: unique symbol;
+
+/** Opaque `where` condition. Only constructable via operator functions (`eq`, `and`, `or`, ...). */
+export type Condition = { readonly [_brand]: true };

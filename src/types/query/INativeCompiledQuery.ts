@@ -1,4 +1,4 @@
-import type { ICompiledQuery } from './compiled-query'
+import type { ICompiledQuery } from './ICompiledQuery'
 
 /**
  * Query shape used at the JSI boundary.

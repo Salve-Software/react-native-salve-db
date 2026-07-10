@@ -1,6 +1,6 @@
-import type { SqlValue } from "../specs/types/sql-value";
+import type { SqlValue } from "../../specs/types";
 
-// Internal AST node — not exported from the package public API.
+/** Internal AST node */
 export type ConditionNode =
   | { op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte'; column: string; value: SqlValue }
   | { op: 'like'; column: string; pattern: string }
