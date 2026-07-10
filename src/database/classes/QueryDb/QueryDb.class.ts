@@ -1,4 +1,4 @@
-import type { SalveQuery } from '../../../specs/SalveQuery.nitro';
+import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { AnySchema } from '../../../types/schema/any-schema';
 import type { IQueryClient } from '../../../types/query/query-client';
 import type { SqlValue } from '../../../specs/types/sql-value';
@@ -6,7 +6,7 @@ import { NitroModules } from 'react-native-nitro-modules';
 import { SelectQueryBuilder, InsertQueryBuilder, UpdateQueryBuilder, DeleteQueryBuilder } from './classes';
 import { ConfigureDb } from '../ConfigureDb';
 
-const _bridge = NitroModules.createHybridObject<SalveQuery>('SalveQuery');
+const _bridge = NitroModules.createHybridObject<SalveDatabase>('SalveDatabase');
 
 export class QueryDb {
   constructor() {}

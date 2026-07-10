@@ -2,7 +2,7 @@ import type { AnySchema } from '../../../../../types/schema/any-schema';
 import type { Condition } from '../../../../../types/query/condition';
 import type { InferInsertModel } from '../../../../../types/query/infer-model';
 import type { IUpdateQueryBuilder } from '../../../../../types/query/query-client';
-import type { SalveQuery } from '../../../../../specs/SalveQuery.nitro';
+import type { SalveDatabase } from '../../../../../specs/SalveDatabase.nitro';
 import type { SqlValue } from '../../../../../specs/types/sql-value';
 import { compileCondition } from '../../library';
 import { _unwrap } from '../../../../../query/operators';
@@ -15,7 +15,7 @@ export class UpdateQueryBuilder<TSchema extends AnySchema>
 
   constructor(
     private readonly _schema: TSchema,
-    private readonly _bridge: SalveQuery,
+    private readonly _bridge: SalveDatabase,
   ) {}
 
   set(patch: Partial<InferInsertModel<TSchema>>): this {
