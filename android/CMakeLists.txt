@@ -33,12 +33,11 @@ include_directories(
 )
 
 find_library(LOG_LIB log)
-find_library(SQLITE_LIB sqlite3)
 
 # Link all libraries together
 target_link_libraries(
         ${PACKAGE_NAME}
         ${LOG_LIB}
         android
-        ${SQLITE_LIB}
+        sqlite3
 )
