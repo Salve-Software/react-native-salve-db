@@ -224,9 +224,10 @@ void SQLiteConnection::execLocked(const std::string& sql) {
   char* errMsg = nullptr;
   int rc = sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &errMsg);
   if (rc != SQLITE_OK) {
+    int primaryCode = sqlite3_extended_errcode(_db) & 0xff;
     std::string err = errMsg ? errMsg : "unknown error";
     sqlite3_free(errMsg);
-    throw std::runtime_error("SQLite exec error: " + err + " — SQL: " + sql);
+    throw std::runtime_error(errorPrefix(primaryCode) + "SQLite exec error: " + err + " — SQL: " + sql);
   }
 }
 
