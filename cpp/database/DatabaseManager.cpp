@@ -1,10 +1,10 @@
 #include "DatabaseManager.hpp"
-#include "platform.hpp"
+#include "../platform/platform.hpp"
 
 namespace margelo::nitro::salvedb {
 
 void DatabaseManager::open(const std::string& dbName) {
-  std::string dir  = getPlatformDocumentsDirectory();
+  std::string dir  = platform::getDocumentsDirectory();
   std::string path = dir + "/" + dbName + ".db";
   _connection = std::make_shared<SQLiteConnection>(path);
 }

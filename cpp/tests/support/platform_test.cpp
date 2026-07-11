@@ -1,15 +1,15 @@
-#include "../../database/platform.hpp"
+#include "../../platform/platform.hpp"
 #include <cstdlib>
 #include <stdexcept>
 #include <unistd.h>
 
-namespace margelo::nitro::salvedb {
+namespace margelo::nitro::salvedb::platform {
 
-// Host test double for cpp/database/platform.hpp: returns a fresh temp
+// Host test double for cpp/platform/platform.hpp: returns a fresh temp
 // directory per process instead of the real iOS/Android documents dir.
-void setPlatformDocumentsDirectory(const std::string&) {}
+void setDocumentsDirectory(const std::string&) {}
 
-std::string getPlatformDocumentsDirectory() {
+std::string getDocumentsDirectory() {
   static std::string dir = []() {
     std::string tmpl = "/tmp/salvedb_tests.XXXXXX";
     char* result = mkdtemp(tmpl.data());
@@ -19,4 +19,4 @@ std::string getPlatformDocumentsDirectory() {
   return dir;
 }
 
-} // namespace margelo::nitro::salvedb
+} // namespace margelo::nitro::salvedb::platform

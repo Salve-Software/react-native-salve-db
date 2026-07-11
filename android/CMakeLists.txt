@@ -29,6 +29,7 @@ include_directories(
         "src/main/cpp"
         "../cpp"
         "../cpp/database"
+        "../cpp/platform"
         "../cpp/query"
         "../cpp/sync"
         "../cpp/third_party/sqlite3"

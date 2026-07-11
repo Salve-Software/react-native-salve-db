@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "../../database/MigrationEngine.hpp"
 #include "../../database/SQLiteConnection.hpp"
-#include "../../database/platform.hpp"
+#include "../../platform/platform.hpp"
 #include <memory>
 
 using namespace margelo::nitro::salvedb;
@@ -10,7 +10,7 @@ namespace {
 
 std::string uniqueDbPath(const std::string& testName) {
   static int counter = 0;
-  return getPlatformDocumentsDirectory() + "/" + testName + "_" + std::to_string(++counter) + ".db";
+  return platform::getDocumentsDirectory() + "/" + testName + "_" + std::to_string(++counter) + ".db";
 }
 
 int storedVersion(SQLiteConnection& conn, const std::string& name) {
