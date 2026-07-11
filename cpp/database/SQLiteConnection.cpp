@@ -1,4 +1,5 @@
 #include "SQLiteConnection.hpp"
+#include "SchemaRegistry.hpp"
 
 #include <NitroModules/ArrayBuffer.hpp>
 #include <stdexcept>
@@ -19,7 +20,19 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
   sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
   sqlite3_exec(_db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
   sqlite3_busy_timeout(_db, 5000);
+  sqlite3_extended_result_codes(_db, 1); // needed for errorPrefix() below
 }
+
+namespace {
+
+// Prefix is the only distinguishing signal that survives the JSI boundary (Nitro's
+// generated glue collapses thrown exceptions down to a plain message string).
+std::string errorPrefix(sqlite3* db) {
+  int primaryCode = sqlite3_extended_errcode(db) & 0xff;
+  return primaryCode == SQLITE_CONSTRAINT ? "SQLITE_CONSTRAINT: " : "SQLITE_ERROR: ";
+}
+
+} // namespace
 
 SQLiteConnection::~SQLiteConnection() {
   std::lock_guard<std::mutex> lock(_mutex);
@@ -50,7 +63,7 @@ sqlite3_stmt* SQLiteConnection::getOrPrepare(const std::string& sql) {
   sqlite3_stmt* stmt = nullptr;
   int rc = sqlite3_prepare_v2(_db, sql.c_str(), -1, &stmt, nullptr);
   if (rc != SQLITE_OK) {
-    throw std::runtime_error(std::string("SQLite prepare error: ") + sqlite3_errmsg(_db) + " — SQL: " + sql);
+    throw std::runtime_error(errorPrefix(_db) + "SQLite prepare error: " + sqlite3_errmsg(_db) + " — SQL: " + sql);
   }
   _prepareCount++;
 
@@ -116,9 +129,18 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
         case SQLITE_NULL:
           row.emplace_back(nitro::NullType{});
           break;
-        case SQLITE_INTEGER:
-          row.emplace_back(static_cast<double>(sqlite3_column_int64(stmt, i)));
+        case SQLITE_INTEGER: {
+          // SQLite stores `boolean` columns as plain INTEGER 0/1; ask the registry which columns those are.
+          const char* table  = sqlite3_column_table_name(stmt, i);
+          const char* origin = sqlite3_column_origin_name(stmt, i);
+          int64_t intVal = sqlite3_column_int64(stmt, i);
+          if (table && origin && SchemaRegistry::shared().isBoolean(table, origin)) {
+            row.emplace_back(intVal != 0);
+          } else {
+            row.emplace_back(static_cast<double>(intVal));
+          }
           break;
+        }
         case SQLITE_FLOAT:
           row.emplace_back(sqlite3_column_double(stmt, i));
           break;
@@ -134,7 +156,8 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
           break;
         }
         default:
-          row.emplace_back(nitro::NullType{});
+          // sqlite3_column_type only ever returns the 5 cases above per SQLite's docs.
+          throw std::runtime_error("Unexpected SQLite column type");
       }
     }
     rows.push_back(std::move(row));
@@ -144,7 +167,7 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
   sqlite3_clear_bindings(stmt);
 
   if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
-    throw std::runtime_error(std::string("SQLite execute error: ") + sqlite3_errmsg(_db));
+    throw std::runtime_error(errorPrefix(_db) + "SQLite execute error: " + sqlite3_errmsg(_db));
   }
 
   return QueryResult{std::move(columns), std::move(rows)};

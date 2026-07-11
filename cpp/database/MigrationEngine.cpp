@@ -1,8 +1,10 @@
 #include "MigrationEngine.hpp"
+#include "SchemaRegistry.hpp"
 
 #include <sstream>
 #include <algorithm>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace margelo::nitro::salvedb {
 
@@ -310,6 +312,12 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   }
 
   txn.commit();
+
+  std::unordered_set<std::string> booleanColumns;
+  for (auto& [colName, col] : schema.columns) {
+    if (col.type == "boolean") booleanColumns.insert(colName);
+  }
+  SchemaRegistry::shared().registerBooleanColumns(schema.name, std::move(booleanColumns));
 }
 
 // ── JSON parsing ──────────────────────────────────────────────────────────────
