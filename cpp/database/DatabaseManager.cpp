@@ -6,7 +6,7 @@ namespace margelo::nitro::salvedb {
 void DatabaseManager::open(const std::string& dbName) {
   std::string dir  = platform::getDocumentsDirectory();
   std::string path = dir + "/" + dbName + ".db";
-  _connection = std::make_shared<SQLiteConnection>(path);
+  _db = std::make_shared<SQLiteConnection>(path);
 }
 
 } // namespace margelo::nitro::salvedb
