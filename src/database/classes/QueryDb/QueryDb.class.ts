@@ -2,52 +2,49 @@ import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { SqlValue } from '../../../specs/types';
 import type { IQueryClient } from './types';
 import type { AnySchema } from '../../../types';
-import { NitroModules } from 'react-native-nitro-modules';
 import { SelectQueryBuilder, InsertQueryBuilder, UpdateQueryBuilder, DeleteQueryBuilder } from './classes';
 import { ConfigureDb } from '../ConfigureDb';
 
-const _bridge = NitroModules.createHybridObject<SalveDatabase>('SalveDatabase');
-
 export class QueryDb {
-  constructor() {}
+  constructor(private readonly _bridge: SalveDatabase) {}
 
   select<TSchema extends AnySchema>(schema: TSchema) {
     this._assertConfigured('select');
-    return new SelectQueryBuilder(schema, _bridge);
+    return new SelectQueryBuilder(schema, this._bridge);
   }
 
   insert<TSchema extends AnySchema>(schema: TSchema) {
     this._assertConfigured('insert');
-    return new InsertQueryBuilder(schema, _bridge);
+    return new InsertQueryBuilder(schema, this._bridge);
   }
 
   update<TSchema extends AnySchema>(schema: TSchema) {
     this._assertConfigured('update');
-    return new UpdateQueryBuilder(schema, _bridge);
+    return new UpdateQueryBuilder(schema, this._bridge);
   }
 
   delete<TSchema extends AnySchema>(schema: TSchema) {
     this._assertConfigured('delete');
-    return new DeleteQueryBuilder(schema, _bridge);
+    return new DeleteQueryBuilder(schema, this._bridge);
   }
 
   transaction<T>(fn: (tx: IQueryClient) => T): T {
     this._assertConfigured('transaction');
-    _bridge.beginTransaction();
+    this._bridge.beginTransaction();
 
     try {
       const result = fn(this._makeTxClient());
-      _bridge.commit();
+      this._bridge.commit();
       return result;
     } catch (err) {
-      _bridge.rollback();
+      this._bridge.rollback();
       throw err;
     }
   }
 
   execute(sql: string, params?: unknown[]): unknown[] {
     this._assertConfigured('execute');
-    const result = _bridge.execute(sql, (params ?? []) as SqlValue[]);
+    const result = this._bridge.execute(sql, (params ?? []) as SqlValue[]);
 
     return result.rows.map((row) => {
       const obj: Record<string, unknown> = {};
@@ -65,16 +62,16 @@ export class QueryDb {
   private _makeTxClient(): IQueryClient {
     return {
       select: <TSchema extends AnySchema>(schema: TSchema) =>
-        new SelectQueryBuilder(schema, _bridge),
+        new SelectQueryBuilder(schema, this._bridge),
 
       insert: <TSchema extends AnySchema>(schema: TSchema) =>
-        new InsertQueryBuilder(schema, _bridge),
+        new InsertQueryBuilder(schema, this._bridge),
 
       update: <TSchema extends AnySchema>(schema: TSchema) =>
-        new UpdateQueryBuilder(schema, _bridge),
+        new UpdateQueryBuilder(schema, this._bridge),
 
       delete: <TSchema extends AnySchema>(schema: TSchema) =>
-        new DeleteQueryBuilder(schema, _bridge),
+        new DeleteQueryBuilder(schema, this._bridge),
 
       transaction: <T>(fn: (tx: IQueryClient) => T) =>
         this.transaction(fn),

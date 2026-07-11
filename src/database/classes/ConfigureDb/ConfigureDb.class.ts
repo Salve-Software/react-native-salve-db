@@ -1,9 +1,6 @@
 import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { IConfigureProps, ICredentialsDefinition, IRegisterProps } from './types';
 import type { ConfigureParams } from '../../../specs/types/ConfigureParams';
-import { NitroModules } from 'react-native-nitro-modules';
-
-const _bridge = NitroModules.createHybridObject<SalveDatabase>('SalveDatabase');
 
 function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credentials'] {
   switch (creds.provider) {
@@ -23,14 +20,14 @@ function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credent
 export class ConfigureDb {
   private static _configured = false;
 
-  constructor() {}
+  constructor(private readonly _bridge: SalveDatabase) {}
 
   configure(props: IConfigureProps): void {
     if (!props.name || props.name.trim() === '') {
       throw new Error("Database.configure: 'name' is required");
     }
 
-    _bridge.configure({
+    this._bridge.configure({
       name: props.name,
       baseUrl: props.baseUrl,
       network: props.network,
@@ -59,7 +56,7 @@ export class ConfigureDb {
       );
     }
 
-    return _bridge.registerSchema(JSON.stringify(schema));
+    return this._bridge.registerSchema(JSON.stringify(schema));
   }
 
   static isConfigured(): boolean {

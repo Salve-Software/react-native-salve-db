@@ -1,10 +1,14 @@
+import type { SalveDatabase } from '../specs/SalveDatabase.nitro';
 import type { AnySchema } from '../types';
 import type { IConfigureProps, IQueryClient, IRegisterProps } from './classes';
+import { NitroModules } from 'react-native-nitro-modules';
 import { ConfigureDb, QueryDb } from './classes';
 
+const _bridge = NitroModules.createHybridObject<SalveDatabase>('SalveDatabase');
+
 export class Database {
-  private static readonly configureDb = new ConfigureDb()
-  private static readonly queryDb = new QueryDb()
+  private static readonly configureDb = new ConfigureDb(_bridge)
+  private static readonly queryDb = new QueryDb(_bridge)
 
   private constructor() {}
 
