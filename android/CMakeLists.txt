@@ -7,8 +7,6 @@ set (CMAKE_CXX_STANDARD 20)
 
 # Enable Raw Props parsing in react-native (for Nitro Views)
 add_compile_options(-DRN_SERIALIZABLE_STATE=1)
-# Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
-add_compile_definitions(SQLITE_ENABLE_COLUMN_METADATA=1)
 
 # Define C++ library and add all sources
 add_library(${PACKAGE_NAME} SHARED
@@ -24,6 +22,11 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/sync/SyncOrchestrator.cpp
 	../cpp/sync/SyncApplyGuard.cpp
 )
+
+# Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
+# target_compile_definitions (not add_compile_definitions, which needs CMake >= 3.12)
+# keeps this working under the cmake_minimum_required(3.9.0) declared above.
+target_compile_definitions(${PACKAGE_NAME} PRIVATE SQLITE_ENABLE_COLUMN_METADATA=1)
 
 # Add Nitrogen specs :)
 include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/SalveDb+autolinking.cmake)
