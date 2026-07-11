@@ -9,9 +9,13 @@
 .vscode/
 jsconfig.json
 
+# clangd (Zed/VSCode language server index)
+.cache/
+
 # Xcode
 #
 build/
+cpp/tests/compile_commands.json
 *.pbxuser
 !default.pbxuser
 *.mode1v3

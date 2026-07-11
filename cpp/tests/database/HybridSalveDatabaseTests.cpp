@@ -1,0 +1,145 @@
+#include <catch2/catch_test_macros.hpp>
+#include "../support/HybridDatabaseHarness.hpp"
+
+using margelo::nitro::salvedb::tests::HybridDatabaseHarness;
+
+namespace {
+
+// Every test needs its own unique db name — DatabaseManager is a process-wide
+// singleton, and each configure() call points it at a new file under the
+// same test-only temp directory (see platform_test.cpp).
+std::string uniqueDbName(const std::string& testName) {
+  static int counter = 0;
+  return testName + "_" + std::to_string(++counter);
+}
+
+std::string configureExpr(const std::string& name) {
+  return "db.configure({ name: '" + name + "' })";
+}
+
+} // namespace
+
+TEST_CASE("execute() runs a simple SELECT", "[query]") {
+  HybridDatabaseHarness harness;
+  auto db = "globalThis.NitroModulesProxy.createHybridObject('SalveDatabase')";
+  harness.run("(() => { globalThis.db = " + std::string(db) + "; return true; })()");
+  harness.run(configureExpr(uniqueDbName("select")));
+
+  auto result = harness.run("db.execute('SELECT 1 as one', [])");
+  REQUIRE(result == R"({"columns":["one"],"rows":[[1]]})");
+}
+
+TEST_CASE("execute() round-trips insert/select/update/delete across column types", "[query]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("roundtrip")));
+
+  harness.run(R"(
+    db.registerSchema(JSON.stringify({
+      name: 'items', version: 1, primaryKey: 'id',
+      columns: {
+        id: { type: 'integer' }, label: { type: 'text' }, price: { type: 'real' },
+        active: { type: 'boolean' }, createdAt: { type: 'datetime' }
+      }
+    }))
+  )");
+
+  harness.run(
+    "db.execute('INSERT INTO items (id, label, price, active, createdAt) VALUES (?, ?, ?, ?, ?)', "
+    "[1, 'widget', 9.99, true, 1700000000000])");
+
+  // MigrationEngine stores columns in a std::map, so CREATE TABLE emits them
+  // alphabetically regardless of the schema's declaration order.
+  auto selected = harness.run("db.execute('SELECT * FROM items WHERE id = 1', [])");
+  REQUIRE(selected == R"({"columns":["active","createdAt","id","label","price"],"rows":[[1,1700000000000,1,"widget",9.99]]})");
+
+  harness.run("db.execute('UPDATE items SET label = ? WHERE id = 1', ['widget-updated'])");
+  auto updated = harness.run("db.execute('SELECT label FROM items WHERE id = 1', [])");
+  REQUIRE(updated == R"({"columns":["label"],"rows":[["widget-updated"]]})");
+
+  harness.run("db.execute('DELETE FROM items WHERE id = 1', [])");
+  auto afterDelete = harness.run("db.execute('SELECT * FROM items WHERE id = 1', [])");
+  REQUIRE(afterDelete == R"({"columns":[],"rows":[]})");
+}
+
+TEST_CASE("transactions commit and roll back", "[transactions]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("tx")));
+  harness.run("db.execute('CREATE TABLE t (id INTEGER PRIMARY KEY)', [])");
+
+  SECTION("commit persists the write") {
+    harness.run(R"(
+      (async () => {
+        await db.beginTransaction();
+        await db.execute('INSERT INTO t (id) VALUES (1)', []);
+        await db.commit();
+        return true;
+      })()
+    )");
+    auto rows = harness.run("db.execute('SELECT * FROM t', [])");
+    REQUIRE(rows == R"({"columns":["id"],"rows":[[1]]})");
+  }
+
+  SECTION("rollback discards the write") {
+    harness.run(R"(
+      (async () => {
+        await db.beginTransaction();
+        await db.execute('INSERT INTO t (id) VALUES (1)', []);
+        await db.rollback();
+        return true;
+      })()
+    )");
+    // No rows read means `columns` never gets populated (SQLiteConnection
+    // only fills it on the first SQLITE_ROW), so an empty result is truly empty.
+    auto rows = harness.run("db.execute('SELECT * FROM t', [])");
+    REQUIRE(rows == R"({"columns":[],"rows":[]})");
+  }
+
+  SECTION("nested beginTransaction() is rejected") {
+    CHECK_THROWS(harness.run(R"(
+      (async () => {
+        await db.beginTransaction();
+        await db.beginTransaction();
+      })()
+    )"));
+  }
+}
+
+TEST_CASE("prepared statement cache is reused for repeated SQL", "[cache]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("cache")));
+
+  harness.run("db.execute('SELECT 1', [])");
+  auto countAfterFirst = harness.run("db.debugPreparedStatementCount()");
+
+  harness.run("db.execute('SELECT 1', [])");
+  auto countAfterSecond = harness.run("db.debugPreparedStatementCount()");
+
+  REQUIRE(countAfterFirst == countAfterSecond);
+}
+
+TEST_CASE("blob ArrayBuffer params survive the async JSI thread hop", "[thread-safety]") {
+  // Regression test for the bug where ArrayBuffer blob params were captured
+  // by value and touched inside Promise::async's lambda off the JS thread
+  // that created them. Runs many times to stress the crossing.
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("blob")));
+  harness.run("db.execute('CREATE TABLE blobs (id INTEGER PRIMARY KEY, payload BLOB)', [])");
+
+  for (int i = 0; i < 25; i++) {
+    harness.run(
+      "db.execute('INSERT OR REPLACE INTO blobs (id, payload) VALUES (1, ?)', "
+      "[new Uint8Array([1, 2, 3, 4, " + std::to_string(i) + "]).buffer])");
+
+    auto result = harness.run(R"(
+      (async () => {
+        const rows = await db.execute('SELECT payload FROM blobs WHERE id = 1', []);
+        return Array.from(new Uint8Array(rows.rows[0][0]));
+      })()
+    )");
+    REQUIRE(result == "[1,2,3,4," + std::to_string(i) + "]");
+  }
+}
