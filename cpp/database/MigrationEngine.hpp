@@ -6,6 +6,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <optional>
 
 namespace margelo::nitro::salvedb {
 
@@ -14,6 +15,8 @@ struct ColumnDef {
   bool nullable = true;
   bool unique   = false;
   bool hasDef   = false;
+  // SQL-ready literal for `default` (e.g. "'x'", "42", "1"), set iff hasDef.
+  std::optional<std::string> defaultLiteral;
 };
 
 struct IndexDef {

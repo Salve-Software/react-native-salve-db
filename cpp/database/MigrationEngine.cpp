@@ -9,6 +9,63 @@ namespace margelo::nitro::salvedb {
 MigrationEngine::MigrationEngine(std::shared_ptr<SQLiteConnection> conn)
   : _conn(std::move(conn)) {}
 
+namespace {
+
+// Rolls back on scope exit unless commit() ran, so a mid-sequence throw can't leave a half-applied migration.
+class TransactionGuard {
+public:
+  explicit TransactionGuard(SQLiteConnection& conn) : _conn(conn) {
+    _conn.beginTransaction();
+  }
+
+  TransactionGuard(const TransactionGuard&) = delete;
+  TransactionGuard& operator=(const TransactionGuard&) = delete;
+
+  ~TransactionGuard() {
+    if (!_committed) {
+      try {
+        _conn.rollback();
+      } catch (...) {
+        // destructors must not throw
+      }
+    }
+  }
+
+  void commit() {
+    _conn.commit();
+    _committed = true;
+  }
+
+private:
+  SQLiteConnection& _conn;
+  bool _committed = false;
+};
+
+std::string formatDefaultLiteral(const json::Value& v) {
+  if (v.isString()) {
+    std::string escaped;
+    for (char c : v.asString()) {
+      if (c == '\'') escaped += "''";
+      else escaped += c;
+    }
+    return "'" + escaped + "'";
+  }
+  if (v.isBool()) return v.asBool() ? "1" : "0";
+  if (v.isNumber()) {
+    double d = v.asNumber();
+    if (d == static_cast<double>(static_cast<long long>(d))) {
+      return std::to_string(static_cast<long long>(d));
+    }
+    std::ostringstream oss;
+    oss.precision(17);
+    oss << d;
+    return oss.str();
+  }
+  return "NULL";
+}
+
+} // namespace
+
 // ── Schema version table ─────────────────────────────────────────────────────
 
 static constexpr auto kVersionTable = R"sql(
@@ -73,6 +130,7 @@ void MigrationEngine::createTable(const SchemaDef& schema) {
     ddl << "  \"" << colName << "\" " << sqliteType(col.type);
     if (!col.nullable) ddl << " NOT NULL";
     if (col.unique)    ddl << " UNIQUE";
+    if (col.defaultLiteral) ddl << " DEFAULT " << *col.defaultLiteral;
     if (colName == schema.primaryKey) ddl << " PRIMARY KEY";
   }
 
@@ -101,12 +159,13 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
   for (auto& [colName, col] : schema.columns) {
     bool found = std::find(existing.begin(), existing.end(), colName) != existing.end();
     if (!found) {
-      // ADD COLUMN — nullable or has default (SQLite restriction)
       std::ostringstream alter;
       alter << "ALTER TABLE \"" << schema.name << "\" ADD COLUMN \""
             << colName << "\" " << sqliteType(col.type);
-      // New NOT NULL columns require a DEFAULT in SQLite; pick a type-safe literal
-      if (!col.nullable && !col.hasDef) {
+      if (col.defaultLiteral) {
+        alter << " DEFAULT " << *col.defaultLiteral;
+      } else if (!col.nullable) {
+        // No declared default, but NOT NULL needs one to backfill existing rows.
         const std::string& t = col.type;
         if (t == "integer" || t == "boolean" || t == "datetime" || t == "real")
           alter << " DEFAULT 0";
@@ -116,6 +175,12 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
           alter << " DEFAULT ''";
       }
       _conn->exec(alter.str());
+
+      // ALTER TABLE ADD COLUMN can't carry a UNIQUE constraint directly.
+      if (col.unique) {
+        _conn->exec("CREATE UNIQUE INDEX IF NOT EXISTS \"" + schema.name + "_" + colName +
+                    "_unique\" ON \"" + schema.name + "\" (\"" + colName + "\")");
+      }
     }
   }
 }
@@ -123,6 +188,8 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
 // ── Public: registerSchema ────────────────────────────────────────────────────
 
 void MigrationEngine::registerSchema(const SchemaDef& schema) {
+  TransactionGuard txn(*_conn);
+
   // Ensure version tracking table exists
   _conn->exec(kVersionTable);
 
@@ -138,6 +205,8 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   if (schema.version != stored) {
     setStoredVersion(schema.name, schema.version);
   }
+
+  txn.commit();
 }
 
 // ── JSON parsing ──────────────────────────────────────────────────────────────
@@ -165,6 +234,9 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
       col.nullable = colVal.getBool("nullable", true);
       col.unique   = colVal.getBool("unique", false);
       col.hasDef   = colVal.has("default");
+      if (col.hasDef) {
+        col.defaultLiteral = formatDefaultLiteral(colVal.get("default")->get());
+      }
       schema.columns[colName] = col;
     }
   }
