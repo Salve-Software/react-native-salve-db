@@ -22,6 +22,8 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
 }
 
 SQLiteConnection::~SQLiteConnection() {
+  std::lock_guard<std::mutex> lock(_mutex);
+
   // Best-effort rollback of a dangling transaction; can't throw from a destructor.
   if (_inTransaction && _db) {
     sqlite3_exec(_db, "ROLLBACK", nullptr, nullptr, nullptr);
@@ -66,6 +68,8 @@ void SQLiteConnection::evictLRU() {
 }
 
 QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<SqlValue>& params) {
+  std::lock_guard<std::mutex> lock(_mutex);
+
   sqlite3_stmt* stmt = getOrPrepare(sql);
   sqlite3_reset(stmt);
   sqlite3_clear_bindings(stmt);
@@ -147,24 +151,35 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
 }
 
 void SQLiteConnection::beginTransaction() {
+  std::lock_guard<std::mutex> lock(_mutex);
+
   if (_inTransaction) {
     throw std::runtime_error("Nested transactions are not supported — commit() or rollback() first.");
   }
-  exec("BEGIN");
+  execLocked("BEGIN");
   _inTransaction = true;
 }
 
 void SQLiteConnection::commit() {
-  exec("COMMIT");
+  std::lock_guard<std::mutex> lock(_mutex);
+
+  execLocked("COMMIT");
   _inTransaction = false;
 }
 
 void SQLiteConnection::rollback() {
-  exec("ROLLBACK");
+  std::lock_guard<std::mutex> lock(_mutex);
+
+  execLocked("ROLLBACK");
   _inTransaction = false;
 }
 
 void SQLiteConnection::exec(const std::string& sql) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  execLocked(sql);
+}
+
+void SQLiteConnection::execLocked(const std::string& sql) {
   char* errMsg = nullptr;
   int rc = sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &errMsg);
   if (rc != SQLITE_OK) {

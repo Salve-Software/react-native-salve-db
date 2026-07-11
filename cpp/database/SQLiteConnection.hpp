@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <stdexcept>
 #include <memory>
+#include <mutex>
 
 namespace margelo::nitro::salvedb {
 
@@ -43,6 +44,9 @@ private:
   sqlite3* _db = nullptr;
   bool _inTransaction = false;
 
+  // Guards _db/_lru/_cache; private helpers assume the caller already holds it.
+  std::mutex _mutex;
+
   // LRU prepared statement cache (max 100 entries)
   static constexpr size_t kCacheCapacity = 100;
   std::list<std::pair<std::string, sqlite3_stmt*>> _lru;
@@ -51,6 +55,7 @@ private:
 
   sqlite3_stmt* getOrPrepare(const std::string& sql);
   void evictLRU();
+  void execLocked(const std::string& sql);
 };
 
 } // namespace margelo::nitro::salvedb
