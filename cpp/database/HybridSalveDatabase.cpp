@@ -23,8 +23,9 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::st
 }
 
 QueryResult HybridSalveDatabase::execute(
-    const std::string& sql,
-    const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) {
+  const std::string& sql,
+  const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params
+) {
   return _queryExecutor.execute(sql, params);
 }
 

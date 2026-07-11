@@ -4,26 +4,9 @@ permissions:
   contents: read
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-    paths:
-      - '.github/workflows/harness-android.yml'
-      - 'example/**'
-      - 'android/**'
-      - 'ios/**'
-      - 'cpp/**'
-      - 'src/**'
-      - 'nitrogen/**'
-      - '*.podspec'
-      - 'package.json'
-      - 'bun.lock'
-      - 'pnpm-lock.yaml'
-      - 'package-lock.json'
-      - 'yarn.lock'
-      - 'react-native.config.js'
-      - 'nitro.json'
-  pull_request:
     paths:
       - '.github/workflows/harness-android.yml'
       - 'example/**'
