@@ -14,4 +14,9 @@ bool SchemaRegistry::isBoolean(const std::string& table, const std::string& colu
   return it->second.count(column) > 0;
 }
 
+void SchemaRegistry::clear() {
+  std::lock_guard<std::mutex> lock(_mutex);
+  _booleanColumns.clear();
+}
+
 } // namespace margelo::nitro::salvedb
