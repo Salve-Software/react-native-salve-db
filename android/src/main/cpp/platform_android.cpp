@@ -1,25 +1,25 @@
-#include "../../../../cpp/database/platform.hpp"
+#include "../../../../cpp/platform/platform.hpp"
 #include <jni.h>
 #include <string>
 
-namespace margelo::nitro::salvedb {
+namespace margelo::nitro::salvedb::platform {
 
 static std::string s_documentsDirectory;
 
-void setPlatformDocumentsDirectory(const std::string& path) {
+void setDocumentsDirectory(const std::string& path) {
   s_documentsDirectory = path;
 }
 
-std::string getPlatformDocumentsDirectory() {
+std::string getDocumentsDirectory() {
   return s_documentsDirectory;
 }
 
-} // namespace margelo::nitro::salvedb
+} // namespace margelo::nitro::salvedb::platform
 
 // Called from SalveDbPackage.kt via System.loadLibrary
 extern "C" JNIEXPORT void JNICALL
 Java_com_salvedb_SalveDbPackage_nativeSetDocumentsDir(JNIEnv* env, jclass, jstring path) {
   const char* str = env->GetStringUTFChars(path, nullptr);
-  margelo::nitro::salvedb::setPlatformDocumentsDirectory(std::string(str));
+  margelo::nitro::salvedb::platform::setDocumentsDirectory(std::string(str));
   env->ReleaseStringUTFChars(path, str);
 }

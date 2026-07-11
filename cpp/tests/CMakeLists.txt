@@ -137,6 +137,7 @@ target_include_directories(salvedb_tests PRIVATE
   ${NITRO_MODULES_INCLUDE_DIRS}
   "${CMAKE_SOURCE_DIR}/support"
   "${PROJECT_CPP_DIR}/database"
+  "${PROJECT_CPP_DIR}/platform"
   "${PROJECT_CPP_DIR}/query"
   "${PROJECT_CPP_DIR}/sync"
   "${PROJECT_CPP_DIR}/third_party/sqlite3"
