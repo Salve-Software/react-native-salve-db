@@ -75,6 +75,25 @@ static constexpr auto kVersionTable = R"sql(
   );
 )sql";
 
+// ── Sync queue / apply lock (global, created once regardless of schema) ──────
+
+static constexpr auto kSyncQueueTable = R"sql(
+  CREATE TABLE IF NOT EXISTS sync_queue (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    operation  TEXT    NOT NULL,
+    entity     TEXT    NOT NULL,
+    entity_id  TEXT    NOT NULL,
+    payload    TEXT    NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+)sql";
+
+static constexpr auto kSyncApplyLockTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _sync_apply_lock (
+    id INTEGER PRIMARY KEY CHECK (id = 1)
+  );
+)sql";
+
 int MigrationEngine::storedVersion(const std::string& schemaName) {
   auto result = _conn->execute(
     "SELECT version FROM _salve_schema_versions WHERE name = ?",
@@ -153,12 +172,14 @@ void MigrationEngine::createTable(const SchemaDef& schema) {
 
 // ── ALTER TABLE ADD COLUMN (migration) ───────────────────────────────────────
 
-void MigrationEngine::migrateTable(const SchemaDef& schema) {
+bool MigrationEngine::migrateTable(const SchemaDef& schema) {
   auto existing = existingColumns(schema.name);
+  bool added = false;
 
   for (auto& [colName, col] : schema.columns) {
     bool found = std::find(existing.begin(), existing.end(), colName) != existing.end();
     if (!found) {
+      added = true;
       std::ostringstream alter;
       alter << "ALTER TABLE \"" << schema.name << "\" ADD COLUMN \""
             << colName << "\" " << sqliteType(col.type);
@@ -183,6 +204,75 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
       }
     }
   }
+
+  return added;
+}
+
+// ── Sync triggers ──────────────────────────────────────────────────────────
+
+namespace {
+
+std::string buildJsonObjectArgs(const SchemaDef& schema, const std::string& rowAlias) {
+  std::ostringstream args;
+  bool first = true;
+  for (auto& [colName, col] : schema.columns) {
+    if (!first) args << ", ";
+    first = false;
+    args << "'" << colName << "', " << rowAlias << ".\"" << colName << "\"";
+  }
+  return args.str();
+}
+
+} // namespace
+
+void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
+  const std::string& t  = schema.name;
+  const std::string& pk = schema.primaryKey;
+  std::string rowCols = buildJsonObjectArgs(schema, "NEW");
+
+  std::ostringstream insertTrig;
+  insertTrig << "CREATE TRIGGER IF NOT EXISTS \"" << t << "_sync_after_insert\"\n"
+             << "AFTER INSERT ON \"" << t << "\"\n"
+             << "WHEN NOT EXISTS (SELECT 1 FROM _sync_apply_lock)\n"
+             << "BEGIN\n"
+             << "  INSERT INTO sync_queue (operation, entity, entity_id, payload, updated_at)\n"
+             << "  VALUES ('insert', '" << t << "', NEW.\"" << pk << "\",\n"
+             << "    json_object(" << rowCols << "),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "END;";
+  _conn->exec(insertTrig.str());
+
+  std::ostringstream updateTrig;
+  updateTrig << "CREATE TRIGGER IF NOT EXISTS \"" << t << "_sync_after_update\"\n"
+             << "AFTER UPDATE ON \"" << t << "\"\n"
+             << "WHEN NOT EXISTS (SELECT 1 FROM _sync_apply_lock)\n"
+             << "BEGIN\n"
+             << "  INSERT INTO sync_queue (operation, entity, entity_id, payload, updated_at)\n"
+             << "  VALUES ('update', '" << t << "', NEW.\"" << pk << "\",\n"
+             << "    json_object(" << rowCols << "),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "END;";
+  _conn->exec(updateTrig.str());
+
+  // PK-only payload: the row is already gone by the time AFTER DELETE fires.
+  std::ostringstream deleteTrig;
+  deleteTrig << "CREATE TRIGGER IF NOT EXISTS \"" << t << "_sync_after_delete\"\n"
+             << "AFTER DELETE ON \"" << t << "\"\n"
+             << "WHEN NOT EXISTS (SELECT 1 FROM _sync_apply_lock)\n"
+             << "BEGIN\n"
+             << "  INSERT INTO sync_queue (operation, entity, entity_id, payload, updated_at)\n"
+             << "  VALUES ('delete', '" << t << "', OLD.\"" << pk << "\",\n"
+             << "    json_object('" << pk << "', OLD.\"" << pk << "\"),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "END;";
+  _conn->exec(deleteTrig.str());
+}
+
+void MigrationEngine::dropSyncTriggers(const SchemaDef& schema) {
+  const std::string& t = schema.name;
+  _conn->exec("DROP TRIGGER IF EXISTS \"" + t + "_sync_after_insert\";");
+  _conn->exec("DROP TRIGGER IF EXISTS \"" + t + "_sync_after_update\";");
+  _conn->exec("DROP TRIGGER IF EXISTS \"" + t + "_sync_after_delete\";");
 }
 
 // ── Public: registerSchema ────────────────────────────────────────────────────
@@ -190,17 +280,30 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
 void MigrationEngine::registerSchema(const SchemaDef& schema) {
   TransactionGuard txn(*_conn);
 
-  // Ensure version tracking table exists
   _conn->exec(kVersionTable);
+  _conn->exec(kSyncQueueTable);
+  _conn->exec(kSyncApplyLockTable);
 
   int stored = storedVersion(schema.name);
+  bool columnsChanged = false;
 
   if (stored == 0) {
     createTable(schema);
+    columnsChanged = true;
   } else if (schema.version > stored) {
-    migrateTable(schema);
+    columnsChanged = migrateTable(schema);
   }
   // If schema.version == stored, nothing to do (idempotent)
+
+  if (schema.sync.enabled) {
+    // Triggers are CREATE ... IF NOT EXISTS, so a stale json_object(...) needs an explicit drop+recreate.
+    if (columnsChanged) {
+      dropSyncTriggers(schema);
+      createSyncTriggers(schema);
+    }
+  } else {
+    dropSyncTriggers(schema); // no-op unless sync was previously enabled
+  }
 
   if (schema.version != stored) {
     setStoredVersion(schema.name, schema.version);
@@ -258,6 +361,11 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
         schema.indexes.push_back(std::move(idx));
       }
     }
+  }
+
+  auto syncVal = root.get("sync");
+  if (syncVal && syncVal->get().isObject()) {
+    schema.sync.enabled = syncVal->get().getBool("enabled", false);
   }
 
   return schema;
