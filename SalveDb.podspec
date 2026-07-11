@@ -25,6 +25,9 @@ Pod::Spec.new do |s|
   ]
   s.exclude_files = "cpp/tests/**/*"
 
+  # Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
+  s.pod_target_xcconfig = { 'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SQLITE_ENABLE_COLUMN_METADATA=1' }
+
   load 'nitrogen/generated/ios/SalveDb+autolinking.rb'
   add_nitrogen_files(s)
 

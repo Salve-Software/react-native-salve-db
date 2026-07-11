@@ -1,4 +1,5 @@
 #include "SQLiteConnection.hpp"
+#include "SchemaRegistry.hpp"
 
 #include <NitroModules/ArrayBuffer.hpp>
 #include <stdexcept>
@@ -19,7 +20,25 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
   sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
   sqlite3_exec(_db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
   sqlite3_busy_timeout(_db, 5000);
+  sqlite3_extended_result_codes(_db, 1); // makes prepare/step/exec return extended codes directly
 }
+
+namespace {
+
+// Prefix is the only distinguishing signal that survives the JSI boundary (Nitro's
+// generated glue collapses thrown exceptions down to a plain message string). Callers
+// must read the primary code immediately after the failing call, before any other
+// sqlite3 API touches the connection's error state.
+std::string errorPrefix(int primaryCode) {
+  switch (primaryCode) {
+    case SQLITE_CONSTRAINT: return "SQLITE_CONSTRAINT: ";
+    case SQLITE_BUSY:
+    case SQLITE_LOCKED:     return "SQLITE_BUSY: ";
+    default:                return "SQLITE_ERROR: ";
+  }
+}
+
+} // namespace
 
 SQLiteConnection::~SQLiteConnection() {
   std::lock_guard<std::mutex> lock(_mutex);
@@ -50,7 +69,8 @@ sqlite3_stmt* SQLiteConnection::getOrPrepare(const std::string& sql) {
   sqlite3_stmt* stmt = nullptr;
   int rc = sqlite3_prepare_v2(_db, sql.c_str(), -1, &stmt, nullptr);
   if (rc != SQLITE_OK) {
-    throw std::runtime_error(std::string("SQLite prepare error: ") + sqlite3_errmsg(_db) + " — SQL: " + sql);
+    int primaryCode = sqlite3_extended_errcode(_db) & 0xff;
+    throw std::runtime_error(errorPrefix(primaryCode) + "SQLite prepare error: " + sqlite3_errmsg(_db) + " — SQL: " + sql);
   }
   _prepareCount++;
 
@@ -94,6 +114,7 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
 
   std::vector<std::string> columns;
   std::vector<std::vector<SqlValue>> rows;
+  std::vector<bool> isBoolCol;
   bool headerRead = false;
   int colCount = 0;
 
@@ -102,9 +123,16 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
     if (!headerRead) {
       colCount = sqlite3_column_count(stmt);
       columns.reserve(colCount);
+      isBoolCol.reserve(colCount);
       for (int i = 0; i < colCount; ++i) {
         const char* name = sqlite3_column_name(stmt, i);
         columns.emplace_back(name ? name : "");
+
+        // A column's origin table/name is fixed for the whole result set, so the
+        // (mutex-guarded) registry lookup only needs to happen once per column, not per cell.
+        const char* table  = sqlite3_column_table_name(stmt, i);
+        const char* origin = sqlite3_column_origin_name(stmt, i);
+        isBoolCol.push_back(table && origin && SchemaRegistry::shared().isBoolean(table, origin));
       }
       headerRead = true;
     }
@@ -116,9 +144,15 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
         case SQLITE_NULL:
           row.emplace_back(nitro::NullType{});
           break;
-        case SQLITE_INTEGER:
-          row.emplace_back(static_cast<double>(sqlite3_column_int64(stmt, i)));
+        case SQLITE_INTEGER: {
+          int64_t intVal = sqlite3_column_int64(stmt, i);
+          if (isBoolCol[i]) {
+            row.emplace_back(intVal != 0);
+          } else {
+            row.emplace_back(static_cast<double>(intVal));
+          }
           break;
+        }
         case SQLITE_FLOAT:
           row.emplace_back(sqlite3_column_double(stmt, i));
           break;
@@ -134,17 +168,24 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
           break;
         }
         default:
-          row.emplace_back(nitro::NullType{});
+          // sqlite3_column_type only ever returns the 5 cases above per SQLite's docs.
+          throw std::runtime_error("Unexpected SQLite column type");
       }
     }
     rows.push_back(std::move(row));
   }
 
+  // Capture the failure's error state before reset()/clear_bindings() run, so a future
+  // reordering of those calls can't silently make this read a stale/cleared code.
+  bool failed = rc != SQLITE_DONE && rc != SQLITE_ROW;
+  int primaryCode = failed ? (sqlite3_extended_errcode(_db) & 0xff) : 0;
+  std::string errMsg = failed ? sqlite3_errmsg(_db) : std::string{};
+
   sqlite3_reset(stmt);
   sqlite3_clear_bindings(stmt);
 
-  if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
-    throw std::runtime_error(std::string("SQLite execute error: ") + sqlite3_errmsg(_db));
+  if (failed) {
+    throw std::runtime_error(errorPrefix(primaryCode) + "SQLite execute error: " + errMsg);
   }
 
   return QueryResult{std::move(columns), std::move(rows)};

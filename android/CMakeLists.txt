@@ -7,6 +7,8 @@ set (CMAKE_CXX_STANDARD 20)
 
 # Enable Raw Props parsing in react-native (for Nitro Views)
 add_compile_options(-DRN_SERIALIZABLE_STATE=1)
+# Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
+add_compile_definitions(SQLITE_ENABLE_COLUMN_METADATA=1)
 
 # Define C++ library and add all sources
 add_library(${PACKAGE_NAME} SHARED
@@ -17,6 +19,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
 	../cpp/database/MigrationEngine.cpp
+	../cpp/database/SchemaRegistry.cpp
 	../cpp/query/QueryExecutor.cpp
 	../cpp/sync/SyncOrchestrator.cpp
 	../cpp/sync/SyncApplyGuard.cpp
