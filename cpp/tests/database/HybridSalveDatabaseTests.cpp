@@ -106,6 +106,25 @@ TEST_CASE("transactions commit and roll back", "[transactions]") {
   }
 }
 
+TEST_CASE("execute() and transaction methods return synchronously, not a Promise", "[query][transactions]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("sync_contract")));
+
+  auto result = harness.run(R"(
+    (() => {
+      const executeResult = db.execute('SELECT 1', []);
+      const executeIsPromise = executeResult instanceof Promise;
+      const beginResult = db.beginTransaction();
+      const beginIsPromise = beginResult instanceof Promise;
+      const commitResult = db.commit();
+      const commitIsPromise = commitResult instanceof Promise;
+      return { executeIsPromise, beginIsPromise, commitIsPromise };
+    })()
+  )");
+  REQUIRE(result == R"({"executeIsPromise":false,"beginIsPromise":false,"commitIsPromise":false})");
+}
+
 TEST_CASE("prepared statement cache is reused for repeated SQL", "[cache]") {
   HybridDatabaseHarness harness;
   harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");

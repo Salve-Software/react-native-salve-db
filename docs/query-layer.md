@@ -29,6 +29,31 @@ O native (`NitroSalveDb.execute(sql, params)`) mantém um LRU de prepared statem
 
 ---
 
+## Decisão: `execute()` e transação síncronos, com guardas de paginação e índice
+
+> Registrado a partir da exploração da issue [#37](https://github.com/Salve-Software/react-native-salve-db/issues/37) ("leitura síncrona no core, estilo Realm"). Substitui a entrada "Streaming/cursor de resultado grande" que aparecia em *Fora do MVP* sem alternativa.
+
+Comparado com o Realm (objetos live mapeados em memória — ler uma propriedade é dereference direto, sem parse), o SQLite não tem noção de "objeto vivo": é cursor row-a-row, e ponteiros de `sqlite3_column_*` só são válidos até o próximo `step`/`reset`/`finalize` do mesmo statement. Por isso, replicar o modelo zero-copy lazy do Realm 1:1 não é viável em cima do SQLite sem segurar um cursor entre chamadas JS — o que arriscaria dangling pointer no momento em que a cache LRU de prepared statements reaproveitasse aquele statement por trás.
+
+O caminho adotado é diferente: **`execute()` (e o ciclo de transação `beginTransaction`/`commit`/`rollback`) passam a ser síncronos diretamente**, sem um método novo ao lado do antigo `Promise`-based. O corpo de execução em si não muda (bind → step-loop → materializa → reset); só passa a rodar direto na JS thread em vez de via `Promise::async`/ThreadPool. Como a chamada já era atômica antes — nunca segurava um statement entre chamadas —, isso não introduz risco novo de ponteiro pendurado, só muda em qual thread o loop roda. `registerSchema()` e `triggerSync()` ficam fora desta decisão — migração de schema e o sync engine continuam potencialmente lentos/de rede, não são o tipo de trabalho "rápido e determinístico" que justifica um método síncrono.
+
+Duas regras, aplicadas na camada TS (`SelectQueryBuilder`/`UpdateQueryBuilder`/`DeleteQueryBuilder`), controlam o risco de travar a JS thread com um `execute()` agora sempre síncrono:
+
+1. **`LIMIT` obrigatório, com teto máximo** (`MAX_SYNC_PAGE_SIZE = 500`), exigido só em `SelectQueryBuilder.execute()`. Cobre tanto "1 registro por PK" quanto "uma página de N registros" com o mesmo mecanismo. Não se aplica a `UPDATE`/`DELETE` — SQLite não tem `LIMIT` nativo pra essas operações, e "atualizar/apagar tudo que casa a condição" é o comportamento esperado, não algo a paginar.
+2. **Índice obrigatório pra `ORDER BY`/`WHERE` fora da primary key.** `LIMIT` sozinho limita o *tamanho do retorno*, não o *custo do scan* — uma coluna sem índice ainda obriga o SQLite a varrer a tabela inteira antes de aplicar o `LIMIT` (ou, no caso de `UPDATE`/`DELETE`, antes de encontrar as linhas a mudar). A regra reaproveita o `IndexDefinition` já existente no contrato de schema (`docs/architecture.md`), usando **leftmost-prefix**: a coluna precisa ser a primeira do array `columns` de algum índice declarado — é assim que o SQLite de fato usa um índice composto pra `WHERE`/`ORDER BY`. Sem índice líder pra essa coluna, a chamada rejeita com erro explícito orientando a declarar o índice. Aplicada a `SelectQueryBuilder` (`orderBy` + `where`) e a `UpdateQueryBuilder`/`DeleteQueryBuilder` (só `where`, quando presente) — um `UPDATE`/`DELETE` sem índice na coluna do `where()` faz o mesmo full table scan bloqueante que um `SELECT` faria. `UPDATE`/`DELETE` sem `where()` nenhum (afeta a tabela inteira) não passa por essa checagem — é o próprio caller pedindo o full scan.
+
+`InsertQueryBuilder` e o `execute(sql, params)` cru (escape hatch, sem schema associado) não têm guarda — o custo de um insert já é proporcional ao que o caller escreveu explicitamente, e o escape hatch não tem schema pra validar índice contra.
+
+### Sincronização da cache de prepared statements
+
+Achado durante a exploração da #37, corrigido como pré-requisito desta mudança: a cache LRU de prepared statements do core C++ (`SQLiteConnection`) não tinha nenhuma sincronização entre threads — já era uma race condition pré-existente entre chamadas concorrentes de `execute()` async (rodando em threads diferentes do ThreadPool da Nitro). Com `execute()` agora sempre síncrono, a concorrência entre chamadas JS desaparece (JS é single-thread), mas a JS thread passa a disputar a mesma cache com qualquer escrita em background do sync engine (`triggerSync()`, que continua `Promise`). `SQLiteConnection` agora guarda um `std::mutex` único cobrindo `execute`/`exec`/`beginTransaction`/`commit`/`rollback`/`getOrPrepare`/`evictLRU`.
+
+### Futuras extensões
+
+- **Cache de identidade + invalidação por mudança.** Depois de ler uma linha uma vez, guardar em memória; leituras repetidas do mesmo registro batem no cache (velocidade de memória); invalidação dispara via o Trigger Engine que o projeto já tem (toda escrita já loga em `sync_queue`) ou via `sqlite3_update_hook` nativo. Não é zero-copy real, mas aproxima a ergonomia de "objeto vivo" do Realm — acesso repetido rápido e atualização automática — sem duplicar o motor de armazenamento. Não implementado; registrado aqui como direção natural, sem issue própria ainda.
+
+---
+
 ## Inferência de tipos
 
 Mapeamento de `ColumnDefinition.type` (já existente em `architecture.md`) pro tipo TS:
@@ -115,18 +140,18 @@ export interface QueryClient {
   ): DeleteQueryBuilder<TSchema>;
 
   /**
-   * BEGIN/COMMIT/ROLLBACK nativo. Se `fn` lançar, faz ROLLBACK.
+   * BEGIN/COMMIT/ROLLBACK nativo, síncrono. Se `fn` lançar, faz ROLLBACK.
    * Todo write dentro de `tx` ainda dispara as triggers normalmente
    * (a fila de sync só é populada no COMMIT, não em cada write isolado).
    */
-  transaction<T>(fn: (tx: QueryClient) => Promise<T>): Promise<T>;
+  transaction<T>(fn: (tx: QueryClient) => T): T;
 
   /**
    * Escape hatch. Sem type-safety, sem inferência — mas como a trigger
    * é a nível de tabela SQLite, raw SQL ainda fica rastreado pela
    * sync_queue normalmente.
    */
-  execute(sql: string, params?: unknown[]): Promise<unknown[]>;
+  execute(sql: string, params?: unknown[]): unknown[];
 
 }
 
@@ -135,39 +160,48 @@ export interface SelectQueryBuilder<TSchema extends SchemaDefinition<any>> {
   orderBy(column: keyof InferSelectModel<TSchema>, direction?: "asc" | "desc"): this;
   limit(n: number): this;
   offset(n: number): this;
-  execute(): Promise<InferSelectModel<TSchema>[]>;
+
+  /**
+   * Exige `limit()` já chamado (com teto `MAX_SYNC_PAGE_SIZE`) e índice
+   * declarado pra qualquer coluna de `orderBy`/`where` fora da primary key.
+   */
+  execute(): InferSelectModel<TSchema>[];
 }
 
 export interface InsertQueryBuilder<TSchema extends SchemaDefinition<any>> {
   values(row: InferInsertModel<TSchema>): this;
-  execute(): Promise<void>;
+  execute(): void;
 }
 
 export interface UpdateQueryBuilder<TSchema extends SchemaDefinition<any>> {
   set(patch: Partial<InferInsertModel<TSchema>>): this;
   where(condition: Condition): this;
-  execute(): Promise<void>;
+
+  /** Exige índice declarado pra coluna de `where`, se `where()` foi chamado. */
+  execute(): void;
 }
 
 export interface DeleteQueryBuilder<TSchema extends SchemaDefinition<any>> {
   where(condition: Condition): this;
-  execute(): Promise<void>;
+
+  /** Exige índice declarado pra coluna de `where`, se `where()` foi chamado. */
+  execute(): void;
 }
 ```
 
 Exemplo:
 
 ```ts
-const activeCustomers = await db
+const activeCustomers = db
   .select(CustomerSchema)
   .where(eq(CustomerSchema.columns.active, true))
   .orderBy("name")
   .limit(50)
   .execute();
 
-await db.transaction(async (tx) => {
-  await tx.insert(OrderSchema).values({ id, customerId, total }).execute();
-  await tx.insert(OrderItemSchema).values({ orderId: id, sku, qty }).execute();
+db.transaction((tx) => {
+  tx.insert(OrderSchema).values({ id, customerId, total }).execute();
+  tx.insert(OrderItemSchema).values({ orderId: id, sku, qty }).execute();
 });
 ```
 
@@ -266,4 +300,4 @@ Escrita feita via query builder (`db.insert(...)`, `db.update(...)`, `db.delete(
 - Funções de agregação (`count`, `sum`, `avg`, `groupBy`)
 - `ilike`, `between`, subqueries, `returning()`
 - Prepared statement API exposta ao usuário (fica interno, só cache)
-- Streaming/cursor de resultado grande (usa `limit`/`offset` por enquanto)
+- Streaming/cursor de resultado grande — descartado como rota (ver "Decisão: `execute()` e transação síncronos, com guardas de paginação e índice" acima); a alternativa adotada é `LIMIT` obrigatório com teto, não um cursor lazy

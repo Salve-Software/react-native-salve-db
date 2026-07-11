@@ -5,7 +5,7 @@ import type { SqlValue } from '../../../../../specs/types';
 import type { IUpdateQueryBuilder } from '../../types';
 import type { AnySchema } from '../../../../../types';
 import type { InferInsertModel } from '../InsertQueryBuilder';
-import { compileCondition } from '../../library';
+import { assertIndexedColumns, collectConditionColumns, compileCondition } from '../../library';
 
 export class UpdateQueryBuilder<TSchema extends AnySchema>
   implements IUpdateQueryBuilder<TSchema>
@@ -28,9 +28,13 @@ export class UpdateQueryBuilder<TSchema extends AnySchema>
     return this;
   }
 
-  async execute(): Promise<void> {
+  execute(): void {
     if (!this._patch || Object.keys(this._patch).length === 0) {
       throw new Error('UpdateQueryBuilder: call .set() with at least one field before .execute()');
+    }
+
+    if (this._condition) {
+      assertIndexedColumns(this._schema, collectConditionColumns(this._condition as unknown as ConditionNode));
     }
 
     const params: SqlValue[] = [];
@@ -47,6 +51,6 @@ export class UpdateQueryBuilder<TSchema extends AnySchema>
       sql += ` WHERE ${compileCondition(this._condition as unknown as ConditionNode, params)}`;
     }
 
-    await this._bridge.execute(sql, params);
+    this._bridge.execute(sql, params);
   }
 }

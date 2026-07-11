@@ -7,5 +7,5 @@ export interface ISelectQueryBuilder<TSchema extends AnySchema> {
   orderBy(column: keyof InferSelectModel<TSchema>, direction?: "asc" | "desc"): this;
   limit(n: number): this;
   offset(n: number): this;
-  execute(): Promise<InferSelectModel<TSchema>[]>;
+  execute(): InferSelectModel<TSchema>[];
 }

@@ -17,20 +17,20 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
   // ── Query ──────────────────────────────────────────────────────────────────
 
   /**
-   * Executes parametrized SQL and returns the resulting rows.
+   * Executes parametrized SQL and returns the resulting rows, synchronously.
    * @param sql SQL text, used as the native prepared statement cache key.
    * @param params One SqlValue per positional placeholder in sql.
    */
-  execute(sql: string, params: SqlValue[]): Promise<QueryResult>;
+  execute(sql: string, params: SqlValue[]): QueryResult;
 
-  /** Starts a native transaction (BEGIN). */
-  beginTransaction(): Promise<void>;
+  /** Starts a native transaction (BEGIN), synchronously. */
+  beginTransaction(): void;
 
-  /** Commits the active transaction. */
-  commit(): Promise<void>;
+  /** Commits the active transaction, synchronously. */
+  commit(): void;
 
-  /** Rolls back the active transaction. */
-  rollback(): Promise<void>;
+  /** Rolls back the active transaction, synchronously. */
+  rollback(): void;
 
   // ── Sync ───────────────────────────────────────────────────────────────────
 

@@ -63,10 +63,10 @@ namespace margelo::nitro::salvedb {
       // Methods
       virtual void configure(const ConfigureParams& params) = 0;
       virtual std::shared_ptr<Promise<void>> registerSchema(const std::string& schemaJson) = 0;
-      virtual std::shared_ptr<Promise<QueryResult>> execute(const std::string& sql, const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) = 0;
-      virtual std::shared_ptr<Promise<void>> beginTransaction() = 0;
-      virtual std::shared_ptr<Promise<void>> commit() = 0;
-      virtual std::shared_ptr<Promise<void>> rollback() = 0;
+      virtual QueryResult execute(const std::string& sql, const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) = 0;
+      virtual void beginTransaction() = 0;
+      virtual void commit() = 0;
+      virtual void rollback() = 0;
       virtual std::shared_ptr<Promise<NativeSyncResult>> triggerSync(const std::string& schemaName) = 0;
       virtual double debugPreparedStatementCount() = 0;
 

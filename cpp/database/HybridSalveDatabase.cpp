@@ -5,25 +5,6 @@
 
 namespace margelo::nitro::salvedb {
 
-namespace {
-
-// ArrayBuffer::data()/size() may only be touched on the JS thread that created
-// them, so blob params must be copied here before crossing into Promise::async.
-std::vector<SqlValue> copyBlobParams(const std::vector<SqlValue>& params) {
-  std::vector<SqlValue> safe;
-  safe.reserve(params.size());
-  for (const auto& param : params) {
-    if (auto* blob = std::get_if<std::shared_ptr<ArrayBuffer>>(&param)) {
-      safe.emplace_back(ArrayBuffer::copy(*blob));
-    } else {
-      safe.push_back(param);
-    }
-  }
-  return safe;
-}
-
-} // namespace
-
 void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.name.empty())
     throw std::runtime_error("Database.configure: 'name' is required");
@@ -41,31 +22,22 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::st
   });
 }
 
-std::shared_ptr<Promise<QueryResult>> HybridSalveDatabase::execute(
+QueryResult HybridSalveDatabase::execute(
     const std::string& sql,
     const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) {
-  auto safeParams = copyBlobParams(params);
-  return Promise<QueryResult>::async([this, sql, safeParams]() {
-    return _queryExecutor.execute(sql, safeParams);
-  });
+  return _queryExecutor.execute(sql, params);
 }
 
-std::shared_ptr<Promise<void>> HybridSalveDatabase::beginTransaction() {
-  return Promise<void>::async([this]() {
-    _queryExecutor.beginTransaction();
-  });
+void HybridSalveDatabase::beginTransaction() {
+  _queryExecutor.beginTransaction();
 }
 
-std::shared_ptr<Promise<void>> HybridSalveDatabase::commit() {
-  return Promise<void>::async([this]() {
-    _queryExecutor.commit();
-  });
+void HybridSalveDatabase::commit() {
+  _queryExecutor.commit();
 }
 
-std::shared_ptr<Promise<void>> HybridSalveDatabase::rollback() {
-  return Promise<void>::async([this]() {
-    _queryExecutor.rollback();
-  });
+void HybridSalveDatabase::rollback() {
+  _queryExecutor.rollback();
 }
 
 std::shared_ptr<Promise<NativeSyncResult>> HybridSalveDatabase::triggerSync(const std::string& schemaName) {

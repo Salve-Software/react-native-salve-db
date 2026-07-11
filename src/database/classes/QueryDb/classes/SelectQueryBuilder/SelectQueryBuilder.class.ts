@@ -3,10 +3,13 @@ import type { ConditionNode } from '../../../../../types/query/ConditionNode';
 import type { SalveDatabase } from '../../../../../specs/SalveDatabase.nitro';
 import type { SqlValue } from '../../../../../specs/types';
 import type { AnySchema } from '../../../../../types';
+import type { ISelectQueryBuilder } from '../../types';
 import type { InferSelectModel } from './types';
-import { compileCondition } from '../../library';
+import { assertIndexedColumns, collectConditionColumns, compileCondition, MAX_SYNC_PAGE_SIZE } from '../../library';
 
-export class SelectQueryBuilder<TSchema extends AnySchema> {
+export class SelectQueryBuilder<TSchema extends AnySchema>
+  implements ISelectQueryBuilder<TSchema>
+{
   private _condition?: Condition;
   private _orderByColumn?: string;
   private _orderByDir: 'asc' | 'desc' = 'asc';
@@ -39,28 +42,38 @@ export class SelectQueryBuilder<TSchema extends AnySchema> {
     return this;
   }
 
-  async execute(): Promise<InferSelectModel<TSchema>[]> {
+  execute(): InferSelectModel<TSchema>[] {
+    if (this._limit === undefined) {
+      throw new Error('execute() requires .limit() to be set (max MAX_SYNC_PAGE_SIZE) before calling.');
+    }
+    if (this._limit > MAX_SYNC_PAGE_SIZE) {
+      throw new Error(`execute() limit (${this._limit}) exceeds MAX_SYNC_PAGE_SIZE (${MAX_SYNC_PAGE_SIZE}).`);
+    }
+
+    const columnsNeedingIndex: string[] = [];
+    if (this._orderByColumn) columnsNeedingIndex.push(this._orderByColumn);
+    if (this._condition) columnsNeedingIndex.push(...collectConditionColumns(this._condition as unknown as ConditionNode));
+    assertIndexedColumns(this._schema, columnsNeedingIndex);
+
     const params: SqlValue[] = [];
     let sql = `SELECT * FROM "${this._schema.name}"`;
 
     if (this._condition) {
       sql += ` WHERE ${compileCondition(this._condition as unknown as ConditionNode, params)}`;
     }
-    
+
     if (this._orderByColumn) {
       sql += ` ORDER BY "${this._orderByColumn}" ${this._orderByDir.toUpperCase()}`;
     }
-    
-    if (this._limit !== undefined) {
-      sql += ` LIMIT ${this._limit}`;
-    }
-    
+
+    sql += ` LIMIT ${this._limit}`;
+
     if (this._offset !== undefined) {
       sql += ` OFFSET ${this._offset}`;
     }
 
-    const result = await this._bridge.execute(sql, params);
-    
+    const result = this._bridge.execute(sql, params);
+
     return result.rows.map((row) => {
       const obj: Record<string, unknown> = {};
       

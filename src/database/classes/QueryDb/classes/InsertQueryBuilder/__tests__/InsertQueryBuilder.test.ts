@@ -15,7 +15,7 @@ const schema: AnySchema = {
 
 function makeBridge() {
   return {
-    execute: jest.fn().mockResolvedValue({ columns: [], rows: [] }),
+    execute: jest.fn().mockReturnValue({ columns: [], rows: [] }),
   } as unknown as SalveDatabase;
 }
 
@@ -24,25 +24,25 @@ function executedWith(bridge: SalveDatabase) {
 }
 
 describe('InsertQueryBuilder', () => {
-  test('generates correct INSERT SQL and params', async () => {
+  test('generates correct INSERT SQL and params', () => {
     const bridge = makeBridge();
-    await new InsertQueryBuilder(schema, bridge).values({ id: 1, name: 'Alice', age: 30 }).execute();
+    new InsertQueryBuilder(schema, bridge).values({ id: 1, name: 'Alice', age: 30 }).execute();
     const [sql, params] = executedWith(bridge);
     expect(sql).toBe('INSERT INTO "users" ("id", "name", "age") VALUES (?, ?, ?)');
     expect(params).toEqual([1, 'Alice', 30]);
   });
 
-  test('omitted nullable columns are excluded from the INSERT', async () => {
+  test('omitted nullable columns are excluded from the INSERT', () => {
     const bridge = makeBridge();
-    await new InsertQueryBuilder(schema, bridge).values({ id: 2, name: 'Bob' }).execute();
+    new InsertQueryBuilder(schema, bridge).values({ id: 2, name: 'Bob' }).execute();
     const [sql, params] = executedWith(bridge);
     expect(sql).toBe('INSERT INTO "users" ("id", "name") VALUES (?, ?)');
     expect(params).toEqual([2, 'Bob']);
   });
 
-  test('throws if execute is called without values()', async () => {
+  test('throws if execute is called without values()', () => {
     const bridge = makeBridge();
-    await expect(new InsertQueryBuilder(schema, bridge).execute()).rejects.toThrow(
+    expect(() => new InsertQueryBuilder(schema, bridge).execute()).toThrow(
       'InsertQueryBuilder: call .values() before .execute()'
     );
   });

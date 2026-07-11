@@ -12,11 +12,15 @@ const schema: AnySchema = {
     name: { type: 'text' },
     age:  { type: 'integer', nullable: true },
   },
+  indexes: [
+    { name: 'idx_age', columns: ['age'] },
+    { name: 'idx_name', columns: ['name'] },
+  ],
 };
 
 function makeBridge() {
   return {
-    execute: jest.fn().mockResolvedValue({ columns: [], rows: [] }),
+    execute: jest.fn().mockReturnValue({ columns: [], rows: [] }),
   } as unknown as SalveDatabase;
 }
 
@@ -25,17 +29,17 @@ function executedWith(bridge: SalveDatabase) {
 }
 
 describe('UpdateQueryBuilder', () => {
-  test('generates SET clause without WHERE', async () => {
+  test('generates SET clause without WHERE', () => {
     const bridge = makeBridge();
-    await new UpdateQueryBuilder(schema, bridge).set({ name: 'Bob' }).execute();
+    new UpdateQueryBuilder(schema, bridge).set({ name: 'Bob' }).execute();
     const [sql, params] = executedWith(bridge);
     expect(sql).toBe('UPDATE "users" SET "name" = ?');
     expect(params).toEqual(['Bob']);
   });
 
-  test('generates SET clause with WHERE', async () => {
+  test('generates SET clause with WHERE on the primary key', () => {
     const bridge = makeBridge();
-    await new UpdateQueryBuilder(schema, bridge)
+    new UpdateQueryBuilder(schema, bridge)
       .set({ name: 'Bob', age: 25 })
       .where(eq('id', 1))
       .execute();
@@ -44,9 +48,9 @@ describe('UpdateQueryBuilder', () => {
     expect(params).toEqual(['Bob', 25, 1]);
   });
 
-  test('supports compound WHERE', async () => {
+  test('supports compound WHERE on indexed columns', () => {
     const bridge = makeBridge();
-    await new UpdateQueryBuilder(schema, bridge)
+    new UpdateQueryBuilder(schema, bridge)
       .set({ name: 'Carol' })
       .where(and(gt('age', 18), eq('name', 'old')))
       .execute();
@@ -55,17 +59,25 @@ describe('UpdateQueryBuilder', () => {
     expect(params).toEqual(['Carol', 18, 'old']);
   });
 
-  test('throws if execute is called without set()', async () => {
+  test('throws if execute is called without set()', () => {
     const bridge = makeBridge();
-    await expect(new UpdateQueryBuilder(schema, bridge).execute()).rejects.toThrow(
+    expect(() => new UpdateQueryBuilder(schema, bridge).execute()).toThrow(
       'UpdateQueryBuilder: call .set() with at least one field before .execute()'
     );
   });
 
-  test('throws if set() is called with an empty object', async () => {
+  test('throws if set() is called with an empty object', () => {
     const bridge = makeBridge();
-    await expect(new UpdateQueryBuilder(schema, bridge).set({}).execute()).rejects.toThrow(
+    expect(() => new UpdateQueryBuilder(schema, bridge).set({}).execute()).toThrow(
       'UpdateQueryBuilder: call .set() with at least one field before .execute()'
     );
+  });
+
+  test('throws when where() targets a non-indexed, non-primary-key column', () => {
+    const bridge = makeBridge();
+    const noIndexSchema: AnySchema = { ...schema, indexes: [] };
+    expect(() =>
+      new UpdateQueryBuilder(noIndexSchema, bridge).set({ name: 'Dave' }).where(eq('age', 40)).execute()
+    ).toThrow(/index/i);
   });
 });

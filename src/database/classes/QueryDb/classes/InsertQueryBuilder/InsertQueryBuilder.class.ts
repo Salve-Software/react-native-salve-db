@@ -19,7 +19,7 @@ export class InsertQueryBuilder<TSchema extends AnySchema>
     return this
   }
 
-  async execute(): Promise<void> {
+  execute(): void {
     if (!this._row) throw new Error('InsertQueryBuilder: call .values() before .execute()')
 
     const cols = Object.keys(this._row as Record<string, unknown>)
@@ -28,6 +28,6 @@ export class InsertQueryBuilder<TSchema extends AnySchema>
     const placeholders = cols.map(() => '?').join(', ')
     const sql = `INSERT INTO "${this._schema.name}" (${colList}) VALUES (${placeholders})`
 
-    await this._bridge.execute(sql, params)
+    this._bridge.execute(sql, params)
   }
 }
