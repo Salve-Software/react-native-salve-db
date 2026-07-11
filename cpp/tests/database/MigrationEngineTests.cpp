@@ -218,3 +218,124 @@ TEST_CASE("a failure mid-registration rolls back the whole migration", "[migrati
   REQUIRE(storedVersion(*conn, "widgets") == 0);
   REQUIRE(storedVersion(*conn, "existing") == 1); // unrelated, already-committed schema is untouched
 }
+
+namespace {
+
+bool tableExists(SQLiteConnection& conn, const std::string& name) {
+  auto r = conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", { name });
+  return !r.rows.empty();
+}
+
+int triggerCount(SQLiteConnection& conn, const std::string& tableName) {
+  auto r = conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = ?", { tableName });
+  return static_cast<int>(std::get<double>(r.rows[0][0]));
+}
+
+std::string triggerSql(SQLiteConnection& conn, const std::string& name) {
+  auto r = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", { name });
+  REQUIRE(!r.rows.empty());
+  return std::get<std::string>(r.rows[0][0]);
+}
+
+} // namespace
+
+TEST_CASE("sync_queue and _sync_apply_lock are created once and survive repeated registerSchema", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_tables_once"));
+  MigrationEngine engine(conn);
+  std::string schemaJson = R"({
+    "name": "widgets", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" } }
+  })";
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(schemaJson));
+  REQUIRE(tableExists(*conn, "sync_queue"));
+  REQUIRE(tableExists(*conn, "_sync_apply_lock"));
+
+  conn->execute(
+    "INSERT INTO sync_queue (operation, entity, entity_id, payload, updated_at) VALUES ('insert','widgets','1','{}',0)", {});
+  engine.registerSchema(MigrationEngine::parseSchemaJson(schemaJson));
+
+  auto rows = conn->execute("SELECT COUNT(*) FROM sync_queue", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 1.0);
+}
+
+TEST_CASE("sync.enabled: true creates 3 triggers matching schema.columns", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_triggers"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" } },
+    "sync": { "enabled": true }
+  })"));
+
+  REQUIRE(triggerCount(*conn, "customers") == 3);
+
+  auto insertSql = triggerSql(*conn, "customers_sync_after_insert");
+  REQUIRE(insertSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\")") != std::string::npos);
+
+  auto updateSql = triggerSql(*conn, "customers_sync_after_update");
+  REQUIRE(updateSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\")") != std::string::npos);
+
+  auto deleteSql = triggerSql(*conn, "customers_sync_after_delete");
+  REQUIRE(deleteSql.find("json_object('id', OLD.\"id\")") != std::string::npos);
+  REQUIRE(deleteSql.find("'name'") == std::string::npos); // delete payload is PK-only
+}
+
+TEST_CASE("sync.enabled: false or absent creates no triggers", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_disabled"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "no_sync_field", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" } }
+  })"));
+  REQUIRE(triggerCount(*conn, "no_sync_field") == 0);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "sync_off", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" } },
+    "sync": { "enabled": false }
+  })"));
+  REQUIRE(triggerCount(*conn, "sync_off") == 0);
+}
+
+TEST_CASE("migrating a sync-enabled schema with a new column regenerates triggers", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_migrate_regen"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "sync": { "enabled": true }
+  })"));
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 2, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" } },
+    "sync": { "enabled": true }
+  })"));
+
+  REQUIRE(triggerCount(*conn, "customers") == 3);
+  auto insertSql = triggerSql(*conn, "customers_sync_after_insert");
+  REQUIRE(insertSql.find("'phone', NEW.\"phone\"") != std::string::npos);
+}
+
+TEST_CASE("turning sync.enabled off across versions drops orphaned triggers", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_toggle_off"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" } },
+    "sync": { "enabled": true }
+  })"));
+  REQUIRE(triggerCount(*conn, "customers") == 3);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 2, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "note": { "type": "text" } },
+    "sync": { "enabled": false }
+  })"));
+  REQUIRE(triggerCount(*conn, "customers") == 0);
+}
