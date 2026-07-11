@@ -5,5 +5,5 @@ import type { InferInsertModel } from "../classes";
 export interface IUpdateQueryBuilder<TSchema extends AnySchema> {
   set(patch: Partial<InferInsertModel<TSchema>>): this;
   where(condition: Condition): this;
-  execute(): Promise<void>;
+  execute(): void;
 }

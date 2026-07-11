@@ -34,7 +34,7 @@ export class Database {
     return this.queryDb.delete(schema);
   }
   
-  static transaction = <T>(fn: (tx: IQueryClient) => Promise<T>) => {
+  static transaction = <T>(fn: (tx: IQueryClient) => T) => {
     return this.queryDb.transaction<T>(fn);
   }
   

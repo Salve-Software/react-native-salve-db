@@ -31,23 +31,23 @@ export class QueryDb {
     return new DeleteQueryBuilder(schema, _bridge);
   }
 
-  async transaction<T>(fn: (tx: IQueryClient) => Promise<T>): Promise<T> {
+  transaction<T>(fn: (tx: IQueryClient) => T): T {
     this._assertConfigured('transaction');
-    await _bridge.beginTransaction();
+    _bridge.beginTransaction();
 
     try {
-      const result = await fn(this._makeTxClient());
-      await _bridge.commit();
+      const result = fn(this._makeTxClient());
+      _bridge.commit();
       return result;
     } catch (err) {
-      await _bridge.rollback();
+      _bridge.rollback();
       throw err;
     }
   }
 
-  async execute(sql: string, params?: unknown[]): Promise<unknown[]> {
+  execute(sql: string, params?: unknown[]): unknown[] {
     this._assertConfigured('execute');
-    const result = await _bridge.execute(sql, (params ?? []) as SqlValue[]);
+    const result = _bridge.execute(sql, (params ?? []) as SqlValue[]);
 
     return result.rows.map((row) => {
       const obj: Record<string, unknown> = {};
@@ -76,7 +76,7 @@ export class QueryDb {
       delete: <TSchema extends AnySchema>(schema: TSchema) =>
         new DeleteQueryBuilder(schema, _bridge),
 
-      transaction: <T>(fn: (tx: IQueryClient) => Promise<T>) =>
+      transaction: <T>(fn: (tx: IQueryClient) => T) =>
         this.transaction(fn),
 
       execute: (sql: string, params?: unknown[]) =>
