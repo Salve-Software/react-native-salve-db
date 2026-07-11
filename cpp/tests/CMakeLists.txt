@@ -113,6 +113,7 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/database/MigrationEngine.cpp"
   "${PROJECT_CPP_DIR}/query/QueryExecutor.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncOrchestrator.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncApplyGuard.cpp"
   "${PROJECT_CPP_DIR}/third_party/sqlite3/sqlite3.c"
   "${GENERATED_CPP_DIR}/HybridSalveDatabaseSpec.cpp"
 )

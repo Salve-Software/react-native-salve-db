@@ -19,6 +19,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/MigrationEngine.cpp
 	../cpp/query/QueryExecutor.cpp
 	../cpp/sync/SyncOrchestrator.cpp
+	../cpp/sync/SyncApplyGuard.cpp
 )
 
 # Add Nitrogen specs :)
