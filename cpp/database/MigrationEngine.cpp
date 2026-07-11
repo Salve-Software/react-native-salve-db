@@ -9,6 +9,40 @@ namespace margelo::nitro::salvedb {
 MigrationEngine::MigrationEngine(std::shared_ptr<SQLiteConnection> conn)
   : _conn(std::move(conn)) {}
 
+namespace {
+
+// Rolls back on scope exit unless commit() ran, so a mid-sequence throw can't leave a half-applied migration.
+class TransactionGuard {
+public:
+  explicit TransactionGuard(SQLiteConnection& conn) : _conn(conn) {
+    _conn.beginTransaction();
+  }
+
+  TransactionGuard(const TransactionGuard&) = delete;
+  TransactionGuard& operator=(const TransactionGuard&) = delete;
+
+  ~TransactionGuard() {
+    if (!_committed) {
+      try {
+        _conn.rollback();
+      } catch (...) {
+        // destructors must not throw
+      }
+    }
+  }
+
+  void commit() {
+    _conn.commit();
+    _committed = true;
+  }
+
+private:
+  SQLiteConnection& _conn;
+  bool _committed = false;
+};
+
+} // namespace
+
 // ── Schema version table ─────────────────────────────────────────────────────
 
 static constexpr auto kVersionTable = R"sql(
@@ -123,6 +157,8 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
 // ── Public: registerSchema ────────────────────────────────────────────────────
 
 void MigrationEngine::registerSchema(const SchemaDef& schema) {
+  TransactionGuard txn(*_conn);
+
   // Ensure version tracking table exists
   _conn->exec(kVersionTable);
 
@@ -138,6 +174,8 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   if (schema.version != stored) {
     setStoredVersion(schema.name, schema.version);
   }
+
+  txn.commit();
 }
 
 // ── JSON parsing ──────────────────────────────────────────────────────────────
