@@ -9,7 +9,6 @@
 #include <vector>
 #include <list>
 #include <unordered_map>
-#include <stdexcept>
 #include <memory>
 #include <mutex>
 

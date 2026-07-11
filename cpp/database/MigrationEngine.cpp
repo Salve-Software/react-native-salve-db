@@ -1,4 +1,5 @@
 #include "MigrationEngine.hpp"
+#include "json_parser.hpp"
 
 #include <sstream>
 #include <algorithm>
@@ -7,15 +8,15 @@
 namespace margelo::nitro::salvedb {
 
 MigrationEngine::MigrationEngine(std::shared_ptr<SQLiteConnection> conn)
-  : _conn(std::move(conn)) {}
+  : _db(std::move(conn)) {}
 
 namespace {
 
 // Rolls back on scope exit unless commit() ran, so a mid-sequence throw can't leave a half-applied migration.
 class TransactionGuard {
 public:
-  explicit TransactionGuard(SQLiteConnection& conn) : _conn(conn) {
-    _conn.beginTransaction();
+  explicit TransactionGuard(SQLiteConnection& conn) : _db(conn) {
+    _db.beginTransaction();
   }
 
   TransactionGuard(const TransactionGuard&) = delete;
@@ -24,7 +25,7 @@ public:
   ~TransactionGuard() {
     if (!_committed) {
       try {
-        _conn.rollback();
+        _db.rollback();
       } catch (...) {
         // destructors must not throw
       }
@@ -32,12 +33,12 @@ public:
   }
 
   void commit() {
-    _conn.commit();
+    _db.commit();
     _committed = true;
   }
 
 private:
-  SQLiteConnection& _conn;
+  SQLiteConnection& _db;
   bool _committed = false;
 };
 
@@ -76,7 +77,7 @@ static constexpr auto kVersionTable = R"sql(
 )sql";
 
 int MigrationEngine::storedVersion(const std::string& schemaName) {
-  auto result = _conn->execute(
+  auto result = _db->execute(
     "SELECT version FROM _salve_schema_versions WHERE name = ?",
     { schemaName }
   );
@@ -85,7 +86,7 @@ int MigrationEngine::storedVersion(const std::string& schemaName) {
 }
 
 void MigrationEngine::setStoredVersion(const std::string& schemaName, int version) {
-  _conn->execute(
+  _db->execute(
     "INSERT OR REPLACE INTO _salve_schema_versions (name, version) VALUES (?, ?)",
     { schemaName, static_cast<double>(version) }
   );
@@ -106,7 +107,7 @@ std::string MigrationEngine::sqliteType(const std::string& colType) const {
 // ── Existing columns ──────────────────────────────────────────────────────────
 
 std::vector<std::string> MigrationEngine::existingColumns(const std::string& tableName) {
-  auto result = _conn->execute("PRAGMA table_info(\"" + tableName + "\")", {});
+  auto result = _db->execute("PRAGMA table_info(\"" + tableName + "\")", {});
   std::vector<std::string> cols;
   for (auto& row : result.rows) {
     // PRAGMA table_info columns: cid, name, type, notnull, dflt_value, pk
@@ -135,7 +136,7 @@ void MigrationEngine::createTable(const SchemaDef& schema) {
   }
 
   ddl << "\n);";
-  _conn->exec(ddl.str());
+  _db->exec(ddl.str());
 
   // Indexes
   for (auto& idx : schema.indexes) {
@@ -147,7 +148,7 @@ void MigrationEngine::createTable(const SchemaDef& schema) {
       idxDdl << "\"" << idx.columns[i] << "\"";
     }
     idxDdl << ");";
-    _conn->exec(idxDdl.str());
+    _db->exec(idxDdl.str());
   }
 }
 
@@ -174,11 +175,11 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
         else
           alter << " DEFAULT ''";
       }
-      _conn->exec(alter.str());
+      _db->exec(alter.str());
 
       // ALTER TABLE ADD COLUMN can't carry a UNIQUE constraint directly.
       if (col.unique) {
-        _conn->exec("CREATE UNIQUE INDEX IF NOT EXISTS \"" + schema.name + "_" + colName +
+        _db->exec("CREATE UNIQUE INDEX IF NOT EXISTS \"" + schema.name + "_" + colName +
                     "_unique\" ON \"" + schema.name + "\" (\"" + colName + "\")");
       }
     }
@@ -188,10 +189,10 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
 // ── Public: registerSchema ────────────────────────────────────────────────────
 
 void MigrationEngine::registerSchema(const SchemaDef& schema) {
-  TransactionGuard txn(*_conn);
+  TransactionGuard txn(*_db);
 
   // Ensure version tracking table exists
-  _conn->exec(kVersionTable);
+  _db->exec(kVersionTable);
 
   int stored = storedVersion(schema.name);
 
