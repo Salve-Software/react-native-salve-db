@@ -1,5 +1,5 @@
 import type { ISalveDbProviderProps, ISalveDbProviderDeps, IDatabaseReadyState } from './types';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SalveDbContext } from './SalveDbContext';
 
 export const SalveDbProvider = (props: ISalveDbProviderProps & ISalveDbProviderDeps) => {
@@ -13,12 +13,8 @@ export const SalveDbProvider = (props: ISalveDbProviderProps & ISalveDbProviderD
   } = props;
 
   const [state, setState] = useState<IDatabaseReadyState>({ isReady: false, isLoading: true, error: null });
-  const startedRef = useRef(false);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
     let cancelled = false;
 
     async function onMount() {
