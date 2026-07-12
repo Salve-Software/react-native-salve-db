@@ -1,6 +1,7 @@
 #include "../../../../cpp/platform/platform.hpp"
 #include "../../../../cpp/platform/platform_android_jni.hpp"
 #include "JniSupport.hpp"
+#include "platform_android_http.hpp"
 #include <stdexcept>
 #include <string>
 
@@ -23,6 +24,7 @@ void setJavaVM(JavaVM* vm) {
   JNIEnv* env = nullptr;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
   s_secureStorageClass = resolveGlobalClass(env, "com/salvedb/SalveDbSecureStorage");
+  registerHttpClientClass(resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpClient"));
 }
 
 namespace {
