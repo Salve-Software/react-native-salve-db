@@ -13,20 +13,19 @@ public:
     return instance;
   }
 
-  // Called by HybridSalveDatabase::configure()
   void open(const std::string& dbName);
 
   std::shared_ptr<SQLiteConnection> connection() const {
-    if (!_connection)
+    if (!_db)
       throw std::runtime_error("Database not configured — call Database.configure() before any other operation.");
-    return _connection;
+    return _db;
   }
 
-  bool isOpen() const { return _connection != nullptr; }
+  bool isOpen() const { return _db != nullptr; }
 
 private:
   DatabaseManager() = default;
-  std::shared_ptr<SQLiteConnection> _connection;
+  std::shared_ptr<SQLiteConnection> _db;
 };
 
 } // namespace margelo::nitro::salvedb

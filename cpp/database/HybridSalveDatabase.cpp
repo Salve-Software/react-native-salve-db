@@ -47,6 +47,17 @@ std::shared_ptr<Promise<NativeSyncResult>> HybridSalveDatabase::triggerSync(cons
   });
 }
 
+double HybridSalveDatabase::subscribeToChanges(const std::function<void(const std::vector<std::string>&)>& callback) {
+  int id = DatabaseManager::shared().connection()->subscribe(
+    [callback](std::vector<std::string> tables) { callback(tables); }
+  );
+  return static_cast<double>(id);
+}
+
+void HybridSalveDatabase::unsubscribeFromChanges(double id) {
+  DatabaseManager::shared().connection()->unsubscribe(static_cast<int>(id));
+}
+
 double HybridSalveDatabase::debugPreparedStatementCount() {
   return static_cast<double>(DatabaseManager::shared().connection()->prepareCount());
 }

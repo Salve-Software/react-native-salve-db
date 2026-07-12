@@ -6,23 +6,25 @@ Quebra do MVP (ver [`../mvp-scope.md`](../mvp-scope.md)) em tarefas independente
 
 | # | Tarefa | Status | Prioridade | Área | Depende de | Skills |
 |---|---|---|---|---|---|---|
-| [001](./001-ts-contracts.md) | Contratos TypeScript | ✅ | P0 | TS | — | `api-design` |
-| [002](./002-nitro-hybrid-spec.md) | Nitro HybridObject Spec | ✅ | P0 | TS | 001 | `build-nitro-modules`, `api-design` |
-| [003](./003-test-harness-bootstrap.md) | Bootstrap de test harness | ✅ | P1 | Tooling | — | — |
-| [004](./004-sqlite-core.md) | SQLite Core & Connection Management | ⬜ | P0 | C++ (core) | 002 | `cpp` |
-| [005](./005-migration-engine.md) | Schema Registration & Migration Engine | ⬜ | P0 | C++ (core) | 004 | `cpp` |
+| [001](https://github.com/Salve-Software/react-native-salve-db/issues/2) | Contratos TypeScript | ✅ | P0 | TS | — | `api-design` |
+| [002](https://github.com/Salve-Software/react-native-salve-db/issues/3) | Nitro HybridObject Spec | ✅ | P0 | TS | 001 | `build-nitro-modules`, `api-design` |
+| [003](https://github.com/Salve-Software/react-native-salve-db/issues/4) | Bootstrap de test harness | ✅ | P1 | Tooling | — | — |
+| [004](https://github.com/Salve-Software/react-native-salve-db/issues/5) | SQLite Core & Connection Management | ✅ | P0 | C++ (core) | 002 | `cpp` |
+| [005](https://github.com/Salve-Software/react-native-salve-db/issues/6) | Schema Registration & Migration Engine | ✅ | P0 | C++ (core) | 004 | `cpp` |
 | [006](./006-trigger-engine-sync-queue.md) | Trigger Engine & Sync Queue | ⬜ | P0 | C++ (core) | 005 | `cpp` |
-| [007](./007-query-executor.md) | Query Executor | ⬜ | P1 | C++ (core) | 004 | `cpp` |
+| [007](./007-query-executor.md) | Query Executor | ✅ | P1 | C++ (core) | 004 | `cpp` |
 | [008](./008-expression-interpreter.md) | Interpretador de Expressões Declarativas | ⬜ | P1 | C++ (core) | 004 (parcial) | `cpp` |
 | [009](./009-credential-provider.md) | Credential Provider | ⬜ | P1 | Android+iOS | 002, 008 | `kotlin`, `swift` |
 | [010](./010-http-client.md) | HTTP Client | ⬜ | P1 | Android+iOS | 002 | `kotlin`, `swift` |
 | [011](./011-background-scheduler.md) | Background Scheduler | ⬜ | P2 | Android+iOS | 002, 012 | `kotlin`, `swift` |
 | [012](./012-sync-orchestrator.md) | Sync Orchestrator | ⬜ | P1 | C++ (core) | 006, 008, 009, 010 | `cpp` |
-| [013](./013-query-builder.md) | Query Builder (TS, estilo Drizzle) | ⬜ | P1 | TS | 001, 002 | `api-design` |
-| [014](./014-public-api-configure-register.md) | Public API: `Database.configure/register` | ⬜ | P1 | TS | 001, 002, 005, 009 | `api-design`, `build-nitro-modules` |
+| [013](./013-query-builder.md) | Query Builder (TS, estilo Drizzle) | ✅ | P1 | TS | 001, 002 | `api-design` |
+| [014](./014-public-api-configure-register.md) | Public API: `Database.configure/register` | ✅ | P1 | TS | 001, 002, 005, 009 | `api-design`, `build-nitro-modules` |
 | [015](./015-readme-rewrite.md) | Reescrever README.md | ⬜ | P2 | Docs | — | — |
 
 **Status:** ⬜ Não iniciado · 🟡 Em andamento · ✅ Finalizado — atualize aqui **e** no campo `**Status:**` do arquivo da tarefa ao mudar.
+
+> Os arquivos de 001–005 foram removidos deste diretório (rastreamento migrou para as GitHub Issues #2–#16 do repo `Salve-Software/react-native-salve-db`); os links acima apontam direto pra issue correspondente. **Atenção:** as issues #8 (TASK-007), #14 (TASK-013) e #15 (TASK-014) ainda aparecem abertas no GitHub apesar do código já estar implementado e testado — precisam ser fechadas/atualizadas manualmente lá, isso não foi feito automaticamente.
 
 ## Grupos de paralelismo
 

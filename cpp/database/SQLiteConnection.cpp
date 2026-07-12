@@ -21,6 +21,7 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
   sqlite3_exec(_db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
   sqlite3_busy_timeout(_db, 5000);
   sqlite3_extended_result_codes(_db, 1); // makes prepare/step/exec return extended codes directly
+  sqlite3_update_hook(_db, &SQLiteConnection::onSqliteUpdate, this);
 }
 
 namespace {
@@ -48,12 +49,19 @@ SQLiteConnection::~SQLiteConnection() {
     sqlite3_exec(_db, "ROLLBACK", nullptr, nullptr, nullptr);
   }
 
+  if (_db) sqlite3_update_hook(_db, nullptr, nullptr);
+
   for (auto& [key, stmt] : _cache) {
     sqlite3_finalize(stmt->second);
   }
   _lru.clear();
   _cache.clear();
   if (_db) sqlite3_close(_db);
+}
+
+void SQLiteConnection::onSqliteUpdate(void* context, int /*op*/, const char* /*dbName*/, const char* table, sqlite3_int64 /*rowid*/) {
+  auto* self = static_cast<SQLiteConnection*>(context);
+  if (table) self->_touchedTables.insert(table);
 }
 
 sqlite3_stmt* SQLiteConnection::getOrPrepare(const std::string& sql) {
@@ -88,7 +96,7 @@ void SQLiteConnection::evictLRU() {
 }
 
 QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<SqlValue>& params) {
-  std::lock_guard<std::mutex> lock(_mutex);
+  std::unique_lock<std::mutex> lock(_mutex);
 
   sqlite3_stmt* stmt = getOrPrepare(sql);
   sqlite3_reset(stmt);
@@ -188,7 +196,9 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
     throw std::runtime_error(errorPrefix(primaryCode) + "SQLite execute error: " + errMsg);
   }
 
-  return QueryResult{std::move(columns), std::move(rows)};
+  QueryResult result{std::move(columns), std::move(rows)};
+  if (!_inTransaction) flushChangeNotifications(lock);
+  return result;
 }
 
 void SQLiteConnection::beginTransaction() {
@@ -202,10 +212,11 @@ void SQLiteConnection::beginTransaction() {
 }
 
 void SQLiteConnection::commit() {
-  std::lock_guard<std::mutex> lock(_mutex);
+  std::unique_lock<std::mutex> lock(_mutex);
 
   execLocked("COMMIT");
   _inTransaction = false;
+  flushChangeNotifications(lock);
 }
 
 void SQLiteConnection::rollback() {
@@ -213,11 +224,14 @@ void SQLiteConnection::rollback() {
 
   execLocked("ROLLBACK");
   _inTransaction = false;
+  // Discard without notifying — nothing in _touchedTables was actually persisted.
+  _touchedTables.clear();
 }
 
 void SQLiteConnection::exec(const std::string& sql) {
-  std::lock_guard<std::mutex> lock(_mutex);
+  std::unique_lock<std::mutex> lock(_mutex);
   execLocked(sql);
+  if (!_inTransaction) flushChangeNotifications(lock);
 }
 
 void SQLiteConnection::execLocked(const std::string& sql) {
@@ -229,6 +243,39 @@ void SQLiteConnection::execLocked(const std::string& sql) {
     sqlite3_free(errMsg);
     throw std::runtime_error(errorPrefix(primaryCode) + "SQLite exec error: " + err + " — SQL: " + sql);
   }
+}
+
+void SQLiteConnection::flushChangeNotifications(std::unique_lock<std::mutex>& lock) {
+  if (_touchedTables.empty()) return;
+
+  std::vector<std::string> tables(_touchedTables.begin(), _touchedTables.end());
+  _touchedTables.clear();
+
+  std::vector<std::function<void(std::vector<std::string>)>> callbacks;
+  callbacks.reserve(_subscribers.size());
+  for (auto& [id, callback] : _subscribers) callbacks.push_back(callback);
+
+  lock.unlock();
+  for (auto& callback : callbacks) {
+    try {
+      callback(tables);
+    } catch (...) {
+      // A subscriber's failure must not fail the write that triggered it,
+      // nor block notifications to the remaining subscribers.
+    }
+  }
+}
+
+int SQLiteConnection::subscribe(std::function<void(std::vector<std::string>)> callback) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  int id = _nextSubscriberId++;
+  _subscribers[id] = std::move(callback);
+  return id;
+}
+
+void SQLiteConnection::unsubscribe(int id) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  _subscribers.erase(id);
 }
 
 } // namespace margelo::nitro::salvedb

@@ -53,6 +53,16 @@ export class QueryDb {
     })
   }
 
+  subscribeToChanges(callback: (tables: string[]) => void): number {
+    this._assertConfigured('subscribeToChanges');
+    return this._bridge.subscribeToChanges(callback);
+  }
+
+  unsubscribeFromChanges(id: number): void {
+    this._assertConfigured('unsubscribeFromChanges');
+    this._bridge.unsubscribeFromChanges(id);
+  }
+
   private _assertConfigured(method: string): void {
     if (!ConfigureDb.isConfigured()) {
       throw new Error(`Database.${method}: call Database.configure() first`);

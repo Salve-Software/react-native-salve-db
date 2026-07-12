@@ -1,6 +1,6 @@
 # TASK-014 — Public API: `Database.configure()` / `Database.register()`
 
-**Status:** ⬜ Não iniciado
+**Status:** ✅ Finalizado (parcial: sem TASK-009/Credential Provider ainda) — `src/database/Database.class.ts` + `src/database/classes/ConfigureDb/ConfigureDb.class.ts` expõem `Database.configure/register/select/insert/update/delete/transaction/execute`.
 **Prioridade:** P1 (núcleo do MVP)
 **Área:** TS
 **Depende de:** TASK-001, TASK-002, TASK-005, TASK-009

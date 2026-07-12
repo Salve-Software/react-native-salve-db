@@ -139,6 +139,54 @@ TEST_CASE("prepared statement cache is reused for repeated SQL", "[cache]") {
   REQUIRE(countAfterFirst == countAfterSecond);
 }
 
+TEST_CASE("subscribeToChanges notifies JS after a write, across the async JSI thread hop", "[notify]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("subscribe")));
+  harness.run("db.execute('CREATE TABLE t (id INTEGER PRIMARY KEY)', [])");
+
+  auto subscribeReturnsNumber = harness.run(R"(
+    (() => {
+      globalThis.__received = null;
+      const id = db.subscribeToChanges((tables) => { globalThis.__received = tables; });
+      return typeof id;
+    })()
+  )");
+  REQUIRE(subscribeReturnsNumber == R"("number")");
+
+  harness.run("db.execute('INSERT INTO t (id) VALUES (1)', [])");
+
+  // The subscriber callback is dispatched async (AsyncJSCallback), queued on
+  // the same TestDispatcher `execute()` used above — a follow-up run() drains
+  // it before returning, since its own completion is enqueued strictly after.
+  auto received = harness.run("globalThis.__received");
+  REQUIRE(received == R"(["t"])");
+}
+
+TEST_CASE("unsubscribeFromChanges stops further notifications", "[notify]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("unsubscribe")));
+  harness.run("db.execute('CREATE TABLE t (id INTEGER PRIMARY KEY)', [])");
+
+  harness.run(R"(
+    (() => {
+      globalThis.__count = 0;
+      globalThis.__subId = db.subscribeToChanges(() => { globalThis.__count++; });
+      return true;
+    })()
+  )");
+
+  harness.run("db.execute('INSERT INTO t (id) VALUES (1)', [])");
+  auto countAfterFirst = harness.run("globalThis.__count");
+  REQUIRE(countAfterFirst == "1");
+
+  harness.run("db.unsubscribeFromChanges(globalThis.__subId)");
+  harness.run("db.execute('INSERT INTO t (id) VALUES (2)', [])");
+  auto countAfterSecond = harness.run("globalThis.__count");
+  REQUIRE(countAfterSecond == "1");
+}
+
 TEST_CASE("blob ArrayBuffer params survive the async JSI thread hop", "[thread-safety]") {
   // Regression test for the bug where ArrayBuffer blob params were captured
   // by value and touched inside Promise::async's lambda off the JS thread

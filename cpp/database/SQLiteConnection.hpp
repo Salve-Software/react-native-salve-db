@@ -8,8 +8,9 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <set>
 #include <unordered_map>
-#include <stdexcept>
+#include <functional>
 #include <memory>
 #include <mutex>
 
@@ -40,11 +41,16 @@ public:
   // statements instead of re-preparing on every call with the same SQL text.
   size_t prepareCount() const { return _prepareCount; }
 
+  // Subscribe to table-level change notifications (fires once per commit,
+  // or once per statement outside an explicit transaction, listing every
+  // table touched — coalesced, not per-row). Returns an id for unsubscribe().
+  int subscribe(std::function<void(std::vector<std::string>)> callback);
+  void unsubscribe(int id);
+
 private:
   sqlite3* _db = nullptr;
   bool _inTransaction = false;
 
-  // Guards _db/_lru/_cache; private helpers assume the caller already holds it.
   std::mutex _mutex;
 
   // LRU prepared statement cache (max 100 entries)
@@ -53,9 +59,16 @@ private:
   std::unordered_map<std::string, decltype(_lru)::iterator> _cache;
   size_t _prepareCount = 0;
 
+  std::set<std::string> _touchedTables;
+  std::unordered_map<int, std::function<void(std::vector<std::string>)>> _subscribers;
+  int _nextSubscriberId = 0;
+
   sqlite3_stmt* getOrPrepare(const std::string& sql);
   void evictLRU();
   void execLocked(const std::string& sql);
+
+  void flushChangeNotifications(std::unique_lock<std::mutex>& lock);
+  static void onSqliteUpdate(void* context, int op, const char* dbName, const char* table, sqlite3_int64 rowid);
 };
 
 } // namespace margelo::nitro::salvedb

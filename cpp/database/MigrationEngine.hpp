@@ -1,7 +1,6 @@
 #pragma once
 
 #include "SQLiteConnection.hpp"
-#include "json_parser.hpp"
 #include <memory>
 #include <string>
 #include <map>
@@ -48,7 +47,7 @@ public:
   static SchemaDef parseSchemaJson(const std::string& json);
 
 private:
-  std::shared_ptr<SQLiteConnection> _conn;
+  std::shared_ptr<SQLiteConnection> _db;
 
   void createTable(const SchemaDef& schema);
   bool migrateTable(const SchemaDef& schema); // true if a column was added

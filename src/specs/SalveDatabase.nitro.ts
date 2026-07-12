@@ -40,6 +40,21 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
    */
   triggerSync(schemaName: string): Promise<NativeSyncResult>;
 
+  // ── Change notification ─────────────────────────────────────────────────────
+
+  /**
+   * Subscribes to table-level write notifications (backed by sqlite3_update_hook).
+   * Fires once per commit — or once per statement outside an explicit transaction —
+   * listing every table touched, coalesced rather than per-row. Fires for every
+   * write regardless of origin: the query builder, raw SQL, migrations, or the
+   * native background sync engine.
+   * @returns A subscription id, pass to unsubscribeFromChanges to stop listening.
+   */
+  subscribeToChanges(callback: (tables: string[]) => void): number;
+
+  /** Stops a subscription previously created by subscribeToChanges. */
+  unsubscribeFromChanges(id: number): void;
+
   // ── Debug ──────────────────────────────────────────────────────────────────
 
   /** Test-only: number of sqlite3_prepare_v2 calls, i.e. LRU cache misses. */

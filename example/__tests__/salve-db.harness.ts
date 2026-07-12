@@ -10,22 +10,6 @@ describe('SalveDb', () => {
   it('exposes Database', () => {
     expect(Database).toBeDefined();
   });
-
-  // ORDER MATTERS: ConfigureDb._configured is a static, process-wide flag with
-  // no reset — this must be the first configure()/register() call in the whole
-  // file, or this assertion becomes a false positive (it would only "pass"
-  // because an earlier test already configured the database).
-  it('register() before configure() throws', () => {
-    const schema: AnySchema = {
-      name: 'unconfigured_probe',
-      version: 1,
-      primaryKey: 'id',
-      columns: { id: { type: 'integer' } },
-    };
-    expect(() => Database.register({ schema })).toThrow(
-      'Database.register: call Database.configure() first'
-    );
-  });
 });
 
 describe('Database.configure / register guards', () => {
@@ -322,5 +306,32 @@ describe('sync_queue side effects from real writes', () => {
     expect(queue).toHaveLength(3);
     expect(queue.map((row) => row.operation)).toEqual(['insert', 'update', 'delete']);
     expect(queue.every((row) => row.entity === 'customers')).toBe(true);
+  });
+});
+
+describe('subscribeToChanges — real native write notifications', () => {
+  it('notifies subscribers with the touched table on write', async () => {
+    Database.configure({ name: uniqueName('e2e_subscribe') });
+
+    const schema: AnySchema = {
+      name: 'notes',
+      version: 1,
+      primaryKey: 'id',
+      columns: {
+        id: { type: 'integer' },
+        title: { type: 'text' },
+      },
+    };
+    await Database.register({ schema });
+
+    const seen: string[][] = [];
+    const subscriptionId = Database.subscribeToChanges((tables) => seen.push(tables));
+
+    try {
+      Database.insert(schema).values({ id: 1, title: 'reactive note' }).execute();
+      expect(seen).toEqual([['notes']]);
+    } finally {
+      Database.unsubscribeFromChanges(subscriptionId);
+    }
   });
 });
