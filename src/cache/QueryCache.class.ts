@@ -70,7 +70,8 @@ export class QueryCache {
 
     return () => {
       entry.listeners.delete(listener);
-      if (entry.listeners.size === 0 && this._entries.get(key) === entry) {
+
+      if (entry.listeners.size === 0 && this._entries.get(key)?.listeners === entry.listeners) {
         this._entries.delete(key);
       }
     };

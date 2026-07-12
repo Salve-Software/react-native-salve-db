@@ -162,4 +162,17 @@ describe('QueryCache — subscribeToEntry lifecycle', () => {
     const { cache } = makeCache();
     expect(() => cache.subscribeToEntry({ key: 'missing', listener: jest.fn() })()).not.toThrow();
   });
+
+  test('still evicts the entry after a table change replaced it with a new object reference', () => {
+    const { cache, fireNativeChange } = makeCache();
+    cache.subscribeNative();
+    cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn: () => [{ id: 1 }] });
+
+    const unsubscribe = cache.subscribeToEntry({ key: 'users', listener: jest.fn() });
+
+    fireNativeChange(['users']);
+
+    unsubscribe();
+    expect(cache.getSnapshot('users')).toBeUndefined();
+  });
 });
