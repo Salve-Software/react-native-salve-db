@@ -16,6 +16,9 @@ Pod::Spec.new do |s|
   s.source_files = [
     # Implementation (Swift)
     "ios/**/*.{swift}",
+    # Objective-C headers shared between Swift and Objective-C++ (e.g. Bridge.h) — must
+    # be a podspec source so CocoaPods puts it in the umbrella header Swift sees.
+    "ios/**/*.h",
     # Autolinking/Registration + platform init (Objective-C++)
     "ios/**/*.{m,mm}",
     # Implementation (C++ objects)
@@ -24,6 +27,9 @@ Pod::Spec.new do |s|
     "cpp/third_party/sqlite3/*.{c,h}",
   ]
   s.exclude_files = ["cpp/tests/**/*", "ios/tests/**/*"]
+  # Without this, CocoaPods marks ios/**/*.h as "Project" headers (only visible via
+  # relative #import in .m/.mm) instead of "Public" (visible to Swift via the umbrella header).
+  s.public_header_files = "ios/**/*.h"
 
   # Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
   s.pod_target_xcconfig = { 'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SQLITE_ENABLE_COLUMN_METADATA=1' }

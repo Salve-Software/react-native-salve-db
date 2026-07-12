@@ -1,10 +1,12 @@
 import Foundation
 
-final class URLSessionAdapter {
+// NSObject-derived: IHttpClientProtocol (Bridge.h) inherits NSObject, required for ObjC++ to hold it as id<IHttpClientProtocol>.
+final class URLSessionAdapter: NSObject {
   private let session: URLSession
 
   init(session: URLSession = .shared) {
     self.session = session
+    super.init()
   }
 
   func execute(_ request: HttpAdapterRequest) async -> HttpAdapterOutcome {
