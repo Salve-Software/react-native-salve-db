@@ -248,6 +248,18 @@ export interface CredentialsDefinition {
     };
 
     /**
+     * Par de tokens inicial, obtido pelo próprio fluxo de login do app
+     * (fora do escopo desta lib) antes de chamar `configure()`. Persistido
+     * nativamente (Keychain/Keystore) uma única vez — chamadas seguintes de
+     * `configure()` (ex: reabrir o app) não sobrescrevem um token já
+     * refreshado nativamente desde então.
+     */
+    tokens?: {
+        accessToken: string;
+        refreshToken: string;
+    };
+
+    /**
      * Contrato de refresh. Disparado pelo Native Sync Engine quando um
      * request de sync recebe 401 — JavaScript nunca participa.
      */

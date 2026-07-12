@@ -12,11 +12,22 @@ interface RefreshParams {
   responseRefreshTokenPath: string;
 }
 
+interface InitialTokensParams {
+  accessToken: string;
+  refreshToken: string;
+}
+
 interface CredentialsParams {
   /** Auth provider. Determines how the native engine authenticates sync requests. */
   provider: string;
   /** Header used to send the access token in sync requests (e.g. `"Authorization"`). */
   accessTokenHeaderName: string;
+  /**
+   * Initial token pair obtained by the app's own login flow. Seeded into
+   * Keychain/Keystore once at configure() time; omitted on later configure()
+   * calls (e.g. app restart) since the tokens already persisted natively.
+   */
+  tokens?: InitialTokensParams;
   /** Token refresh contract. Executed natively on 401 — JS never participates. */
   refresh: RefreshParams;
 }
