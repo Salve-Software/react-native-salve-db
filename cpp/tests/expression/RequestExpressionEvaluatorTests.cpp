@@ -8,6 +8,15 @@
 
 using namespace margelo::nitro::salvedb;
 
+namespace {
+
+std::string uniqueDbPath(const std::string& testName) {
+  static int counter = 0;
+  return platform::getDocumentsDirectory() + "/" + testName + "_" + std::to_string(++counter) + ".db";
+}
+
+} // namespace
+
 TEST_CASE("evaluates ConstantExpression", "[expression][RequestExpressionEvaluator]") {
   auto noopResolver = [](const std::string&) -> json::Value { return json::Value(nullptr); };
 
@@ -90,7 +99,7 @@ TEST_CASE("malformed or ambiguous expression nodes throw", "[expression][Request
 }
 
 TEST_CASE("composes a full request body with cursor/operations/pageSize wired to a real sync_queue", "[expression][RequestExpressionEvaluator][integration]") {
-  auto conn = std::make_shared<SQLiteConnection>(platform::getDocumentsDirectory() + "/evaluator_composition.db");
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("evaluator_composition"));
   MigrationEngine engine(conn);
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
