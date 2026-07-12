@@ -1,7 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
+#include "../../http/NetworkConfig.hpp"
 #include "../support/HybridDatabaseHarness.hpp"
 
 using margelo::nitro::salvedb::tests::HybridDatabaseHarness;
+using margelo::nitro::salvedb::NetworkConfig;
 
 namespace {
 
@@ -209,4 +211,25 @@ TEST_CASE("blob ArrayBuffer params survive the async JSI thread hop", "[thread-s
     )");
     REQUIRE(result == "[1,2,3,4," + std::to_string(i) + "]");
   }
+}
+
+TEST_CASE("configure() with baseUrl and network.timeout populates NetworkConfig", "[database][configure]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(
+    "db.configure({ name: '" + uniqueDbName("network_config") + "', "
+    "baseUrl: 'https://api.x.com', network: { timeout: 5000 } })"
+  );
+
+  REQUIRE(NetworkConfig::shared().baseUrl() == "https://api.x.com");
+  REQUIRE(NetworkConfig::shared().timeoutMs() == 5000.0);
+}
+
+TEST_CASE("configure() without baseUrl/network leaves NetworkConfig empty", "[database][configure]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("network_config_empty")));
+
+  REQUIRE_FALSE(NetworkConfig::shared().baseUrl().has_value());
+  REQUIRE_FALSE(NetworkConfig::shared().timeoutMs().has_value());
 }

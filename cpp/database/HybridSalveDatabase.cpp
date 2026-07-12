@@ -1,6 +1,7 @@
 #include "HybridSalveDatabase.hpp"
 #include "DatabaseManager.hpp"
 #include "MigrationEngine.hpp"
+#include "../http/NetworkConfig.hpp"
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
@@ -9,6 +10,12 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.name.empty())
     throw std::runtime_error("Database.configure: 'name' is required");
   DatabaseManager::shared().open(params.name);
+
+  NetworkConfig::shared().configure(
+    params.baseUrl,
+    params.network ? std::optional<double>(params.network->timeout) : std::nullopt,
+    params.credentials
+  );
 }
 
 std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::string& schemaJson) {
