@@ -15,5 +15,5 @@ TEST_CASE("SQLiteConnection(walMode=false) leaves the default (non-WAL) journal 
   SQLiteConnection conn(platform::getDocumentsDirectory() + "/wal_disabled_test.db", /*walMode=*/false);
 
   auto result = conn.execute("PRAGMA journal_mode", {});
-  REQUIRE(std::get<std::string>(result.rows[0][0]) != "wal");
+  REQUIRE(std::get<std::string>(result.rows[0][0]) == "delete");
 }

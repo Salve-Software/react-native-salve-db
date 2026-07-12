@@ -7,6 +7,25 @@
 
 namespace margelo::nitro::salvedb {
 
+namespace {
+
+std::string setJournalMode(sqlite3* db, const char* mode) {
+  std::string sql = std::string("PRAGMA journal_mode=") + mode + ";";
+  sqlite3_stmt* stmt = nullptr;
+  if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+    throw std::runtime_error(std::string("SQLite journal_mode pragma failed: ") + sqlite3_errmsg(db));
+  }
+  std::string result;
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    const auto* text = sqlite3_column_text(stmt, 0);
+    result = text ? reinterpret_cast<const char*>(text) : "";
+  }
+  sqlite3_finalize(stmt);
+  return result;
+}
+
+} // namespace
+
 SQLiteConnection::SQLiteConnection(const std::string& path, bool walMode) {
   int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
   int rc = sqlite3_open_v2(path.c_str(), &_db, flags, nullptr);
@@ -16,9 +35,16 @@ SQLiteConnection::SQLiteConnection(const std::string& path, bool walMode) {
     _db = nullptr;
     throw std::runtime_error("SQLite open failed (" + path + "): " + err);
   }
-  // WAL mode for concurrent read + write (reads never block on a write in
-  // progress, e.g. the native background sync engine), busy timeout to avoid SQLITE_BUSY
-  if (walMode) sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+  // WAL reduces read/write contention: readers keep seeing a consistent
+  // snapshot while a write (e.g. the native background sync engine) is in
+  // progress, instead of blocking behind its exclusive lock.
+  std::string journalMode = setJournalMode(_db, walMode ? "WAL" : "DELETE");
+  if (walMode && journalMode != "wal") {
+    std::string err = "SQLite failed to enable WAL journal mode (got '" + journalMode + "')";
+    sqlite3_close(_db);
+    _db = nullptr;
+    throw std::runtime_error(err);
+  }
   sqlite3_exec(_db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
   sqlite3_busy_timeout(_db, 5000);
   sqlite3_extended_result_codes(_db, 1); // makes prepare/step/exec return extended codes directly

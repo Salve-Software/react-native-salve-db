@@ -203,7 +203,7 @@ TEST_CASE("configure({ walMode: false }) leaves the default (non-WAL) journal mo
   harness.run("db.configure({ name: '" + name + "', walMode: false })");
 
   auto result = harness.run("db.execute('PRAGMA journal_mode', [])");
-  REQUIRE(result != R"({"columns":["journal_mode"],"rows":[["wal"]]})");
+  REQUIRE(result == R"({"columns":["journal_mode"],"rows":[["delete"]]})");
 }
 
 TEST_CASE("blob ArrayBuffer params survive the async JSI thread hop", "[thread-safety]") {
