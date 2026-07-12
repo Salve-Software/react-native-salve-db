@@ -13,6 +13,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/third_party/sqlite3/sqlite3.c
 	src/main/cpp/cpp-adapter.cpp
 	src/main/cpp/platform_android.cpp
+	src/main/cpp/http_client_jni.cpp
 	../cpp/database/HybridSalveDatabase.cpp
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
