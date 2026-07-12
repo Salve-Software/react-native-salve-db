@@ -256,7 +256,14 @@ void SQLiteConnection::flushChangeNotifications(std::unique_lock<std::mutex>& lo
   for (auto& [id, callback] : _subscribers) callbacks.push_back(callback);
 
   lock.unlock();
-  for (auto& callback : callbacks) callback(tables);
+  for (auto& callback : callbacks) {
+    try {
+      callback(tables);
+    } catch (...) {
+      // A subscriber's failure must not fail the write that triggered it,
+      // nor block notifications to the remaining subscribers.
+    }
+  }
 }
 
 int SQLiteConnection::subscribe(std::function<void(std::vector<std::string>)> callback) {

@@ -89,6 +89,18 @@ TEST_CASE("unsubscribe() stops further notifications", "[notify]") {
   REQUIRE(callCount == 1);
 }
 
+TEST_CASE("a throwing subscriber does not block later subscribers or propagate to the caller", "[notify]") {
+  SQLiteConnection conn(platform::getDocumentsDirectory() + "/notify_throwing_subscriber.db");
+  setUpNotifTables(conn);
+
+  bool secondCalled = false;
+  conn.subscribe([](std::vector<std::string>) { throw std::runtime_error("subscriber boom"); });
+  conn.subscribe([&](std::vector<std::string>) { secondCalled = true; });
+
+  REQUIRE_NOTHROW(conn.execute("INSERT INTO notif_a (value) VALUES (?)", {static_cast<double>(1)}));
+  REQUIRE(secondCalled);
+}
+
 TEST_CASE("concurrent writes from multiple threads notify without crashing or deadlocking", "[notify][thread-safety]") {
   SQLiteConnection conn(platform::getDocumentsDirectory() + "/notify_concurrency.db");
   setUpNotifTables(conn);
