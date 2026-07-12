@@ -35,9 +35,7 @@ SQLiteConnection::SQLiteConnection(const std::string& path, bool walMode) {
     _db = nullptr;
     throw std::runtime_error("SQLite open failed (" + path + "): " + err);
   }
-  // WAL reduces read/write contention: readers keep seeing a consistent
-  // snapshot while a write (e.g. the native background sync engine) is in
-  // progress, instead of blocking behind its exclusive lock.
+
   std::string journalMode = setJournalMode(_db, walMode ? "WAL" : "DELETE");
   if (walMode && journalMode != "wal") {
     std::string err = "SQLite failed to enable WAL journal mode (got '" + journalMode + "')";
