@@ -17,9 +17,19 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
 	../cpp/database/MigrationEngine.cpp
+	../cpp/database/SchemaRegistry.cpp
 	../cpp/query/QueryExecutor.cpp
 	../cpp/sync/SyncOrchestrator.cpp
+	../cpp/sync/SyncApplyGuard.cpp
+	../cpp/sync/SyncQueueReader.cpp
+	../cpp/expression/RequestExpressionEvaluator.cpp
+	../cpp/expression/JsonPathExtractor.cpp
 )
+
+# Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
+# target_compile_definitions (not add_compile_definitions, which needs CMake >= 3.12)
+# keeps this working under the cmake_minimum_required(3.9.0) declared above.
+target_compile_definitions(${PACKAGE_NAME} PRIVATE SQLITE_ENABLE_COLUMN_METADATA=1)
 
 # Add Nitrogen specs :)
 include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/SalveDb+autolinking.cmake)
@@ -32,6 +42,7 @@ include_directories(
         "../cpp/platform"
         "../cpp/query"
         "../cpp/sync"
+        "../cpp/expression"
         "../cpp/third_party/sqlite3"
 )
 

@@ -111,8 +111,13 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/database/SQLiteConnection.cpp"
   "${PROJECT_CPP_DIR}/database/DatabaseManager.cpp"
   "${PROJECT_CPP_DIR}/database/MigrationEngine.cpp"
+  "${PROJECT_CPP_DIR}/database/SchemaRegistry.cpp"
   "${PROJECT_CPP_DIR}/query/QueryExecutor.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncOrchestrator.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncApplyGuard.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncQueueReader.cpp"
+  "${PROJECT_CPP_DIR}/expression/RequestExpressionEvaluator.cpp"
+  "${PROJECT_CPP_DIR}/expression/JsonPathExtractor.cpp"
   "${PROJECT_CPP_DIR}/third_party/sqlite3/sqlite3.c"
   "${GENERATED_CPP_DIR}/HybridSalveDatabaseSpec.cpp"
 )
@@ -124,6 +129,7 @@ file(GLOB_RECURSE TEST_SOURCES
   "${CMAKE_SOURCE_DIR}/database/*.cpp"
   "${CMAKE_SOURCE_DIR}/query/*.cpp"
   "${CMAKE_SOURCE_DIR}/sync/*.cpp"
+  "${CMAKE_SOURCE_DIR}/expression/*.cpp"
 )
 
 # ── Real test suite: Catch2 + HybridSalveDatabase through real JSI ─────────
@@ -140,9 +146,11 @@ target_include_directories(salvedb_tests PRIVATE
   "${PROJECT_CPP_DIR}/platform"
   "${PROJECT_CPP_DIR}/query"
   "${PROJECT_CPP_DIR}/sync"
+  "${PROJECT_CPP_DIR}/expression"
   "${PROJECT_CPP_DIR}/third_party/sqlite3"
   "${GENERATED_CPP_DIR}"
 )
+target_compile_definitions(salvedb_tests PRIVATE SQLITE_ENABLE_COLUMN_METADATA=1)
 target_link_libraries(salvedb_tests PRIVATE Catch2::Catch2WithMain)
 target_link_options(salvedb_tests PRIVATE "-F${HERMES_FRAMEWORKS_DIR}" "-framework" "hermesvm")
 set_target_properties(salvedb_tests PROPERTIES

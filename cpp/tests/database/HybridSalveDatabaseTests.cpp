@@ -51,7 +51,7 @@ TEST_CASE("execute() round-trips insert/select/update/delete across column types
   // MigrationEngine stores columns in a std::map, so CREATE TABLE emits them
   // alphabetically regardless of the schema's declaration order.
   auto selected = harness.run("db.execute('SELECT * FROM items WHERE id = 1', [])");
-  REQUIRE(selected == R"({"columns":["active","createdAt","id","label","price"],"rows":[[1,1700000000000,1,"widget",9.99]]})");
+  REQUIRE(selected == R"({"columns":["active","createdAt","id","label","price"],"rows":[[true,1700000000000,1,"widget",9.99]]})");
 
   harness.run("db.execute('UPDATE items SET label = ? WHERE id = 1', ['widget-updated'])");
   auto updated = harness.run("db.execute('SELECT label FROM items WHERE id = 1', [])");

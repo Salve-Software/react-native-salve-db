@@ -7,7 +7,12 @@
 #include <stdexcept>
 #include <optional>
 #include <cctype>
+#include <cmath>
+#include <cstdio>
 #include <functional>
+#include <iomanip>
+#include <limits>
+#include <sstream>
 
 namespace margelo::nitro::salvedb::json {
 
@@ -192,6 +197,84 @@ public:
 
 inline Value parse(const std::string& json) {
   return Parser(json).parse();
+}
+
+namespace detail {
+
+inline void stringifyString(const std::string& s, std::ostringstream& out) {
+  out << '"';
+  for (char c : s) {
+    switch (c) {
+      case '"':  out << "\\\""; break;
+      case '\\': out << "\\\\"; break;
+      case '\n': out << "\\n";  break;
+      case '\r': out << "\\r";  break;
+      case '\t': out << "\\t";  break;
+      case '\b': out << "\\b";  break;
+      case '\f': out << "\\f";  break;
+      default:
+        if (static_cast<unsigned char>(c) < 0x20) {
+          char buf[7];
+          std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned int>(static_cast<unsigned char>(c)));
+          out << buf;
+        } else {
+          out << c;
+        }
+    }
+  }
+  out << '"';
+}
+
+inline void stringifyNumber(double d, std::ostringstream& out) {
+  if (!std::isfinite(d)) {
+    throw std::runtime_error("json::stringify: cannot serialize non-finite number (NaN/Infinity)");
+  }
+  if (d == std::floor(d) && std::abs(d) < 1e15) {
+    out << static_cast<long long>(d);
+  } else {
+    out << std::setprecision(std::numeric_limits<double>::max_digits10) << d;
+  }
+}
+
+inline void stringifyValue(const Value& v, std::ostringstream& out) {
+  if (v.isNull()) {
+    out << "null";
+  } else if (v.isBool()) {
+    out << (v.asBool() ? "true" : "false");
+  } else if (v.isNumber()) {
+    stringifyNumber(v.asNumber(), out);
+  } else if (v.isString()) {
+    stringifyString(v.asString(), out);
+  } else if (v.isArray()) {
+    out << '[';
+    const Array& arr = v.asArray();
+    for (size_t i = 0; i < arr.size(); ++i) {
+      if (i > 0) out << ',';
+      stringifyValue(arr[i], out);
+    }
+    out << ']';
+  } else if (v.isObject()) {
+    out << '{';
+    const Object& obj = v.asObject();
+    bool first = true;
+    for (const auto& [key, value] : obj) {
+      if (!first) out << ',';
+      first = false;
+      stringifyString(key, out);
+      out << ':';
+      stringifyValue(value, out);
+    }
+    out << '}';
+  }
+}
+
+} // namespace detail
+
+// Object key order follows std::map's lexicographic order, not insertion order.
+inline std::string stringify(const Value& v) {
+  std::ostringstream out;
+  detail::stringifyValue(v, out);
+  return out.str();
 }
 
 } // namespace margelo::nitro::salvedb::json

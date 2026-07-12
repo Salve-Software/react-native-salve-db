@@ -24,12 +24,17 @@ struct IndexDef {
   bool unique = false;
 };
 
+struct SyncSettings {
+  bool enabled = false;
+};
+
 struct SchemaDef {
   std::string name;
   int version = 1;
   std::string primaryKey;
   std::map<std::string, ColumnDef> columns;
   std::vector<IndexDef> indexes;
+  SyncSettings sync;
 };
 
 class MigrationEngine {
@@ -45,13 +50,16 @@ private:
   std::shared_ptr<SQLiteConnection> _db;
 
   void createTable(const SchemaDef& schema);
-  void migrateTable(const SchemaDef& schema);
+  bool migrateTable(const SchemaDef& schema); // true if a column was added
 
   int storedVersion(const std::string& schemaName);
   void setStoredVersion(const std::string& schemaName, int version);
 
   std::string sqliteType(const std::string& colType) const;
   std::vector<std::string> existingColumns(const std::string& tableName);
+
+  void createSyncTriggers(const SchemaDef& schema);
+  void dropSyncTriggers(const SchemaDef& schema);
 };
 
 } // namespace margelo::nitro::salvedb
