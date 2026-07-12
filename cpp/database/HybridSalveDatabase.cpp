@@ -10,6 +10,11 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
     throw std::runtime_error("Database.configure: 'name' is required");
   DatabaseManager::shared().open(params.name);
 
+  if (params.baseUrl.has_value() != params.network.has_value())
+    throw std::runtime_error("Database.configure: 'baseUrl' and 'network' must be provided together");
+  if (params.baseUrl.has_value())
+    DatabaseManager::shared().configureNetwork(*params.baseUrl, params.network->timeout);
+
   if (params.credentials.has_value()) {
     const auto& creds = *params.credentials;
     std::optional<InitialCredentialTokens> initialTokens;

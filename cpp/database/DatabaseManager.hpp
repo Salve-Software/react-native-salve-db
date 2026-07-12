@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../credentials/CredentialProvider.hpp"
+#include "../http/NetworkConfig.hpp"
 #include "SQLiteConnection.hpp"
 #include <memory>
 #include <optional>
@@ -50,10 +51,19 @@ public:
     return *_credentials;
   }
 
+  void configureNetwork(const std::string& baseUrl, double timeoutMs);
+
+  const NetworkConfig& network() const {
+    if (!_network)
+      throw std::runtime_error("Database.configure() was not called with 'baseUrl'/'network' — sync is unavailable.");
+    return *_network;
+  }
+
 private:
   DatabaseManager() = default;
   std::shared_ptr<SQLiteConnection> _db;
   std::unique_ptr<CredentialProvider> _credentials;
+  std::optional<NetworkConfig> _network;
 };
 
 } // namespace margelo::nitro::salvedb
