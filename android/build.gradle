@@ -138,7 +138,7 @@ dependencies {
   // Add a dependency on NitroModules
   implementation project(":react-native-nitro-modules")
 
-  // Keystore-backed encrypted storage for CredentialProvider (TASK-009).
+  // Keystore-backed encrypted storage for CredentialProvider.
   implementation "androidx.security:security-crypto:1.1.0-alpha06"
 }
 

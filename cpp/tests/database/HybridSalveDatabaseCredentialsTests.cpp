@@ -25,8 +25,8 @@ void resetSecureStore() {
 
 // Drives configure() through the real JS/JSI bridge (like every other test
 // in this suite) but asserts on native-side state instead of a JS return
-// value — by design, tokens never cross back over JSI (TASK-009 acceptance
-// criterion), so there's nothing for JS to read here.
+// value — by design, tokens never cross back over JSI, so there's nothing
+// for JS to read here.
 TEST_CASE("configure() with credentials.tokens seeds the CredentialProvider", "[database][credentials]") {
   resetSecureStore();
   HybridDatabaseHarness harness;

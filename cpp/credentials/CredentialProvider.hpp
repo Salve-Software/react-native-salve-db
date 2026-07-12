@@ -9,8 +9,7 @@
 namespace margelo::nitro::salvedb {
 
 // Result of calling the refresh endpoint. The HTTP call itself is injected
-// (TASK-010 doesn't exist yet) — this struct is the seam CredentialProvider
-// needs from it.
+// by the caller — this struct is the seam CredentialProvider needs from it.
 struct RefreshHttpResponse {
   int statusCode;
   json::Value body;
@@ -47,8 +46,8 @@ public:
   // body, calls httpCaller against refresh.endpoint, extracts the new token
   // pair via JsonPath, and persists it. Throws a clear error — never
   // silently no-ops — if there's no refresh token stored, the call fails,
-  // or the response is missing either JsonPath. Callers (Sync Orchestrator,
-  // TASK-012) are expected to let this propagate.
+  // or the response is missing either JsonPath. Callers are expected to
+  // let this propagate rather than swallow it.
   void refresh(const HttpCaller& httpCaller);
 
 private:
