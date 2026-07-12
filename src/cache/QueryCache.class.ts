@@ -86,6 +86,7 @@ export class QueryCache {
     const changed = new Set(tables);
     for (const [key, entry] of this._entries) {
       if (!entry.tables.some((table) => changed.has(table))) continue;
+      if (entry.listeners.size === 0) continue;
 
       const next = this._runQuery({
         tables: entry.tables,

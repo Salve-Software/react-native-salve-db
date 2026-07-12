@@ -126,6 +126,7 @@ describe('QueryCache — per-table invalidation', () => {
         return [{ id: 1 }];
       },
     });
+    cache.subscribeToEntry({ key: 'users', listener: jest.fn() });
 
     shouldThrow = true;
     fireNativeChange(['users']);
@@ -140,6 +141,34 @@ describe('QueryCache — per-table invalidation', () => {
     cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn: () => [{ id: 1 }] });
 
     expect(cache.getSnapshot('users')).toBe(cache.getSnapshot('users'));
+  });
+
+  test('does not re-run queryFn for an entry that was never claimed by a subscriber', () => {
+    const { cache, fireNativeChange } = makeCache();
+    cache.subscribeNative();
+
+    const queryFn = jest.fn().mockReturnValue([{ id: 1 }]);
+    // Simulates getOrCreateEntry() being called during a render that was
+    // discarded before its effect could call subscribeToEntry.
+    cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn });
+
+    fireNativeChange(['users']);
+    fireNativeChange(['users']);
+
+    expect(queryFn).toHaveBeenCalledTimes(1); // only the initial creation
+  });
+
+  test('an unclaimed entry can still be picked up by a subscriber after a table change', () => {
+    const { cache, fireNativeChange } = makeCache();
+    cache.subscribeNative();
+
+    cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn: () => [{ id: 1 }] });
+    fireNativeChange(['users']);
+
+    const listener = jest.fn();
+    cache.subscribeToEntry({ key: 'users', listener });
+
+    expect(cache.getSnapshot('users')).toBeDefined();
   });
 });
 
