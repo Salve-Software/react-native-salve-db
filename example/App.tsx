@@ -1,26 +1,22 @@
 import React from 'react';
-import {Text, View, StyleSheet } from 'react-native';
-import { SalveDb } from '@salve-software/react-native-salve-db';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SalveDbProvider } from '@salve-software/react-native-salve-db';
+import Salvetron from '@salve-software/salvetron-react-native';
+import { NoteSchema } from './src/schemas/NoteSchema';
+import { NotesScreen } from './src/screens/NotesScreen';
+
+if (__DEV__) {
+  Salvetron.connect({ host: 'localhost', port: 8765 });
+}
 
 function App(): React.JSX.Element {
   return (
-    <View style={styles.container}>
-        <Text style={styles.text}>
-        {SalveDb.sum(1, 2)}
-        </Text>
-    </View>
+    <SafeAreaProvider>
+      <SalveDbProvider config={{ name: 'salve-db-example' }} schemas={[NoteSchema]}>
+        <NotesScreen />
+      </SalveDbProvider>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  text: {
-        fontSize: 40, 
-        color: 'green'
-    }});
 
 export default App;
