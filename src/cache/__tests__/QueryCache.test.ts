@@ -1,4 +1,4 @@
-import { QueryCache } from '../QueryCache';
+import { QueryCache } from '../QueryCache.class';
 
 function makeCache() {
   let capturedListener: ((tables: string[]) => void) | null = null;
@@ -28,7 +28,7 @@ describe('QueryCache — subscribeNative / unsubscribeNative', () => {
   test('unsubscribeNative tears down the native subscription and clears entries', () => {
     const { cache, unsubscribe } = makeCache();
     cache.subscribeNative();
-    cache.getOrCreateEntry('users', ['users'], () => [{ id: 1 }]);
+    cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn: () => [{ id: 1 }] });
 
     cache.unsubscribeNative();
 
@@ -42,7 +42,7 @@ describe('QueryCache — getOrCreateEntry', () => {
     const queryFn = jest.fn().mockReturnValue([{ id: 1 }]);
     const { cache } = makeCache();
 
-    const entry = cache.getOrCreateEntry('users', ['users'], queryFn);
+    const entry = cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn });
 
     expect(queryFn).toHaveBeenCalledTimes(1);
     expect(entry.data).toEqual([{ id: 1 }]);
@@ -53,8 +53,8 @@ describe('QueryCache — getOrCreateEntry', () => {
     const queryFn = jest.fn().mockReturnValue([{ id: 1 }]);
     const { cache } = makeCache();
 
-    const first = cache.getOrCreateEntry('users', ['users'], queryFn);
-    const second = cache.getOrCreateEntry('users', ['users'], queryFn);
+    const first = cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn });
+    const second = cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn });
 
     expect(second).toBe(first);
     expect(queryFn).toHaveBeenCalledTimes(1);
@@ -65,7 +65,7 @@ describe('QueryCache — getOrCreateEntry', () => {
     const queryFn = jest.fn().mockImplementation(() => { throw error; });
     const { cache } = makeCache();
 
-    const entry = cache.getOrCreateEntry('users', ['users'], queryFn);
+    const entry = cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn });
 
     expect(entry.data).toBeNull();
     expect(entry.error).toBe(error);
@@ -78,20 +78,28 @@ describe('QueryCache — per-table invalidation', () => {
     cache.subscribeNative();
 
     let usersCallCount = 0;
-    const usersEntry = cache.getOrCreateEntry('users', ['users'], () => {
-      usersCallCount++;
-      return [{ id: usersCallCount }];
+    const usersEntry = cache.getOrCreateEntry({
+      key: 'users',
+      tables: ['users'],
+      queryFn: () => {
+        usersCallCount++;
+        return [{ id: usersCallCount }];
+      },
     });
     let postsCallCount = 0;
-    const postsEntry = cache.getOrCreateEntry('posts', ['posts'], () => {
-      postsCallCount++;
-      return [{ id: postsCallCount }];
+    const postsEntry = cache.getOrCreateEntry({
+      key: 'posts',
+      tables: ['posts'],
+      queryFn: () => {
+        postsCallCount++;
+        return [{ id: postsCallCount }];
+      },
     });
 
     const usersListener = jest.fn();
     const postsListener = jest.fn();
-    cache.subscribeToEntry('users', usersListener);
-    cache.subscribeToEntry('posts', postsListener);
+    cache.subscribeToEntry({ key: 'users', listener: usersListener });
+    cache.subscribeToEntry({ key: 'posts', listener: postsListener });
 
     fireNativeChange(['users']);
 
@@ -110,9 +118,13 @@ describe('QueryCache — per-table invalidation', () => {
     cache.subscribeNative();
 
     let shouldThrow = false;
-    cache.getOrCreateEntry('users', ['users'], () => {
-      if (shouldThrow) throw new Error('refetch failed');
-      return [{ id: 1 }];
+    cache.getOrCreateEntry({
+      key: 'users',
+      tables: ['users'],
+      queryFn: () => {
+        if (shouldThrow) throw new Error('refetch failed');
+        return [{ id: 1 }];
+      },
     });
 
     shouldThrow = true;
@@ -125,7 +137,7 @@ describe('QueryCache — per-table invalidation', () => {
 
   test('getSnapshot returns the same reference across calls when nothing changed', () => {
     const { cache } = makeCache();
-    cache.getOrCreateEntry('users', ['users'], () => [{ id: 1 }]);
+    cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn: () => [{ id: 1 }] });
 
     expect(cache.getSnapshot('users')).toBe(cache.getSnapshot('users'));
   });
@@ -134,10 +146,10 @@ describe('QueryCache — per-table invalidation', () => {
 describe('QueryCache — subscribeToEntry lifecycle', () => {
   test('evicts the entry once its last listener unsubscribes', () => {
     const { cache } = makeCache();
-    cache.getOrCreateEntry('users', ['users'], () => [{ id: 1 }]);
+    cache.getOrCreateEntry({ key: 'users', tables: ['users'], queryFn: () => [{ id: 1 }] });
 
-    const unsubA = cache.subscribeToEntry('users', jest.fn());
-    const unsubB = cache.subscribeToEntry('users', jest.fn());
+    const unsubA = cache.subscribeToEntry({ key: 'users', listener: jest.fn() });
+    const unsubB = cache.subscribeToEntry({ key: 'users', listener: jest.fn() });
 
     unsubA();
     expect(cache.getSnapshot('users')).toBeDefined(); // still one listener left
@@ -148,6 +160,6 @@ describe('QueryCache — subscribeToEntry lifecycle', () => {
 
   test('unsubscribing from a key with no entry is a no-op', () => {
     const { cache } = makeCache();
-    expect(() => cache.subscribeToEntry('missing', jest.fn())()).not.toThrow();
+    expect(() => cache.subscribeToEntry({ key: 'missing', listener: jest.fn() })()).not.toThrow();
   });
 });

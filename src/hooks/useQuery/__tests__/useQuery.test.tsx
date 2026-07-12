@@ -20,7 +20,7 @@ jest.mock('../../../database', () => {
 
 const mockCache = {
   getOrCreateEntry: jest.fn(),
-  subscribeToEntry: jest.fn((_key: string, _listener: () => void) => () => {}),
+  subscribeToEntry: jest.fn((_props: { key: string, listener: () => void }) => () => {}),
   getSnapshot: jest.fn(),
 };
 
@@ -87,7 +87,7 @@ describe('useQuery — once ready', () => {
     });
 
     expect(mockCache.getOrCreateEntry).toHaveBeenCalledTimes(1);
-    const [key, tables, run] = mockCache.getOrCreateEntry.mock.calls[0];
+    const [{ key, tables, queryFn: run }] = mockCache.getOrCreateEntry.mock.calls[0];
     expect(key).toBe('items:["active"]');
     expect(tables).toEqual(['items']);
     expect(typeof run).toBe('function');
@@ -101,7 +101,7 @@ describe('useQuery — once ready', () => {
       wrapper: withDbState(readyState),
     });
 
-    const [, , run] = mockCache.getOrCreateEntry.mock.calls[0];
+    const [{ queryFn: run }] = mockCache.getOrCreateEntry.mock.calls[0];
     expect(run()).toEqual([{ id: 1, label: 'a' }]);
   });
 
@@ -117,7 +117,7 @@ describe('useQuery — once ready', () => {
 
   test('re-renders when the cache notifies the subscribed listener', async () => {
     let capturedListener: (() => void) | null = null;
-    mockCache.subscribeToEntry.mockImplementation((_key: string, listener: () => void) => {
+    mockCache.subscribeToEntry.mockImplementation(({ listener }: { key: string, listener: () => void }) => {
       capturedListener = listener;
       return () => {};
     });

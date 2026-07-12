@@ -1,10 +1,9 @@
-type CacheEntry<T> = {
-  data: T[] | null;
-  error: unknown;
-  tables: string[];
-  queryFn: () => T[];
-  listeners: Set<() => void>;
-};
+import type {
+  ICacheEntry,
+  IGetOrCreateEntryProps,
+  IRunQueryProps,
+  ISubscribeToEntryProps,
+} from "./types";
 
 /**
  * Module-level singleton backing `useQuery`. Caches the last result per query
@@ -19,17 +18,13 @@ type CacheEntry<T> = {
  * place would never be seen as a change and the UI would silently go stale.
  */
 export class QueryCache {
-  private _entries = new Map<string, CacheEntry<unknown>>();
+  private readonly _entries = new Map<string, ICacheEntry<unknown>>();
   private _nativeSubscriptionId: number | null = null;
 
-  // No default here on purpose: defaulting to `Database.subscribeToChanges`
-  // would import `Database.class.ts` (and transitively `react-native`) into
-  // every consumer of this file, including tests that always inject fakes.
-  // See `src/cache/index.ts` for the real, `Database`-backed singleton.
   constructor(
     private readonly _subscribeToChanges: (callback: (tables: string[]) => void) => number,
     private readonly _unsubscribeFromChanges: (id: number) => void,
-  ) {}
+  ) { }
 
   /** Establishes the single native subscription. Safe to call more than once. */
   subscribeNative(): void {
@@ -46,30 +41,35 @@ export class QueryCache {
     this._entries.clear();
   }
 
-  getOrCreateEntry<T>(key: string, tables: string[], queryFn: () => T[]): CacheEntry<T> {
-    const existing = this._entries.get(key) as CacheEntry<T> | undefined;
+  getOrCreateEntry<T>(props: IGetOrCreateEntryProps<T>): ICacheEntry<T> {
+    const {
+      key,
+      tables,
+      queryFn,
+    } = props;
+    const existing = this._entries.get(key) as ICacheEntry<T> | undefined;
     if (existing) {
-      // Refresh the closure only — doesn't change `data`/`error`, so the
-      // reference stays stable and no re-render is triggered for this alone.
       existing.queryFn = queryFn;
       return existing;
     }
 
-    const entry = this._runQuery(tables, queryFn, new Set());
-    this._entries.set(key, entry as CacheEntry<unknown>);
+    const entry = this._runQuery({ tables, queryFn, listeners: new Set(), previousData: null });
+    this._entries.set(key, entry as ICacheEntry<unknown>);
     return entry;
   }
 
-  subscribeToEntry(key: string, listener: () => void): () => void {
+  subscribeToEntry(props: ISubscribeToEntryProps): () => void {
+    const {
+      key,
+      listener,
+    } = props;
     const entry = this._entries.get(key);
-    if (!entry) return () => {};
+    if (!entry) return () => { };
 
     entry.listeners.add(listener);
+
     return () => {
       entry.listeners.delete(listener);
-      // Guard against evicting a newer entry that replaced this one at the same
-      // key (e.g. a re-run from _onTablesChanged) — only delete if it's still
-      // the exact entry this subscription was made against.
       if (entry.listeners.size === 0 && this._entries.get(key) === entry) {
         this._entries.delete(key);
       }
@@ -77,7 +77,7 @@ export class QueryCache {
   }
 
   /** Must return a referentially stable value across calls unless the entry changed (useSyncExternalStore requirement). */
-  getSnapshot(key: string): CacheEntry<unknown> | undefined {
+  getSnapshot(key: string): ICacheEntry<unknown> | undefined {
     return this._entries.get(key);
   }
 
@@ -86,22 +86,27 @@ export class QueryCache {
     for (const [key, entry] of this._entries) {
       if (!entry.tables.some((table) => changed.has(table))) continue;
 
-      const next = this._runQuery(entry.tables, entry.queryFn, entry.listeners, entry.data);
-      this._entries.set(key, next as CacheEntry<unknown>);
+      const next = this._runQuery({
+        tables: entry.tables,
+        queryFn: entry.queryFn,
+        listeners: entry.listeners,
+        previousData: entry.data,
+      });
+      this._entries.set(key, next as ICacheEntry<unknown>);
       next.listeners.forEach((listener) => listener());
     }
   }
 
-  private _runQuery<T>(
-    tables: string[],
-    queryFn: () => T[],
-    listeners: Set<() => void>,
-    previousData: T[] | null = null,
-  ): CacheEntry<T> {
+  private _runQuery<T>(props: IRunQueryProps<T>): ICacheEntry<T> {
+    const {
+      listeners,
+      queryFn,
+      tables,
+      previousData,
+    } = props;
     try {
       return { data: queryFn(), error: null, tables, queryFn, listeners };
     } catch (error) {
-      // Keep the last good data on screen instead of blanking it on a transient error.
       return { data: previousData, error, tables, queryFn, listeners };
     }
   }

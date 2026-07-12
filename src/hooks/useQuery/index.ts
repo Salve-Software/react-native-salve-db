@@ -32,11 +32,11 @@ export const useQuery = <TSchema extends AnySchema>(props: IUseQueryProps<TSchem
   }, []);
 
   if (isReady) {
-    queryCache.getOrCreateEntry(key, [schema.name], run);
+    queryCache.getOrCreateEntry({ key, tables: [schema.name], queryFn: run });
   }
 
   const subscribe = useCallback((onStoreChange: () => void) => {
-    return queryCache.subscribeToEntry(key, onStoreChange);
+    return queryCache.subscribeToEntry({ key, listener: onStoreChange });
   }, [key]);
 
   const getSnapshot = useCallback(() => {
