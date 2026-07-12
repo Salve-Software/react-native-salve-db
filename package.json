@@ -10,6 +10,7 @@
   "scripts": {
     "test": "jest",
     "test:native": "bash cpp/tests/run.sh",
+    "test:native:android": "cd example/android && ./gradlew :salve-software_react-native-salve-db:testDebugUnitTest",
     "typecheck": "tsc --noEmit",
     "clean": "git clean -dfX",
     "release": "semantic-release",

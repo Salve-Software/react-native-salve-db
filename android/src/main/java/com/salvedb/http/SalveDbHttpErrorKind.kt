@@ -12,10 +12,13 @@ enum class SalveDbHttpErrorKind {
   OTHER;
 
   companion object {
+    // OkHttp's own callTimeout cancels the call internally when it fires, so
+    // isCancelled is true for both a real cancel() and a timeout — the
+    // exception shape must be checked first to tell them apart.
     fun from(exception: Throwable, isCancelled: Boolean): SalveDbHttpErrorKind = when {
-      isCancelled -> CANCELLED
       exception is SocketTimeoutException -> TIMEOUT
       exception is InterruptedIOException && exception.message == "timeout" -> TIMEOUT
+      isCancelled -> CANCELLED
       exception is UnknownHostException || exception is ConnectException -> NO_CONNECTION
       else -> OTHER
     }
