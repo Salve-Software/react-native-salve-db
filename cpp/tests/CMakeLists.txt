@@ -116,6 +116,8 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/sync/SyncOrchestrator.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncApplyGuard.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncQueueReader.cpp"
+  "${PROJECT_CPP_DIR}/http/HttpUrlBuilder.cpp"
+  "${PROJECT_CPP_DIR}/http/NetworkConfig.cpp"
   "${PROJECT_CPP_DIR}/expression/RequestExpressionEvaluator.cpp"
   "${PROJECT_CPP_DIR}/expression/JsonPathExtractor.cpp"
   "${PROJECT_CPP_DIR}/third_party/sqlite3/sqlite3.c"
@@ -130,6 +132,7 @@ file(GLOB_RECURSE TEST_SOURCES
   "${CMAKE_SOURCE_DIR}/query/*.cpp"
   "${CMAKE_SOURCE_DIR}/sync/*.cpp"
   "${CMAKE_SOURCE_DIR}/expression/*.cpp"
+  "${CMAKE_SOURCE_DIR}/http/*.cpp"
 )
 
 # ── Real test suite: Catch2 + HybridSalveDatabase through real JSI ─────────
@@ -146,6 +149,7 @@ target_include_directories(salvedb_tests PRIVATE
   "${PROJECT_CPP_DIR}/platform"
   "${PROJECT_CPP_DIR}/query"
   "${PROJECT_CPP_DIR}/sync"
+  "${PROJECT_CPP_DIR}/http"
   "${PROJECT_CPP_DIR}/expression"
   "${PROJECT_CPP_DIR}/third_party/sqlite3"
   "${GENERATED_CPP_DIR}"

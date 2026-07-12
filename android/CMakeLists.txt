@@ -22,6 +22,8 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/sync/SyncOrchestrator.cpp
 	../cpp/sync/SyncApplyGuard.cpp
 	../cpp/sync/SyncQueueReader.cpp
+	../cpp/http/HttpUrlBuilder.cpp
+	../cpp/http/NetworkConfig.cpp
 	../cpp/expression/RequestExpressionEvaluator.cpp
 	../cpp/expression/JsonPathExtractor.cpp
 )
@@ -42,6 +44,7 @@ include_directories(
         "../cpp/platform"
         "../cpp/query"
         "../cpp/sync"
+        "../cpp/http"
         "../cpp/expression"
         "../cpp/third_party/sqlite3"
 )
