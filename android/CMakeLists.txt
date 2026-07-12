@@ -24,6 +24,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/sync/SyncQueueReader.cpp
 	../cpp/expression/RequestExpressionEvaluator.cpp
 	../cpp/expression/JsonPathExtractor.cpp
+	../cpp/credentials/CredentialProvider.cpp
 )
 
 # Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
@@ -43,6 +44,7 @@ include_directories(
         "../cpp/query"
         "../cpp/sync"
         "../cpp/expression"
+        "../cpp/credentials"
         "../cpp/third_party/sqlite3"
 )
 

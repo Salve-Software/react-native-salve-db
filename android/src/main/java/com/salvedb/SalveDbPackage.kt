@@ -19,6 +19,7 @@ public class SalveDbPackage : BaseReactPackage() {
     if (!documentsDirectorySet) {
       documentsDirectorySet = true
       nativeSetDocumentsDir(reactContext.filesDir.absolutePath)
+      SalveDbSecureStorage.init(reactContext)
     }
     return emptyList()
   }
