@@ -73,3 +73,26 @@ TEST_CASE("readOperations does not mutate sync_queue", "[sync][SyncQueueReader]"
   auto rows = conn->execute("SELECT COUNT(*) FROM sync_queue", {});
   REQUIRE(std::get<double>(rows.rows[0][0]) == 1.0);
 }
+
+TEST_CASE("readOperations rejects a negative limit", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("reader_negative_limit"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+
+  SyncQueueReader reader(conn);
+  REQUIRE_THROWS_AS(reader.readOperations(-1), std::runtime_error);
+}
+
+TEST_CASE("readOperations with limit 0 returns an empty array", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("reader_zero_limit"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+
+  SyncQueueReader reader(conn);
+  auto ops = reader.readOperations(0);
+  REQUIRE(ops.empty());
+}

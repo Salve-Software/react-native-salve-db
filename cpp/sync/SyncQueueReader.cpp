@@ -1,4 +1,5 @@
 #include "SyncQueueReader.hpp"
+#include <stdexcept>
 
 namespace margelo::nitro::salvedb {
 
@@ -6,6 +7,10 @@ SyncQueueReader::SyncQueueReader(std::shared_ptr<SQLiteConnection> conn)
   : _conn(std::move(conn)) {}
 
 json::Array SyncQueueReader::readOperations(int limit) {
+  if (limit < 0) {
+    throw std::runtime_error("SyncQueueReader: limit must be >= 0, got " + std::to_string(limit));
+  }
+
   auto result = _conn->execute(
     "SELECT operation, entity, entity_id, payload, updated_at "
     "FROM sync_queue ORDER BY id ASC LIMIT ?",
