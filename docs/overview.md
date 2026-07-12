@@ -345,6 +345,8 @@ https://api.company.com/sync/customers
 
 ```
 
+Normalização: no máximo uma `/` final de `baseUrl` é removida, e exatamente uma `/` inicial é garantida em `path` (inserida se faltar) — cobre barra duplicada ou faltando na junção. Barras internas em `path` não são tocadas. Implementado em `HttpUrlBuilder` (`cpp/http/HttpUrlBuilder.cpp`).
+
   
 
 ## Credenciais

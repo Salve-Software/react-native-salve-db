@@ -38,9 +38,8 @@ public:
 
 class IHttpClient {
 public:
-    virtual void post(const std::string& url,
-                      const std::string& body,
-                      std::function<void(int status, std::string response)> callback) = 0;
+    virtual void execute(const HttpRequest& request,
+                         std::function<void(HttpOutcome)> callback) = 0;
     virtual ~IHttpClient() = default;
 };
 
@@ -52,6 +51,8 @@ public:
     virtual ~ICredentialStore() = default;
 };
 ```
+
+`HttpRequest`/`HttpResponse`/`HttpNetworkError`/`HttpOutcome` are defined in `cpp/http/HttpTypes.hpp` — `HttpOutcome` is a 2-way `variant<HttpResponse, HttpNetworkError>`: any completed exchange (including 4xx/5xx) is a `HttpResponse`, only a transport-level failure is a `HttpNetworkError`.
 
 ```swift
 // Swift (iOS) — implements IBackgroundScheduler

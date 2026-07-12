@@ -10,6 +10,8 @@
   "scripts": {
     "test": "jest",
     "test:native": "bash cpp/tests/run.sh",
+    "test:native:android": "cd example/android && ./gradlew :salve-software_react-native-salve-db:testDebugUnitTest",
+    "test:native:ios": "swift test --package-path ios/tests",
     "typecheck": "tsc --noEmit",
     "clean": "git clean -dfX",
     "release": "semantic-release",
@@ -34,11 +36,14 @@
     "android/gradle.properties",
     "android/CMakeLists.txt",
     "android/src",
+    "!android/src/test",
+    "!android/src/androidTest",
     "ios/**/*.h",
     "ios/**/*.m",
     "ios/**/*.mm",
     "ios/**/*.cpp",
     "ios/**/*.swift",
+    "!ios/tests",
     "app.plugin.js",
     "*.podspec",
     "README.md"
