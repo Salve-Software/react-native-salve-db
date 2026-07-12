@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <unistd.h>
+#include <unordered_map>
 
 namespace margelo::nitro::salvedb::platform {
 
@@ -17,6 +18,31 @@ std::string getDocumentsDirectory() {
     return std::string(result);
   }();
   return dir;
+}
+
+// Host test double for the secure store: plain in-memory map. Real
+// Keychain/Keystore encryption is exercised only on-device (out of reach
+// of this host-run Catch2 suite), not here.
+namespace {
+std::unordered_map<std::string, std::string>& secureStore() {
+  static std::unordered_map<std::string, std::string> store;
+  return store;
+}
+} // namespace
+
+void setSecureValue(const std::string& key, const std::string& value) {
+  secureStore()[key] = value;
+}
+
+std::optional<std::string> getSecureValue(const std::string& key) {
+  auto& store = secureStore();
+  auto it = store.find(key);
+  if (it == store.end()) return std::nullopt;
+  return it->second;
+}
+
+void deleteSecureValue(const std::string& key) {
+  secureStore().erase(key);
 }
 
 } // namespace margelo::nitro::salvedb::platform
