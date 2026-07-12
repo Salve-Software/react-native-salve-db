@@ -8,6 +8,7 @@ namespace margelo::nitro::salvedb::platform {
 
 static std::string s_documentsDirectory;
 static JavaVM* s_javaVm = nullptr;
+static jclass s_secureStorageClass = nullptr;
 
 void setDocumentsDirectory(const std::string& path) {
   s_documentsDirectory = path;
@@ -19,9 +20,26 @@ std::string getDocumentsDirectory() {
 
 void setJavaVM(JavaVM* vm) {
   s_javaVm = vm;
+
+  JNIEnv* env = nullptr;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
+  jclass localClass = env->FindClass("com/salvedb/SalveDbSecureStorage");
+  if (localClass == nullptr) {
+    env->ExceptionClear();
+    return;
+  }
+  s_secureStorageClass = static_cast<jclass>(env->NewGlobalRef(localClass));
+  env->DeleteLocalRef(localClass);
 }
 
 namespace {
+
+jclass secureStorageClass() {
+  if (!s_secureStorageClass) {
+    throw std::runtime_error("SalveDb: SalveDbSecureStorage class was not resolved — setJavaVM (JNI_OnLoad) must run first");
+  }
+  return s_secureStorageClass;
+}
 
 // Secure storage calls can happen from any native thread (foreground sync,
 // background sync worker), not just ones the JVM already attached — so this
@@ -67,8 +85,8 @@ void throwIfJavaExceptionPending(JNIEnv* env, const std::string& context) {
 void setSecureValue(const std::string& key, const std::string& value) {
   ScopedJNIEnv scoped;
   JNIEnv* env = scoped.env();
+  jclass cls = secureStorageClass();
 
-  jclass cls = env->FindClass("com/salvedb/SalveDbSecureStorage");
   jmethodID mid = env->GetStaticMethodID(cls, "setValue", "(Ljava/lang/String;Ljava/lang/String;)V");
   jstring jKey = env->NewStringUTF(key.c_str());
   jstring jValue = env->NewStringUTF(value.c_str());
@@ -77,22 +95,20 @@ void setSecureValue(const std::string& key, const std::string& value) {
 
   env->DeleteLocalRef(jKey);
   env->DeleteLocalRef(jValue);
-  env->DeleteLocalRef(cls);
   throwIfJavaExceptionPending(env, "SalveDbSecureStorage.setValue(\"" + key + "\")");
 }
 
 std::optional<std::string> getSecureValue(const std::string& key) {
   ScopedJNIEnv scoped;
   JNIEnv* env = scoped.env();
+  jclass cls = secureStorageClass();
 
-  jclass cls = env->FindClass("com/salvedb/SalveDbSecureStorage");
   jmethodID mid = env->GetStaticMethodID(cls, "getValue", "(Ljava/lang/String;)Ljava/lang/String;");
   jstring jKey = env->NewStringUTF(key.c_str());
 
   auto jResult = static_cast<jstring>(env->CallStaticObjectMethod(cls, mid, jKey));
 
   env->DeleteLocalRef(jKey);
-  env->DeleteLocalRef(cls);
   throwIfJavaExceptionPending(env, "SalveDbSecureStorage.getValue(\"" + key + "\")");
 
   if (jResult == nullptr) return std::nullopt;
@@ -106,15 +122,14 @@ std::optional<std::string> getSecureValue(const std::string& key) {
 void deleteSecureValue(const std::string& key) {
   ScopedJNIEnv scoped;
   JNIEnv* env = scoped.env();
+  jclass cls = secureStorageClass();
 
-  jclass cls = env->FindClass("com/salvedb/SalveDbSecureStorage");
   jmethodID mid = env->GetStaticMethodID(cls, "deleteValue", "(Ljava/lang/String;)V");
   jstring jKey = env->NewStringUTF(key.c_str());
 
   env->CallStaticVoidMethod(cls, mid, jKey);
 
   env->DeleteLocalRef(jKey);
-  env->DeleteLocalRef(cls);
   throwIfJavaExceptionPending(env, "SalveDbSecureStorage.deleteValue(\"" + key + "\")");
 }
 
