@@ -8,7 +8,7 @@ namespace margelo::nitro::salvedb {
 void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.name.empty())
     throw std::runtime_error("Database.configure: 'name' is required");
-  DatabaseManager::shared().open(params.name);
+  DatabaseManager::shared().open(params.name, params.walMode.value_or(true));
 
   if (params.credentials.has_value()) {
     const auto& creds = *params.credentials;

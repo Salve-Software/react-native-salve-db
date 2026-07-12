@@ -7,7 +7,7 @@
 
 namespace margelo::nitro::salvedb {
 
-SQLiteConnection::SQLiteConnection(const std::string& path) {
+SQLiteConnection::SQLiteConnection(const std::string& path, bool walMode) {
   int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
   int rc = sqlite3_open_v2(path.c_str(), &_db, flags, nullptr);
   if (rc != SQLITE_OK) {
@@ -16,8 +16,9 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
     _db = nullptr;
     throw std::runtime_error("SQLite open failed (" + path + "): " + err);
   }
-  // WAL mode for concurrent read + write, busy timeout to avoid SQLITE_BUSY
-  sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+  // WAL mode for concurrent read + write (reads never block on a write in
+  // progress, e.g. the native background sync engine), busy timeout to avoid SQLITE_BUSY
+  if (walMode) sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
   sqlite3_exec(_db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
   sqlite3_busy_timeout(_db, 5000);
   sqlite3_extended_result_codes(_db, 1); // makes prepare/step/exec return extended codes directly
