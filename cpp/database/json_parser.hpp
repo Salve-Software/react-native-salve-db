@@ -8,7 +8,10 @@
 #include <optional>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <functional>
+#include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace margelo::nitro::salvedb::json {
@@ -212,7 +215,7 @@ inline void stringifyString(const std::string& s, std::ostringstream& out) {
       default:
         if (static_cast<unsigned char>(c) < 0x20) {
           char buf[7];
-          std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+          std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned int>(static_cast<unsigned char>(c)));
           out << buf;
         } else {
           out << c;
@@ -223,11 +226,13 @@ inline void stringifyString(const std::string& s, std::ostringstream& out) {
 }
 
 inline void stringifyNumber(double d, std::ostringstream& out) {
-  if (std::isfinite(d) && d == std::floor(d) &&
-      std::abs(d) < 1e15) {
+  if (!std::isfinite(d)) {
+    throw std::runtime_error("json::stringify: cannot serialize non-finite number (NaN/Infinity)");
+  }
+  if (d == std::floor(d) && std::abs(d) < 1e15) {
     out << static_cast<long long>(d);
   } else {
-    out << d;
+    out << std::setprecision(std::numeric_limits<double>::max_digits10) << d;
   }
 }
 
