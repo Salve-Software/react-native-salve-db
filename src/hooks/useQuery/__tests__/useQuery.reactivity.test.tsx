@@ -71,7 +71,7 @@ describe('useQuery — reactivity across a not-ready → ready transition', () =
       return <SalveDbContext.Provider value={dbState}>{children}</SalveDbContext.Provider>;
     }
 
-    const { result, rerender } = await renderHook(
+    const { result, rerender } = await renderHook<ReturnType<typeof useQuery>, void>(
       () => useQuery({ schema, queryFn: (q: SelectQueryBuilder<AnySchema>) => q.limit(10) }),
       { wrapper: Wrapper },
     );
