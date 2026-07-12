@@ -6,6 +6,8 @@ CompileFlags:
     - -I./nitrogen/generated/shared/c++
     - -I./.clangd-headers
     - -I./.clangd-headers/NitroModules
+    - -I./.clangd-headers/fbjni
+    - -I./nitrogen/generated/android
     # Nitro Modules
     - -I./node_modules/react-native-nitro-modules/cpp/core
     - -I./node_modules/react-native-nitro-modules/cpp/jsi

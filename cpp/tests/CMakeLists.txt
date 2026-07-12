@@ -118,6 +118,7 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/sync/SyncQueueReader.cpp"
   "${PROJECT_CPP_DIR}/expression/RequestExpressionEvaluator.cpp"
   "${PROJECT_CPP_DIR}/expression/JsonPathExtractor.cpp"
+  "${PROJECT_CPP_DIR}/credentials/CredentialProvider.cpp"
   "${PROJECT_CPP_DIR}/third_party/sqlite3/sqlite3.c"
   "${GENERATED_CPP_DIR}/HybridSalveDatabaseSpec.cpp"
 )
@@ -130,6 +131,7 @@ file(GLOB_RECURSE TEST_SOURCES
   "${CMAKE_SOURCE_DIR}/query/*.cpp"
   "${CMAKE_SOURCE_DIR}/sync/*.cpp"
   "${CMAKE_SOURCE_DIR}/expression/*.cpp"
+  "${CMAKE_SOURCE_DIR}/credentials/*.cpp"
 )
 
 # ── Real test suite: Catch2 + HybridSalveDatabase through real JSI ─────────

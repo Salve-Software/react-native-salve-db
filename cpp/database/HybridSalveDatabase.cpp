@@ -9,6 +9,22 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.name.empty())
     throw std::runtime_error("Database.configure: 'name' is required");
   DatabaseManager::shared().open(params.name);
+
+  if (params.credentials.has_value()) {
+    const auto& creds = *params.credentials;
+    std::optional<InitialCredentialTokens> initialTokens;
+    if (creds.tokens.has_value()) {
+      initialTokens = InitialCredentialTokens{creds.tokens->accessToken, creds.tokens->refreshToken};
+    }
+    DatabaseManager::shared().configureCredentials(
+      creds.provider,
+      creds.accessTokenHeaderName,
+      creds.refresh.endpoint,
+      creds.refresh.responseAccessTokenPath,
+      creds.refresh.responseRefreshTokenPath,
+      initialTokens
+    );
+  }
 }
 
 std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::string& schemaJson) {

@@ -11,10 +11,10 @@ Quebra do MVP (ver [`../mvp-scope.md`](../mvp-scope.md)) em tarefas independente
 | [003](https://github.com/Salve-Software/react-native-salve-db/issues/4) | Bootstrap de test harness | ✅ | P1 | Tooling | — | — |
 | [004](https://github.com/Salve-Software/react-native-salve-db/issues/5) | SQLite Core & Connection Management | ✅ | P0 | C++ (core) | 002 | `cpp` |
 | [005](https://github.com/Salve-Software/react-native-salve-db/issues/6) | Schema Registration & Migration Engine | ✅ | P0 | C++ (core) | 004 | `cpp` |
-| [006](./006-trigger-engine-sync-queue.md) | Trigger Engine & Sync Queue | ⬜ | P0 | C++ (core) | 005 | `cpp` |
+| [006](./006-trigger-engine-sync-queue.md) | Trigger Engine & Sync Queue | ✅ | P0 | C++ (core) | 005 | `cpp` |
 | [007](./007-query-executor.md) | Query Executor | ✅ | P1 | C++ (core) | 004 | `cpp` |
-| [008](./008-expression-interpreter.md) | Interpretador de Expressões Declarativas | ⬜ | P1 | C++ (core) | 004 (parcial) | `cpp` |
-| [009](./009-credential-provider.md) | Credential Provider | ⬜ | P1 | Android+iOS | 002, 008 | `kotlin`, `swift` |
+| [008](./008-expression-interpreter.md) | Interpretador de Expressões Declarativas | ✅ | P1 | C++ (core) | 004 (parcial) | `cpp` |
+| [009](./009-credential-provider.md) | Credential Provider | 🟡 | P1 | Android+iOS | 002, 008 | `kotlin`, `swift` |
 | [010](./010-http-client.md) | HTTP Client | ⬜ | P1 | Android+iOS | 002 | `kotlin`, `swift` |
 | [011](./011-background-scheduler.md) | Background Scheduler | ⬜ | P2 | Android+iOS | 002, 012 | `kotlin`, `swift` |
 | [012](./012-sync-orchestrator.md) | Sync Orchestrator | ⬜ | P1 | C++ (core) | 006, 008, 009, 010 | `cpp` |

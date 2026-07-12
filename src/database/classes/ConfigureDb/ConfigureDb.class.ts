@@ -8,6 +8,7 @@ function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credent
       return {
         provider: creds.provider,
         accessTokenHeaderName: creds.accessToken?.headerName ?? 'Authorization',
+        tokens: creds.tokens,
         refresh: {
           endpoint: creds.refresh.endpoint,
           responseAccessTokenPath: creds.refresh.response.accessToken,

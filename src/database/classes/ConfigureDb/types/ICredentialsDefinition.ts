@@ -6,6 +6,16 @@ interface OAuth2CredentialsDefinition {
   accessToken?: {
     headerName?: string;
   };
+  /**
+   * Initial token pair, obtained by the app's own login flow (out of scope
+   * for this lib) before calling `configure()`. Stored natively (Keychain/
+   * Keystore) and never re-read from JS afterwards — subsequent refreshes
+   * are 100% native.
+   */
+  tokens?: {
+    accessToken: string;
+    refreshToken: string;
+  };
   /** Triggered by the native engine on 401 — JS never participates. */
   refresh: {
     endpoint: string;
