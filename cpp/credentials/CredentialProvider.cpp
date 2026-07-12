@@ -28,7 +28,10 @@ CredentialProvider::CredentialProvider(
     _responseRefreshTokenPath(std::move(responseRefreshTokenPath)) {}
 
 void CredentialProvider::seedInitialTokens(const std::string& accessToken, const std::string& refreshToken) {
-  if (platform::getSecureValue(kAccessTokenKey).has_value()) return;
+  bool alreadySeeded = platform::getSecureValue(kAccessTokenKey).has_value()
+    && platform::getSecureValue(kRefreshTokenKey).has_value();
+  if (alreadySeeded) return;
+
   platform::setSecureValue(kAccessTokenKey, accessToken);
   platform::setSecureValue(kRefreshTokenKey, refreshToken);
 }

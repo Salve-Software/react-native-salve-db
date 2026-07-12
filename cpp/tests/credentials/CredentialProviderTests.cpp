@@ -57,6 +57,26 @@ TEST_CASE("seedInitialTokens does not overwrite an already-persisted token", "[c
   REQUIRE(provider.getAccessToken().value() == "access-1");
 }
 
+TEST_CASE("seedInitialTokens completes a partial write instead of treating it as already seeded", "[credentials][CredentialProvider]") {
+  resetSecureStore();
+  auto provider = makeProvider();
+
+  // Simulates a prior seed that failed halfway (accessToken persisted,
+  // refreshToken write never happened) — must not be mistaken for "already
+  // seeded", or refresh() would be permanently unusable.
+  platform::setSecureValue("salvedb.credentials.accessToken", "access-partial");
+
+  provider.seedInitialTokens("access-new", "refresh-new");
+
+  REQUIRE(provider.getAccessToken().value() == "access-new");
+
+  auto httpCaller = [](const std::string&, const json::Value&) -> RefreshHttpResponse {
+    return RefreshHttpResponse{200, json::parse(R"({"accessToken": "access-after-refresh", "refreshToken": "refresh-after-refresh"})")};
+  };
+  provider.refresh(httpCaller);
+  REQUIRE(provider.getAccessToken().value() == "access-after-refresh");
+}
+
 TEST_CASE("refresh throws when no refresh token is stored", "[credentials][CredentialProvider]") {
   resetSecureStore();
   auto provider = makeProvider();
