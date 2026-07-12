@@ -1,21 +1,21 @@
 import type { ISchemaDefinition } from '@salve-software/react-native-salve-db';
 
-export interface Note {
+export interface BenchmarkRow {
   id: number;
-  title: string;
+  label: string;
   createdAt: number;
 }
 
 // `satisfies` (not a type annotation) so `columns`' keys stay literal —
 // `useQuery`'s `InferSelectModel<TSchema>` needs the literal shape to infer real row types.
-export const NoteSchema = {
-  name: 'notes',
+export const BenchmarkSchema = {
+  name: 'benchmark_rows',
   version: 1,
   primaryKey: 'id',
   columns: {
     id: { type: 'integer' },
-    title: { type: 'text' },
+    label: { type: 'text' },
     createdAt: { type: 'datetime' },
   },
-  indexes: [{ name: 'idx_notes_created_at', columns: ['createdAt'] }],
-} satisfies ISchemaDefinition<Note>;
+  indexes: [{ name: 'idx_benchmark_created_at', columns: ['createdAt'] }],
+} satisfies ISchemaDefinition<BenchmarkRow>;

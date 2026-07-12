@@ -7,6 +7,8 @@ import { queryCache } from '../../cache';
 import { useDatabaseReady } from '../useDatabaseReady';
 import { stableStringify } from './library/stableStringify';
 
+export type { IUseQueryProps, IUseQueryResult } from './types';
+
 /**
  * Runs a `select` query against `schema`, cached and kept live: it
  * automatically re-runs and re-renders whenever a write touches `schema`'s
