@@ -33,4 +33,34 @@ json::Array SyncQueueReader::readOperations(int limit) {
   return operations;
 }
 
+SyncQueuePage SyncQueueReader::readPage(const std::string& entity, int limit) {
+  if (limit < 0) {
+    throw std::runtime_error("SyncQueueReader: limit must be >= 0, got " + std::to_string(limit));
+  }
+
+  auto result = _conn->execute(
+    "SELECT id, operation, entity, entity_id, payload, updated_at "
+    "FROM sync_queue WHERE entity = ? ORDER BY id ASC LIMIT ?",
+    { entity, static_cast<double>(limit) }
+  );
+
+  SyncQueuePage page;
+  page.operations.reserve(result.rows.size());
+
+  for (const auto& row : result.rows) {
+    // ORDER BY id ASC, so the last row iterated is always the highest id.
+    page.maxId = static_cast<int64_t>(std::get<double>(row[0]));
+
+    json::Object op;
+    op["operation"]  = json::Value(std::get<std::string>(row[1]));
+    op["entity"]     = json::Value(std::get<std::string>(row[2]));
+    op["primaryKey"] = json::Value(std::get<std::string>(row[3]));
+    op["payload"]    = json::parse(std::get<std::string>(row[4]));
+    op["updatedAt"]  = json::Value(std::get<double>(row[5]));
+    page.operations.emplace_back(std::move(op));
+  }
+
+  return page;
+}
+
 } // namespace margelo::nitro::salvedb
