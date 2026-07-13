@@ -52,3 +52,20 @@ TEST_CASE("configure() throws when only network is provided", "[database][networ
     network: { timeout: 8000 }
   }))"));
 }
+
+TEST_CASE("configure() validates baseUrl/network before opening the database", "[database][network]") {
+  HybridDatabaseHarness harness;
+  createDb(harness);
+
+  harness.run("db.configure({ name: '" + uniqueDbName("network_ordering_good") + "' })");
+  auto connectionBefore = DatabaseManager::shared().connection();
+
+  // A bad baseUrl/network pairing must throw before open() switches the
+  // connection to the new (differently-named) database.
+  REQUIRE_THROWS(harness.run(R"(db.configure({
+    name: ')" + uniqueDbName("network_ordering_bad") + R"(',
+    baseUrl: 'https://api.company.com'
+  }))"));
+
+  REQUIRE(DatabaseManager::shared().connection() == connectionBefore);
+}

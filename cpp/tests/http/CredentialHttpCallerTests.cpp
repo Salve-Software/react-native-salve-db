@@ -62,3 +62,21 @@ TEST_CASE("throws when the transport fails with a network error", "[http][Creden
   auto caller = CredentialHttpCaller::create(testNetwork());
   REQUIRE_THROWS_AS(caller("/auth/refresh", json::parse(R"({"refreshToken": "old"})")), std::runtime_error);
 }
+
+TEST_CASE("throws a clear error when a non-2xx response has a non-JSON body", "[http][CredentialHttpCaller]") {
+  platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    return HttpResponse{500, {}, "<html>Internal Server Error</html>"};
+  });
+
+  auto caller = CredentialHttpCaller::create(testNetwork());
+  REQUIRE_THROWS_AS(caller("/auth/refresh", json::parse(R"({"refreshToken": "old"})")), std::runtime_error);
+}
+
+TEST_CASE("throws a clear error when a non-2xx response has an empty body", "[http][CredentialHttpCaller]") {
+  platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    return HttpResponse{502, {}, ""};
+  });
+
+  auto caller = CredentialHttpCaller::create(testNetwork());
+  REQUIRE_THROWS_AS(caller("/auth/refresh", json::parse(R"({"refreshToken": "old"})")), std::runtime_error);
+}

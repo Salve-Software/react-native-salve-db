@@ -27,3 +27,8 @@ TEST_CASE("returns baseUrl unchanged for an empty path", "[http][HttpUrlBuilder]
 TEST_CASE("preserves nested paths", "[http][HttpUrlBuilder]") {
   REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/v1/customers/42") == "https://api.company.com/v1/customers/42");
 }
+
+TEST_CASE("collapses multiple trailing slashes on baseUrl", "[http][HttpUrlBuilder]") {
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com//", "/customers") == "https://api.company.com/customers");
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com///", "customers") == "https://api.company.com/customers");
+}

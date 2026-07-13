@@ -4,7 +4,7 @@ namespace margelo::nitro::salvedb {
 
 std::string HttpUrlBuilder::build(const std::string& baseUrl, const std::string& path) {
   std::string base = baseUrl;
-  if (!base.empty() && base.back() == '/') {
+  while (!base.empty() && base.back() == '/') {
     base.pop_back();
   }
 

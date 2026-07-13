@@ -23,7 +23,14 @@ CredentialProvider::HttpCaller CredentialHttpCaller::create(const NetworkConfig&
     }
 
     const auto& response = std::get<HttpResponse>(outcome);
-    return RefreshHttpResponse{response.statusCode, json::parse(response.body)};
+    try {
+      return RefreshHttpResponse{response.statusCode, json::parse(response.body)};
+    } catch (const std::exception& e) {
+      throw std::runtime_error(
+        "CredentialHttpCaller: failed to parse response body (status " +
+        std::to_string(response.statusCode) + ") — " + e.what()
+      );
+    }
   };
 }
 
