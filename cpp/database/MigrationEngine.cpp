@@ -1,6 +1,7 @@
 #include "MigrationEngine.hpp"
 #include "json_parser.hpp"
 #include "SchemaRegistry.hpp"
+#include "../sync/SyncDefinitionRegistry.hpp"
 
 #include <sstream>
 #include <algorithm>
@@ -94,6 +95,13 @@ static constexpr auto kSyncQueueTable = R"sql(
 static constexpr auto kSyncApplyLockTable = R"sql(
   CREATE TABLE IF NOT EXISTS _sync_apply_lock (
     id INTEGER PRIMARY KEY CHECK (id = 1)
+  );
+)sql";
+
+static constexpr auto kSyncCursorTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_sync_cursors (
+    entity TEXT PRIMARY KEY,
+    cursor TEXT NOT NULL
   );
 )sql";
 
@@ -287,6 +295,7 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   _db->exec(kVersionTable);
   _db->exec(kSyncQueueTable);
   _db->exec(kSyncApplyLockTable);
+  _db->exec(kSyncCursorTable);
 
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;
@@ -320,6 +329,12 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
     if (col.type == "boolean") booleanColumns.insert(colName);
   }
   SchemaRegistry::shared().registerBooleanColumns(schema.name, std::move(booleanColumns));
+
+  if (schema.sync.enabled) {
+    SyncDefinitionRegistry::shared().registerDefinition(schema.name, schema.sync.definition);
+  } else {
+    SyncDefinitionRegistry::shared().unregisterDefinition(schema.name);
+  }
 }
 
 // ── JSON parsing ──────────────────────────────────────────────────────────────
@@ -375,7 +390,18 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
 
   auto syncVal = root.get("sync");
   if (syncVal && syncVal->get().isObject()) {
-    schema.sync.enabled = syncVal->get().getBool("enabled", false);
+    const json::Value& syncObj = syncVal->get();
+    schema.sync.enabled    = syncObj.getBool("enabled", false);
+    schema.sync.definition = syncObj;
+
+    if (schema.sync.enabled) {
+      auto updatedAt = schema.columns.find("updatedAt");
+      if (updatedAt == schema.columns.end() || updatedAt->second.type != "datetime") {
+        throw std::runtime_error(
+          "registerSchema: sync.enabled requires a 'datetime' column named 'updatedAt' (used for lastWriteWins)"
+        );
+      }
+    }
   }
 
   return schema;

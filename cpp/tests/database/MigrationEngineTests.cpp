@@ -265,17 +265,17 @@ TEST_CASE("sync.enabled: true creates 3 triggers matching schema.columns", "[mig
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime" } },
     "sync": { "enabled": true }
   })"));
 
   REQUIRE(triggerCount(*conn, "customers") == 3);
 
   auto insertSql = triggerSql(*conn, "customers_sync_after_insert");
-  REQUIRE(insertSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\")") != std::string::npos);
+  REQUIRE(insertSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\", 'updatedAt', NEW.\"updatedAt\")") != std::string::npos);
 
   auto updateSql = triggerSql(*conn, "customers_sync_after_update");
-  REQUIRE(updateSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\")") != std::string::npos);
+  REQUIRE(updateSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\", 'updatedAt', NEW.\"updatedAt\")") != std::string::npos);
 
   auto deleteSql = triggerSql(*conn, "customers_sync_after_delete");
   REQUIRE(deleteSql.find("json_object('id', OLD.\"id\")") != std::string::npos);
@@ -306,13 +306,13 @@ TEST_CASE("migrating a sync-enabled schema with a new column regenerates trigger
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime" } },
     "sync": { "enabled": true }
   })"));
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 2, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime" } },
     "sync": { "enabled": true }
   })"));
 
@@ -327,7 +327,7 @@ TEST_CASE("turning sync.enabled off across versions drops orphaned triggers", "[
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" } },
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime" } },
     "sync": { "enabled": true }
   })"));
   REQUIRE(triggerCount(*conn, "customers") == 3);
@@ -338,4 +338,24 @@ TEST_CASE("turning sync.enabled off across versions drops orphaned triggers", "[
     "sync": { "enabled": false }
   })"));
   REQUIRE(triggerCount(*conn, "customers") == 0);
+}
+
+TEST_CASE("sync.enabled: true without a datetime 'updatedAt' column throws", "[migration][sync]") {
+  CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "sync": { "enabled": true }
+  })"), std::runtime_error);
+
+  CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "integer" } },
+    "sync": { "enabled": true }
+  })"), std::runtime_error);
+
+  CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime" } },
+    "sync": { "enabled": true }
+  })"));
 }

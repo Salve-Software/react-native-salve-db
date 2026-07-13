@@ -17,7 +17,7 @@ std::string uniqueDbPath(const std::string& testName) {
 void registerSyncEnabledCustomers(MigrationEngine& engine) {
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime" } },
     "sync": { "enabled": true }
   })"));
 }

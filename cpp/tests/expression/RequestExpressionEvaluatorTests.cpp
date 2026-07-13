@@ -103,7 +103,7 @@ TEST_CASE("composes a full request body with cursor/operations/pageSize wired to
   MigrationEngine engine(conn);
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime" } },
     "sync": { "enabled": true }
   })"));
   conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});

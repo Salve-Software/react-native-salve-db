@@ -135,6 +135,7 @@ export const CustomerSchema = {
     id: { type: "text" },
     name: { type: "text" },
     phone: { type: "text" },
+    updatedAt: { type: "datetime" }, // required when sync.enabled — used by lastWriteWins
   },
 
   sync: {

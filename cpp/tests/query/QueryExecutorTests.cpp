@@ -119,7 +119,7 @@ TEST_CASE("execute() writes through db.execute fire sync triggers into sync_queu
   harness.run(R"(
     db.registerSchema(JSON.stringify({
       name: 'notes', version: 1, primaryKey: 'id',
-      columns: { id: { type: 'integer' }, body: { type: 'text' } },
+      columns: { id: { type: 'integer' }, body: { type: 'text' }, updatedAt: { type: 'datetime' } },
       sync: { enabled: true }
     }))
   )");
