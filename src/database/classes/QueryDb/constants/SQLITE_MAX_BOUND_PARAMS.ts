@@ -1,0 +1,1 @@
+export const SQLITE_MAX_BOUND_PARAMS = 999;

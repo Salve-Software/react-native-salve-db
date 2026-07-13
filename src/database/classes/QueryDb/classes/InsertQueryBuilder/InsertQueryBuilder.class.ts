@@ -3,7 +3,7 @@ import type { SqlValue } from '../../../../../specs/types';
 import type { AnySchema } from '../../../../../types';
 import type { IInsertQueryBuilder } from '../../types';
 import type { InferInsertModel } from './types';
-import { MAX_BATCH_INSERT_ROWS } from '../../constants';
+import { MAX_BATCH_INSERT_ROWS, SQLITE_MAX_BOUND_PARAMS } from '../../constants';
 
 export class InsertQueryBuilder<TSchema extends AnySchema>
   implements IInsertQueryBuilder<TSchema>
@@ -43,6 +43,15 @@ export class InsertQueryBuilder<TSchema extends AnySchema>
       if (rowCols.length !== cols.length || !rowCols.every((c) => cols.includes(c))) {
         throw new Error('InsertQueryBuilder: every row passed to .values() must have the same set of columns')
       }
+    }
+
+    const totalParams = this._rows.length * cols.length
+    if (totalParams > SQLITE_MAX_BOUND_PARAMS) {
+      throw new Error(
+        `InsertQueryBuilder: ${this._rows.length} rows x ${cols.length} columns = ${totalParams} bound params ` +
+        `exceeds SQLITE_MAX_BOUND_PARAMS (${SQLITE_MAX_BOUND_PARAMS}). Split into smaller batches, wrapped in ` +
+        `Database.transaction() if they must be atomic.`,
+      )
     }
 
     const params: SqlValue[] = []
