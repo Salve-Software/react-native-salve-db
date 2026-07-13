@@ -23,7 +23,7 @@ Pod::Spec.new do |s|
     # Vendored SQLite amalgamation (same source used on Android)
     "cpp/third_party/sqlite3/*.{c,h}",
   ]
-  s.exclude_files = "cpp/tests/**/*"
+  s.exclude_files = ["cpp/tests/**/*", "ios/tests/**/*"]
 
   # Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
   s.pod_target_xcconfig = { 'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SQLITE_ENABLE_COLUMN_METADATA=1' }

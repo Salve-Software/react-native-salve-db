@@ -13,6 +13,10 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/third_party/sqlite3/sqlite3.c
 	src/main/cpp/cpp-adapter.cpp
 	src/main/cpp/platform_android.cpp
+	src/main/cpp/JniSupport.cpp
+	src/main/cpp/platform_android_http.cpp
+	../cpp/http/HttpUrlBuilder.cpp
+	../cpp/http/CredentialHttpCaller.cpp
 	../cpp/database/HybridSalveDatabase.cpp
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
@@ -45,6 +49,7 @@ include_directories(
         "../cpp/sync"
         "../cpp/expression"
         "../cpp/credentials"
+        "../cpp/http"
         "../cpp/third_party/sqlite3"
 )
 

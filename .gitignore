@@ -44,6 +44,9 @@ project.xcworkspace
 local.properties
 android.iml
 
+# Swift Package Manager
+.build/
+
 # Cocoapods
 #
 example/ios/Pods

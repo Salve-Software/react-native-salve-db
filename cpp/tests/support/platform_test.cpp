@@ -1,4 +1,5 @@
 #include "../../platform/platform.hpp"
+#include "platform_test.hpp"
 #include <cstdlib>
 #include <stdexcept>
 #include <unistd.h>
@@ -43,6 +44,30 @@ std::optional<std::string> getSecureValue(const std::string& key) {
 
 void deleteSecureValue(const std::string& key) {
   secureStore().erase(key);
+}
+
+// Host test double for httpExecute: no real network, tests configure the
+// outcome via platform::test::setHttpExecuteResult before calling code
+// under test.
+namespace {
+std::function<HttpOutcome(const HttpRequest&)>& httpExecuteHandler() {
+  static std::function<HttpOutcome(const HttpRequest&)> handler;
+  return handler;
+}
+} // namespace
+
+namespace test {
+void setHttpExecuteResult(std::function<HttpOutcome(const HttpRequest&)> handler) {
+  httpExecuteHandler() = std::move(handler);
+}
+} // namespace test
+
+HttpOutcome httpExecute(const HttpRequest& request) {
+  auto& handler = httpExecuteHandler();
+  if (!handler) {
+    throw std::runtime_error("platform_test: httpExecute called without platform::test::setHttpExecuteResult configured");
+  }
+  return handler(request);
 }
 
 } // namespace margelo::nitro::salvedb::platform

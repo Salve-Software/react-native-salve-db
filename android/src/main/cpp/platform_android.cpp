@@ -1,13 +1,13 @@
 #include "../../../../cpp/platform/platform.hpp"
 #include "../../../../cpp/platform/platform_android_jni.hpp"
-#include <jni.h>
+#include "JniSupport.hpp"
+#include "platform_android_http.hpp"
 #include <stdexcept>
 #include <string>
 
 namespace margelo::nitro::salvedb::platform {
 
 static std::string s_documentsDirectory;
-static JavaVM* s_javaVm = nullptr;
 static jclass s_secureStorageClass = nullptr;
 
 void setDocumentsDirectory(const std::string& path) {
@@ -19,17 +19,12 @@ std::string getDocumentsDirectory() {
 }
 
 void setJavaVM(JavaVM* vm) {
-  s_javaVm = vm;
+  registerJavaVM(vm);
 
   JNIEnv* env = nullptr;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
-  jclass localClass = env->FindClass("com/salvedb/SalveDbSecureStorage");
-  if (localClass == nullptr) {
-    env->ExceptionClear();
-    return;
-  }
-  s_secureStorageClass = static_cast<jclass>(env->NewGlobalRef(localClass));
-  env->DeleteLocalRef(localClass);
+  s_secureStorageClass = resolveGlobalClass(env, "com/salvedb/SalveDbSecureStorage");
+  registerHttpClientClass(resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpClient"));
 }
 
 namespace {
@@ -39,45 +34,6 @@ jclass secureStorageClass() {
     throw std::runtime_error("SalveDb: SalveDbSecureStorage class was not resolved — setJavaVM (JNI_OnLoad) must run first");
   }
   return s_secureStorageClass;
-}
-
-// Secure storage calls can happen from any native thread (foreground sync,
-// background sync worker), not just ones the JVM already attached — so this
-// attaches on demand and detaches again if it was the one that attached.
-class ScopedJNIEnv {
-public:
-  ScopedJNIEnv() {
-    if (!s_javaVm) {
-      throw std::runtime_error("SalveDb: JavaVM not set — JNI_OnLoad must run before secure storage access");
-    }
-    jint status = s_javaVm->GetEnv(reinterpret_cast<void**>(&_env), JNI_VERSION_1_6);
-    if (status == JNI_EDETACHED) {
-      if (s_javaVm->AttachCurrentThread(&_env, nullptr) != JNI_OK) {
-        throw std::runtime_error("SalveDb: failed to attach current thread to JVM");
-      }
-      _didAttach = true;
-    } else if (status != JNI_OK) {
-      throw std::runtime_error("SalveDb: JNI GetEnv failed");
-    }
-  }
-
-  ~ScopedJNIEnv() {
-    if (_didAttach) s_javaVm->DetachCurrentThread();
-  }
-
-  JNIEnv* env() const { return _env; }
-
-private:
-  JNIEnv* _env = nullptr;
-  bool _didAttach = false;
-};
-
-// Throws with `context` if a pending Java exception exists, clearing it —
-// otherwise a pending exception left on the JNIEnv corrupts the next call.
-void throwIfJavaExceptionPending(JNIEnv* env, const std::string& context) {
-  if (!env->ExceptionCheck()) return;
-  env->ExceptionClear();
-  throw std::runtime_error("SalveDb: " + context + " threw a Java exception");
 }
 
 } // namespace

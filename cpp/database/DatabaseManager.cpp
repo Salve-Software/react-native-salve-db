@@ -29,4 +29,8 @@ void DatabaseManager::configureCredentials(
   }
 }
 
+void DatabaseManager::configureNetwork(const std::string& baseUrl, double timeoutMs) {
+  _network = NetworkConfig{baseUrl, timeoutMs};
+}
+
 } // namespace margelo::nitro::salvedb

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../http/HttpTypes.hpp"
 #include <optional>
 #include <string>
 
@@ -20,5 +21,10 @@ void setDocumentsDirectory(const std::string& path);
 void setSecureValue(const std::string& key, const std::string& value);
 std::optional<std::string> getSecureValue(const std::string& key);
 void deleteSecureValue(const std::string& key);
+
+// Executes an HTTP request and blocks the calling thread until it completes.
+// Same discipline as the functions above: only call from a native background
+// thread (e.g. inside Promise<T>::async), never from the JS thread.
+HttpOutcome httpExecute(const HttpRequest& request);
 
 } // namespace margelo::nitro::salvedb::platform
