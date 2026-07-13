@@ -5,7 +5,8 @@ import type { SqlValue } from '../../../../../specs/types';
 import type { AnySchema } from '../../../../../types';
 import type { ISelectQueryBuilder } from '../../types';
 import type { InferSelectModel } from './types';
-import { assertIndexedColumns, collectConditionColumns, compileCondition, MAX_SYNC_PAGE_SIZE } from '../../library';
+import { assertIndexedColumns, collectConditionColumns, compileCondition } from '../../library';
+import { MAX_SYNC_PAGE_SIZE } from '../../constants';
 
 export class SelectQueryBuilder<TSchema extends AnySchema>
   implements ISelectQueryBuilder<TSchema>
