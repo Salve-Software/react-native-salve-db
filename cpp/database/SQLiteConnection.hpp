@@ -20,7 +20,7 @@ using SqlValue = std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer
 
 class SQLiteConnection {
 public:
-  explicit SQLiteConnection(const std::string& path);
+  explicit SQLiteConnection(const std::string& path, bool walMode = true);
   ~SQLiteConnection();
 
   // Non-copyable, moveable

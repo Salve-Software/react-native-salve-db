@@ -7,4 +7,14 @@ export interface IConfigureProps {
     timeout: number;
   };
   credentials?: ICredentialsDefinition;
+  /**
+   * Enables SQLite's WAL (Write-Ahead Logging) journal mode, which reduces
+   * read/write contention — readers generally keep seeing a consistent
+   * snapshot while a write (e.g. the native background sync engine) is in
+   * progress, instead of blocking behind its exclusive lock. Not an absolute
+   * guarantee: checkpoints, schema changes, or transaction state can still
+   * cause contention.
+   * @default true
+   */
+  walMode?: boolean;
 }

@@ -187,6 +187,25 @@ TEST_CASE("unsubscribeFromChanges stops further notifications", "[notify]") {
   REQUIRE(countAfterSecond == "1");
 }
 
+TEST_CASE("configure() defaults walMode to true", "[configure][wal]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("wal_default")));
+
+  auto result = harness.run("db.execute('PRAGMA journal_mode', [])");
+  REQUIRE(result == R"({"columns":["journal_mode"],"rows":[["wal"]]})");
+}
+
+TEST_CASE("configure({ walMode: false }) leaves the default (non-WAL) journal mode", "[configure][wal]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  auto name = uniqueDbName("wal_disabled");
+  harness.run("db.configure({ name: '" + name + "', walMode: false })");
+
+  auto result = harness.run("db.execute('PRAGMA journal_mode', [])");
+  REQUIRE(result == R"({"columns":["journal_mode"],"rows":[["delete"]]})");
+}
+
 TEST_CASE("blob ArrayBuffer params survive the async JSI thread hop", "[thread-safety]") {
   // Regression test for the bug where ArrayBuffer blob params were captured
   // by value and touched inside Promise::async's lambda off the JS thread

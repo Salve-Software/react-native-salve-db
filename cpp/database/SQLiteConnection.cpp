@@ -7,7 +7,26 @@
 
 namespace margelo::nitro::salvedb {
 
-SQLiteConnection::SQLiteConnection(const std::string& path) {
+namespace {
+
+std::string setJournalMode(sqlite3* db, const char* mode) {
+  std::string sql = std::string("PRAGMA journal_mode=") + mode + ";";
+  sqlite3_stmt* stmt = nullptr;
+  if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+    throw std::runtime_error(std::string("SQLite journal_mode pragma failed: ") + sqlite3_errmsg(db));
+  }
+  std::string result;
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    const auto* text = sqlite3_column_text(stmt, 0);
+    result = text ? reinterpret_cast<const char*>(text) : "";
+  }
+  sqlite3_finalize(stmt);
+  return result;
+}
+
+} // namespace
+
+SQLiteConnection::SQLiteConnection(const std::string& path, bool walMode) {
   int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
   int rc = sqlite3_open_v2(path.c_str(), &_db, flags, nullptr);
   if (rc != SQLITE_OK) {
@@ -16,8 +35,14 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
     _db = nullptr;
     throw std::runtime_error("SQLite open failed (" + path + "): " + err);
   }
-  // WAL mode for concurrent read + write, busy timeout to avoid SQLITE_BUSY
-  sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+
+  std::string journalMode = setJournalMode(_db, walMode ? "WAL" : "DELETE");
+  if (walMode && journalMode != "wal") {
+    std::string err = "SQLite failed to enable WAL journal mode (got '" + journalMode + "')";
+    sqlite3_close(_db);
+    _db = nullptr;
+    throw std::runtime_error(err);
+  }
   sqlite3_exec(_db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
   sqlite3_busy_timeout(_db, 5000);
   sqlite3_extended_result_codes(_db, 1); // makes prepare/step/exec return extended codes directly

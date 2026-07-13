@@ -24,7 +24,7 @@ public:
     return instance;
   }
 
-  void open(const std::string& dbName);
+  void open(const std::string& dbName, bool walMode = true);
 
   std::shared_ptr<SQLiteConnection> connection() const {
     if (!_db)

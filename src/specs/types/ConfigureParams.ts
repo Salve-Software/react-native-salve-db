@@ -41,4 +41,9 @@ export interface ConfigureParams {
   network?: NetworkParams;
   /** Global auth credentials. Required when sync is used. */
   credentials?: CredentialsParams;
+  /**
+   * Enables SQLite's WAL journal mode on the opened connection.
+   * @default true
+   */
+  walMode?: boolean;
 }
