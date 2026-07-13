@@ -1,6 +1,7 @@
 #include "MigrationEngine.hpp"
 #include "json_parser.hpp"
 #include "SchemaRegistry.hpp"
+#include "../sync/SyncDefinitionStore.hpp"
 
 #include <sstream>
 #include <algorithm>
@@ -91,9 +92,27 @@ static constexpr auto kSyncQueueTable = R"sql(
   );
 )sql";
 
+static constexpr auto kSyncQueueEntityIndex = R"sql(
+  CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_id ON sync_queue (entity, id);
+)sql";
+
 static constexpr auto kSyncApplyLockTable = R"sql(
   CREATE TABLE IF NOT EXISTS _sync_apply_lock (
     id INTEGER PRIMARY KEY CHECK (id = 1)
+  );
+)sql";
+
+static constexpr auto kSyncCursorTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_sync_cursors (
+    entity TEXT PRIMARY KEY,
+    cursor TEXT NOT NULL
+  );
+)sql";
+
+static constexpr auto kSyncDefinitionTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_sync_definitions (
+    name       TEXT PRIMARY KEY,
+    definition TEXT NOT NULL
   );
 )sql";
 
@@ -286,7 +305,10 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   // Ensure version tracking / sync queue tables exist
   _db->exec(kVersionTable);
   _db->exec(kSyncQueueTable);
+  _db->exec(kSyncQueueEntityIndex);
   _db->exec(kSyncApplyLockTable);
+  _db->exec(kSyncCursorTable);
+  _db->exec(kSyncDefinitionTable);
 
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;
@@ -311,6 +333,13 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
 
   if (schema.version != stored) {
     setStoredVersion(schema.name, schema.version);
+  }
+
+  SyncDefinitionStore defStore(_db);
+  if (schema.sync.enabled) {
+    defStore.save(schema.name, schema.sync.definition);
+  } else {
+    defStore.remove(schema.name);
   }
 
   txn.commit();
@@ -375,7 +404,21 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
 
   auto syncVal = root.get("sync");
   if (syncVal && syncVal->get().isObject()) {
-    schema.sync.enabled = syncVal->get().getBool("enabled", false);
+    const json::Value& syncObj = syncVal->get();
+    schema.sync.enabled    = syncObj.getBool("enabled", false);
+    schema.sync.definition = syncObj;
+
+    if (schema.sync.enabled) {
+      auto updatedAt = schema.columns.find("updatedAt");
+      bool valid = updatedAt != schema.columns.end()
+        && updatedAt->second.type == "datetime"
+        && !updatedAt->second.nullable;
+      if (!valid) {
+        throw std::runtime_error(
+          "registerSchema: sync.enabled requires a NOT NULL 'datetime' column named 'updatedAt' (used for lastWriteWins)"
+        );
+      }
+    }
   }
 
   return schema;
