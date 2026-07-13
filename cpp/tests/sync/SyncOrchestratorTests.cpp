@@ -5,6 +5,10 @@
 #include "../../sync/SyncCursorStore.hpp"
 #include "../../sync/SyncOrchestrator.hpp"
 #include "../support/platform_test.hpp"
+#include <atomic>
+#include <chrono>
+#include <thread>
+#include <vector>
 
 using namespace margelo::nitro::salvedb;
 
@@ -258,4 +262,42 @@ TEST_CASE("an error mid-apply rolls back the whole page: no partial writes, lock
   REQUIRE(syncQueueCount(*conn, "customers") == 1); // the pushed row was never cleared
   SyncCursorStore cursorStore(conn);
   REQUIRE_FALSE(cursorStore.load("customers").has_value());
+}
+
+TEST_CASE("DatabaseManager::tryLockSync fails while another thread holds lockSync", "[sync][SyncOrchestrator][concurrency]") {
+  openOrchestratorFixture("orchestrator_lock_contention");
+
+  auto held = DatabaseManager::shared().lockSync();
+  REQUIRE(held.owns_lock());
+
+  auto contended = DatabaseManager::shared().tryLockSync();
+  REQUIRE_FALSE(contended.owns_lock());
+}
+
+TEST_CASE("concurrent triggerSync calls are serialized instead of racing into a nested transaction", "[sync][SyncOrchestrator][concurrency]") {
+  auto conn = openOrchestratorFixture("orchestrator_concurrent_sessions");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 100)", {});
+
+  platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    return HttpResponse{200, {}, R"({"cursor": "c1", "hasMore": false, "operations": []})"};
+  });
+
+  std::atomic<int> errors{0};
+  std::vector<std::thread> threads;
+  for (int i = 0; i < 4; ++i) {
+    threads.emplace_back([&errors]() {
+      try {
+        SyncOrchestrator().triggerSync("customers");
+      } catch (const std::exception&) {
+        ++errors;
+      }
+    });
+  }
+  for (auto& th : threads) th.join();
+
+  // Before the sync-session mutex, this reliably threw "Nested transactions
+  // are not supported" — SyncApplyGuard::applyWithBypass opens a real
+  // transaction per page, and four sessions raced into it concurrently.
+  REQUIRE(errors == 0);
 }

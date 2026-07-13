@@ -100,6 +100,11 @@ std::optional<std::string> extractPathString(const json::Value& responseDef, con
 } // namespace
 
 NativeSyncResult SyncOrchestrator::triggerSync(const std::string& schemaName) {
+  auto lock = DatabaseManager::shared().lockSync();
+  return runSyncSession(schemaName);
+}
+
+NativeSyncResult SyncOrchestrator::runSyncSession(const std::string& schemaName) {
   auto conn = DatabaseManager::shared().connection();
 
   SyncDefinitionStore defStore(conn);

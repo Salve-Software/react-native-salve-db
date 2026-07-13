@@ -4,6 +4,7 @@
 #include "../http/NetworkConfig.hpp"
 #include "SQLiteConnection.hpp"
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -59,11 +60,20 @@ public:
     return *_network;
   }
 
+  std::unique_lock<std::mutex> lockSync() {
+    return std::unique_lock<std::mutex>(_syncMutex);
+  }
+
+  std::unique_lock<std::mutex> tryLockSync() {
+    return std::unique_lock<std::mutex>(_syncMutex, std::try_to_lock);
+  }
+
 private:
   DatabaseManager() = default;
   std::shared_ptr<SQLiteConnection> _db;
   std::unique_ptr<CredentialProvider> _credentials;
   std::optional<NetworkConfig> _network;
+  std::mutex _syncMutex;
 };
 
 } // namespace margelo::nitro::salvedb
