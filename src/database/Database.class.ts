@@ -70,6 +70,11 @@ export class Database {
     return this.queryDb.execute(sql, params);
   }
 
+  /** Reads `sync_queue` for `schema` without running a sync — how many writes are pending, and since when. */
+  static getSyncQueueStatus = <TSchema extends AnySchema>(schema: TSchema) => {
+    return this.queryDb.getSyncQueueStatus(schema);
+  }
+
   /**
    * Subscribes to table-level write notifications (insert/update/delete —
    * from any source: query builder, raw SQL, migrations, or background sync).

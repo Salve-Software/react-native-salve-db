@@ -2,6 +2,7 @@ import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { SqlValue } from '../../../specs/types';
 import type { IQueryClient } from './types';
 import type { AnySchema } from '../../../types';
+import type { SyncQueueStatus } from '../../../types/sync/SyncQueueStatus';
 import { SelectQueryBuilder, InsertQueryBuilder, UpdateQueryBuilder, DeleteQueryBuilder, CountQueryBuilder } from './classes';
 import { ConfigureDb } from '../ConfigureDb';
 
@@ -56,6 +57,12 @@ export class QueryDb {
       result.columns.forEach((col, i) => { obj[col] = row[i] });
       return obj;
     })
+  }
+
+  /** Reads `sync_queue` for `schema` without running a sync — how many writes are pending, and since when. */
+  getSyncQueueStatus<TSchema extends AnySchema>(schema: TSchema): SyncQueueStatus {
+    this._assertConfigured('getSyncQueueStatus');
+    return this._bridge.getSyncQueueStatus(schema.name);
   }
 
   subscribeToChanges(callback: (tables: string[]) => void): number {

@@ -2,7 +2,9 @@
 
 #include "../database/SQLiteConnection.hpp"
 #include "../database/json_parser.hpp"
+#include "SyncQueueStatus.hpp"
 #include <memory>
+#include <string>
 
 namespace margelo::nitro::salvedb {
 
@@ -13,6 +15,9 @@ public:
 
   // FIFO, up to `limit` rows, serialized to the TS `ISyncOperation` shape.
   json::Array readOperations(int limit);
+
+  // Pending count + oldest `updated_at` for one entity, no sync involved.
+  SyncQueueStatus getStatus(const std::string& entity);
 
 private:
   std::shared_ptr<SQLiteConnection> _conn;

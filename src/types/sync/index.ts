@@ -13,4 +13,5 @@ export type * from './ISyncDefinition';
 export type * from './SyncDirection';
 export type * from './ISyncOperation';
 export type * from './SyncStrategy';
+export type * from './SyncQueueStatus';
 export type * from './ITransport';

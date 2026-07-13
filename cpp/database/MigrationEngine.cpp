@@ -97,6 +97,11 @@ static constexpr auto kSyncApplyLockTable = R"sql(
   );
 )sql";
 
+// Backs SyncQueueReader::getStatus's per-entity pending count without a full table scan.
+static constexpr auto kSyncQueueEntityIndex = R"sql(
+  CREATE INDEX IF NOT EXISTS idx_sync_queue_entity ON sync_queue(entity);
+)sql";
+
 int MigrationEngine::storedVersion(const std::string& schemaName) {
   auto result = _db->execute(
     "SELECT version FROM _salve_schema_versions WHERE name = ?",
@@ -280,13 +285,18 @@ void MigrationEngine::dropSyncTriggers(const SchemaDef& schema) {
 
 // ── Public: registerSchema ────────────────────────────────────────────────────
 
+void MigrationEngine::ensureSyncInfra(SQLiteConnection& db) {
+  db.exec(kSyncQueueTable);
+  db.exec(kSyncApplyLockTable);
+  db.exec(kSyncQueueEntityIndex);
+}
+
 void MigrationEngine::registerSchema(const SchemaDef& schema) {
   TransactionGuard txn(*_db);
 
   // Ensure version tracking / sync queue tables exist
   _db->exec(kVersionTable);
-  _db->exec(kSyncQueueTable);
-  _db->exec(kSyncApplyLockTable);
+  ensureSyncInfra(*_db);
 
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;
