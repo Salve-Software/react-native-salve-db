@@ -16,9 +16,14 @@ import type {
  * with a new reference (see `_runQuery`) — `useSyncExternalStore` compares
  * `getSnapshot()` results with `Object.is`, so mutating a cached entry in
  * place would never be seen as a change and the UI would silently go stale.
+ *
+ * `subscribeToTables` offers the same shared native subscription to callers
+ * that don't fit the single-entry-per-key model (e.g. `useInfiniteQuery`,
+ * which accumulates pages across multiple query calls).
  */
 export class QueryCache {
   private readonly _entries = new Map<string, ICacheEntry<unknown>>();
+  private readonly _tableListeners = new Map<object, { tables: string[], listener: () => void }>();
   private _nativeSubscriptionId: number | null = null;
 
   constructor(
@@ -39,6 +44,19 @@ export class QueryCache {
       this._nativeSubscriptionId = null;
     }
     this._entries.clear();
+    this._tableListeners.clear();
+  }
+
+  /**
+   * Raw table-change notification, bypassing the entry/queryFn cache model —
+   * for consumers (e.g. `useInfiniteQuery`) that manage their own data
+   * outside a single cached `queryFn()` call. Reuses the one shared native
+   * subscription instead of opening another.
+   */
+  subscribeToTables(tables: string[], listener: () => void): () => void {
+    const id = {};
+    this._tableListeners.set(id, { tables, listener });
+    return () => { this._tableListeners.delete(id); };
   }
 
   getOrCreateEntry<T>(props: IGetOrCreateEntryProps<T>): ICacheEntry<T> {
@@ -96,6 +114,10 @@ export class QueryCache {
       });
       this._entries.set(key, next as ICacheEntry<unknown>);
       next.listeners.forEach((listener) => listener());
+    }
+
+    for (const { tables: watched, listener } of this._tableListeners.values()) {
+      if (watched.some((table) => changed.has(table))) listener();
     }
   }
 
