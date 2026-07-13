@@ -11,6 +11,7 @@
     "test": "jest",
     "test:native": "bash cpp/tests/run.sh",
     "test:native:android": "cd example/android && ./gradlew :salve-software_react-native-salve-db:testDebugUnitTest",
+    "test:native:ios": "swift test --package-path ios/tests/HttpAdapterTests",
     "typecheck": "tsc --noEmit",
     "clean": "git clean -dfX",
     "release": "semantic-release",
