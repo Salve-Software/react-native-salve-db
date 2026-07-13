@@ -69,6 +69,7 @@ namespace margelo::nitro::salvedb {
       virtual void commit() = 0;
       virtual void rollback() = 0;
       virtual std::shared_ptr<Promise<NativeSyncResult>> triggerSync(const std::string& schemaName) = 0;
+      virtual std::shared_ptr<Promise<std::vector<NativeSyncResult>>> triggerSyncAll(bool discardIfBusy) = 0;
       virtual double subscribeToChanges(const std::function<void(const std::vector<std::string>& /* tables */)>& callback) = 0;
       virtual void unsubscribeFromChanges(double id) = 0;
       virtual double debugPreparedStatementCount() = 0;

@@ -69,6 +69,12 @@ std::shared_ptr<Promise<NativeSyncResult>> HybridSalveDatabase::triggerSync(cons
   });
 }
 
+std::shared_ptr<Promise<std::vector<NativeSyncResult>>> HybridSalveDatabase::triggerSyncAll(bool discardIfBusy) {
+  return Promise<std::vector<NativeSyncResult>>::async([this, discardIfBusy]() {
+    return _syncOrchestrator.triggerSyncAll(discardIfBusy);
+  });
+}
+
 double HybridSalveDatabase::subscribeToChanges(const std::function<void(const std::vector<std::string>&)>& callback) {
   int id = DatabaseManager::shared().connection()->subscribe(
     [callback](std::vector<std::string> tables) { callback(tables); }

@@ -40,6 +40,16 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
    */
   triggerSync(schemaName: string): Promise<NativeSyncResult>;
 
+  /**
+   * Triggers a sync session for every schema registered with `sync.enabled`.
+   * One schema failing does not stop the rest.
+   * @param discardIfBusy If true, returns immediately with an empty array
+   * instead of waiting when a sync session is already in progress (used by
+   * automatic triggers). If false, waits for the in-progress session to
+   * finish (used by an explicit manual call).
+   */
+  triggerSyncAll(discardIfBusy: boolean): Promise<NativeSyncResult[]>;
+
   // ── Change notification ─────────────────────────────────────────────────────
 
   /**

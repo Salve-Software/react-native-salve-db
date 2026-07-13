@@ -21,6 +21,7 @@ namespace margelo::nitro::salvedb {
       prototype.registerHybridMethod("commit", &HybridSalveDatabaseSpec::commit);
       prototype.registerHybridMethod("rollback", &HybridSalveDatabaseSpec::rollback);
       prototype.registerHybridMethod("triggerSync", &HybridSalveDatabaseSpec::triggerSync);
+      prototype.registerHybridMethod("triggerSyncAll", &HybridSalveDatabaseSpec::triggerSyncAll);
       prototype.registerHybridMethod("subscribeToChanges", &HybridSalveDatabaseSpec::subscribeToChanges);
       prototype.registerHybridMethod("unsubscribeFromChanges", &HybridSalveDatabaseSpec::unsubscribeFromChanges);
       prototype.registerHybridMethod("debugPreparedStatementCount", &HybridSalveDatabaseSpec::debugPreparedStatementCount);
