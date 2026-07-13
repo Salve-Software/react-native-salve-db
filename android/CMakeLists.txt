@@ -24,6 +24,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/SchemaRegistry.cpp
 	../cpp/query/QueryExecutor.cpp
 	../cpp/sync/SyncOrchestrator.cpp
+	../cpp/sync/SyncNativeEntryPoint.cpp
 	../cpp/sync/SyncApplyGuard.cpp
 	../cpp/sync/SyncQueueReader.cpp
 	../cpp/sync/SyncDefinitionStore.cpp
