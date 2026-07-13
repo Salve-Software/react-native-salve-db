@@ -301,3 +301,48 @@ TEST_CASE("concurrent triggerSync calls are serialized instead of racing into a 
   // transaction per page, and four sessions raced into it concurrently.
   REQUIRE(errors == 0);
 }
+
+TEST_CASE("triggerSyncAll runs every enabled schema, isolating one schema's failure from the rest", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_all_isolation");
+  MigrationEngine engine(conn);
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "orders", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": {
+      "enabled": true,
+      "endpoint": { "method": "POST", "path": "/sync/orders" },
+      "request": { "body": {
+        "cursor": { "$ref": "cursor" },
+        "operations": { "$ref": "operations" },
+        "pageSize": { "$ref": "pageSize" }
+      } },
+      "response": { "cursor": "$.cursor", "operations": "$.operations", "hasMore": "$.hasMore" }
+    }
+  })"));
+
+  platform::test::setHttpExecuteResult([](const HttpRequest& request) -> HttpOutcome {
+    if (request.url.find("/sync/customers") != std::string::npos) {
+      return HttpResponse{500, {}, "boom"};
+    }
+    return HttpResponse{200, {}, R"({"cursor": "c1", "hasMore": false, "operations": []})"};
+  });
+
+  auto results = SyncOrchestrator().triggerSyncAll(/*discardIfBusy*/ false);
+
+  REQUIRE(results.size() == 1); // "customers" failed and was skipped; "orders" still ran
+  REQUIRE(results[0].cursor.value() == "c1");
+
+  SyncCursorStore cursorStore(conn);
+  REQUIRE_FALSE(cursorStore.load("customers").has_value()); // failed schema never advanced
+  REQUIRE(cursorStore.load("orders").has_value());
+}
+
+TEST_CASE("triggerSyncAll discards silently when a sync session is already in progress", "[sync][SyncOrchestrator][concurrency]") {
+  openOrchestratorFixture("orchestrator_all_discard");
+
+  auto held = DatabaseManager::shared().lockSync();
+
+  auto results = SyncOrchestrator().triggerSyncAll(/*discardIfBusy*/ true);
+
+  REQUIRE(results.empty());
+}

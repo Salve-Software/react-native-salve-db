@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace margelo::nitro::salvedb {
 
@@ -18,6 +19,7 @@ public:
   explicit SyncDefinitionStore(std::shared_ptr<SQLiteConnection> conn);
 
   std::optional<json::Value> definitionFor(const std::string& schema);
+  std::vector<std::string> enabledSchemas();
   void save(const std::string& schema, const json::Value& definition);
   void remove(const std::string& schema);
 

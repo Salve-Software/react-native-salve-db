@@ -2,6 +2,7 @@
 
 #include "NativeSyncResult.hpp"
 #include <string>
+#include <vector>
 
 namespace margelo::nitro::salvedb {
 
@@ -12,6 +13,7 @@ namespace margelo::nitro::salvedb {
 class SyncOrchestrator {
 public:
   NativeSyncResult triggerSync(const std::string& schemaName);
+  std::vector<NativeSyncResult> triggerSyncAll(bool discardIfBusy);
 
 private:
   NativeSyncResult runSyncSession(const std::string& schemaName);

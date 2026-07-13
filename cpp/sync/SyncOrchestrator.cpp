@@ -9,6 +9,7 @@
 #include "../expression/RequestExpressionEvaluator.hpp"
 #include "../http/CredentialHttpCaller.hpp"
 #include "../http/SyncHttpCaller.hpp"
+#include <iostream>
 #include <stdexcept>
 #include <thread>
 #include <variant>
@@ -201,6 +202,29 @@ NativeSyncResult SyncOrchestrator::runSyncSession(const std::string& schemaName)
     static_cast<double>(totalStats.deleted),
     nowMillis() - start
   );
+}
+
+std::vector<NativeSyncResult> SyncOrchestrator::triggerSyncAll(bool discardIfBusy) {
+  auto lock = discardIfBusy
+    ? DatabaseManager::shared().tryLockSync()
+    : DatabaseManager::shared().lockSync();
+
+  if (discardIfBusy && !lock.owns_lock()) {
+    std::cerr << "SyncOrchestrator: sync already in progress, discarding triggerSyncAll" << std::endl;
+    return {};
+  }
+
+  SyncDefinitionStore defStore(DatabaseManager::shared().connection());
+
+  std::vector<NativeSyncResult> results;
+  for (const auto& schemaName : defStore.enabledSchemas()) {
+    try {
+      results.push_back(runSyncSession(schemaName));
+    } catch (const std::exception& e) {
+      std::cerr << "SyncOrchestrator: triggerSyncAll — schema '" << schemaName << "' failed: " << e.what() << std::endl;
+    }
+  }
+  return results;
 }
 
 } // namespace margelo::nitro::salvedb
