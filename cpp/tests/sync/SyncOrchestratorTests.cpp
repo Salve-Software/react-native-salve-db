@@ -5,7 +5,6 @@
 #include "../../sync/SyncCursorStore.hpp"
 #include "../../sync/SyncOrchestrator.hpp"
 #include "../support/platform_test.hpp"
-#include <chrono>
 
 using namespace margelo::nitro::salvedb;
 
@@ -29,7 +28,6 @@ std::shared_ptr<SQLiteConnection> openOrchestratorFixture(
   const std::string& testName, double pageSize = 20, int maxPagesPerSession = 20
 ) {
   resetSecureStore();
-  sync_test::setRetryDelay(std::chrono::milliseconds(0));
 
   DatabaseManager::shared().open(uniqueDbName(testName));
   MigrationEngine engine(DatabaseManager::shared().connection());
@@ -140,6 +138,8 @@ TEST_CASE("triggerSync stops at maxPagesPerSession and a later call resumes from
   REQUIRE(second.cursor.value() == "c4");
 }
 
+// Real ~10s: 2 real 5s retry delays — no test-only override, to keep that
+// hardcoded delay out of the production binary (see PR #61 review).
 TEST_CASE("triggerSync retries a network failure 3 times before giving up, without advancing the cursor", "[sync][SyncOrchestrator]") {
   auto conn = openOrchestratorFixture("orchestrator_retry_exhausted");
   conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 100)", {});
@@ -185,6 +185,7 @@ TEST_CASE("triggerSync refreshes the token on 401 and reexecutes the page", "[sy
   REQUIRE(syncQueueCount(*conn, "customers") == 0);
 }
 
+// Real ~10s — see the retry-exhaustion test above for why there's no override.
 TEST_CASE("a 401 refresh does not eat into the retry budget for a subsequent network failure", "[sync][SyncOrchestrator]") {
   auto conn = openOrchestratorFixture("orchestrator_401_then_network_failure");
   conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 100)", {});

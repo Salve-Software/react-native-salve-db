@@ -18,7 +18,7 @@ namespace margelo::nitro::salvedb {
 namespace {
 
 constexpr int kMaxAttempts = 3;
-std::chrono::milliseconds gRetryDelay{5000};
+constexpr std::chrono::milliseconds kRetryDelay{5000};
 
 double nowMillis() {
   using namespace std::chrono;
@@ -67,7 +67,7 @@ SyncHttpResponse sendPageWithRetryAnd401(
     if (auto* error = std::get_if<HttpNetworkError>(&outcome)) {
       ++failedAttempts;
       if (failedAttempts < kMaxAttempts) {
-        std::this_thread::sleep_for(gRetryDelay);
+        std::this_thread::sleep_for(kRetryDelay);
         continue;
       }
       throw std::runtime_error(
@@ -197,9 +197,5 @@ NativeSyncResult SyncOrchestrator::triggerSync(const std::string& schemaName) {
     nowMillis() - start
   );
 }
-
-namespace sync_test {
-void setRetryDelay(std::chrono::milliseconds delay) { gRetryDelay = delay; }
-} // namespace sync_test
 
 } // namespace margelo::nitro::salvedb
