@@ -55,6 +55,11 @@ export class Database {
     return this.queryDb.delete(schema);
   }
 
+  /** Starts a `COUNT(*)` against `schema`'s table. Call `.execute()` on the returned builder to run it. */
+  static count = <TSchema extends AnySchema>(schema: TSchema) => {
+    return this.queryDb.count(schema);
+  }
+
   /** Runs `fn` inside a native transaction (`BEGIN`/`COMMIT`), rolling back if `fn` throws. */
   static transaction = <T>(fn: (tx: IQueryClient) => T) => {
     return this.queryDb.transaction<T>(fn);

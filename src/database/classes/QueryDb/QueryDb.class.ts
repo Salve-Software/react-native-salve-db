@@ -2,7 +2,7 @@ import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { SqlValue } from '../../../specs/types';
 import type { IQueryClient } from './types';
 import type { AnySchema } from '../../../types';
-import { SelectQueryBuilder, InsertQueryBuilder, UpdateQueryBuilder, DeleteQueryBuilder } from './classes';
+import { SelectQueryBuilder, InsertQueryBuilder, UpdateQueryBuilder, DeleteQueryBuilder, CountQueryBuilder } from './classes';
 import { ConfigureDb } from '../ConfigureDb';
 
 export class QueryDb {
@@ -26,6 +26,11 @@ export class QueryDb {
   delete<TSchema extends AnySchema>(schema: TSchema) {
     this._assertConfigured('delete');
     return new DeleteQueryBuilder(schema, this._bridge);
+  }
+
+  count<TSchema extends AnySchema>(schema: TSchema) {
+    this._assertConfigured('count');
+    return new CountQueryBuilder(schema, this._bridge);
   }
 
   transaction<T>(fn: (tx: IQueryClient) => T): T {
@@ -82,6 +87,9 @@ export class QueryDb {
 
       delete: <TSchema extends AnySchema>(schema: TSchema) =>
         new DeleteQueryBuilder(schema, this._bridge),
+
+      count: <TSchema extends AnySchema>(schema: TSchema) =>
+        new CountQueryBuilder(schema, this._bridge),
 
       transaction: <T>(fn: (tx: IQueryClient) => T) =>
         this.transaction(fn),

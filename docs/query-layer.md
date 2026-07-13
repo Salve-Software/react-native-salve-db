@@ -42,7 +42,7 @@ Duas regras, aplicadas na camada TS (`SelectQueryBuilder`/`UpdateQueryBuilder`/`
 1. **`LIMIT` obrigatório, com teto máximo** (`MAX_SYNC_PAGE_SIZE = 500`), exigido só em `SelectQueryBuilder.execute()`. Cobre tanto "1 registro por PK" quanto "uma página de N registros" com o mesmo mecanismo. Não se aplica a `UPDATE`/`DELETE` — SQLite não tem `LIMIT` nativo pra essas operações, e "atualizar/apagar tudo que casa a condição" é o comportamento esperado, não algo a paginar.
 2. **Índice obrigatório pra `ORDER BY`/`WHERE` fora da primary key.** `LIMIT` sozinho limita o *tamanho do retorno*, não o *custo do scan* — uma coluna sem índice ainda obriga o SQLite a varrer a tabela inteira antes de aplicar o `LIMIT` (ou, no caso de `UPDATE`/`DELETE`, antes de encontrar as linhas a mudar). A regra reaproveita o `IndexDefinition` já existente no contrato de schema (`docs/architecture.md`), usando **leftmost-prefix**: a coluna precisa ser a primeira do array `columns` de algum índice declarado — é assim que o SQLite de fato usa um índice composto pra `WHERE`/`ORDER BY`. Sem índice líder pra essa coluna, a chamada rejeita com erro explícito orientando a declarar o índice. Aplicada a `SelectQueryBuilder` (`orderBy` + `where`) e a `UpdateQueryBuilder`/`DeleteQueryBuilder` (só `where`, quando presente) — um `UPDATE`/`DELETE` sem índice na coluna do `where()` faz o mesmo full table scan bloqueante que um `SELECT` faria. `UPDATE`/`DELETE` sem `where()` nenhum (afeta a tabela inteira) não passa por essa checagem — é o próprio caller pedindo o full scan.
 
-`InsertQueryBuilder` e o `execute(sql, params)` cru (escape hatch, sem schema associado) não têm guarda — o custo de um insert já é proporcional ao que o caller escreveu explicitamente, e o escape hatch não tem schema pra validar índice contra.
+`InsertQueryBuilder` e o `execute(sql, params)` cru (escape hatch, sem schema associado) não têm guarda de índice — o custo de um insert já é proporcional ao que o caller escreveu explicitamente, e o escape hatch não tem schema pra validar índice contra. `values()` aceita uma linha ou um array de linhas (todas com o mesmo conjunto de colunas) num único `INSERT` multi-row; guarda própria (`MAX_BATCH_INSERT_ROWS = 500`) mantém o total de parâmetros ligados abaixo do limite padrão do SQLite (999).
 
 ### Sincronização da cache de prepared statements
 
@@ -139,6 +139,10 @@ export interface QueryClient {
     schema: TSchema
   ): DeleteQueryBuilder<TSchema>;
 
+  count<TSchema extends SchemaDefinition<any>>(
+    schema: TSchema
+  ): CountQueryBuilder<TSchema>;
+
   /**
    * BEGIN/COMMIT/ROLLBACK nativo, síncrono. Se `fn` lançar, faz ROLLBACK.
    * Todo write dentro de `tx` ainda dispara as triggers normalmente
@@ -169,8 +173,23 @@ export interface SelectQueryBuilder<TSchema extends SchemaDefinition<any>> {
 }
 
 export interface InsertQueryBuilder<TSchema extends SchemaDefinition<any>> {
-  values(row: InferInsertModel<TSchema>): this;
+  values(row: InferInsertModel<TSchema> | InferInsertModel<TSchema>[]): this;
+
+  /**
+   * Upsert: on conflict with the primary key, overwrites every other
+   * inserted column with the incoming value (`excluded.col`). Row(s) must
+   * already be given via `values()`.
+   */
+  onConflictDoUpdate(): this;
+
   execute(): void;
+}
+
+export interface CountQueryBuilder<TSchema extends SchemaDefinition<any>> {
+  where(condition: Condition): this;
+
+  /** Exige índice declarado pra coluna de `where`, se `where()` foi chamado. */
+  execute(): number;
 }
 
 export interface UpdateQueryBuilder<TSchema extends SchemaDefinition<any>> {
@@ -203,6 +222,18 @@ db.transaction((tx) => {
   tx.insert(OrderSchema).values({ id, customerId, total }).execute();
   tx.insert(OrderItemSchema).values({ orderId: id, sku, qty }).execute();
 });
+
+// batch insert
+db.insert(CustomerSchema).values(customers).execute();
+
+// upsert (aplicar página baixada do sync, por exemplo)
+db.insert(CustomerSchema).values(customer).onConflictDoUpdate().execute();
+
+// count
+const pendingCount = db
+  .count(OrderSchema)
+  .where(eq(OrderSchema.columns.status, "pending"))
+  .execute();
 ```
 
 ---

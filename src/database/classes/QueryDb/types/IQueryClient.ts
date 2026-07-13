@@ -1,4 +1,5 @@
 import type { AnySchema } from "../../../../types";
+import type { ICountQueryBuilder } from "./ICountQueryBuilder";
 import type { IDeleteQueryBuilder } from "./IDeleteQueryBuilder";
 import type { IInsertQueryBuilder } from "./IInsertQueryBuilder";
 import type { ISelectQueryBuilder } from "./ISelectQueryBuilder";
@@ -10,6 +11,7 @@ export interface IQueryClient {
   insert<TSchema extends AnySchema>(schema: TSchema): IInsertQueryBuilder<TSchema>;
   update<TSchema extends AnySchema>(schema: TSchema): IUpdateQueryBuilder<TSchema>;
   delete<TSchema extends AnySchema>(schema: TSchema): IDeleteQueryBuilder<TSchema>;
+  count<TSchema extends AnySchema>(schema: TSchema): ICountQueryBuilder<TSchema>;
 
   /**
    * Native BEGIN/COMMIT/ROLLBACK, synchronous. If `fn` throws, rolls back.
