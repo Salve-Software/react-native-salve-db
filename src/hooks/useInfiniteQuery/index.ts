@@ -1,24 +1,13 @@
 import type { AnySchema } from '../../types';
-import type { IUseInfiniteQueryProps, IUseInfiniteQueryResult } from './types';
-import type { InferSelectModel } from '../../database/classes/QueryDb/classes/SelectQueryBuilder/types';
+import type { IUseInfiniteQueryProps, IUseInfiniteQueryResult, Row, IState } from './types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Database } from '../../database';
 import { queryCache } from '../../cache';
 import { useDatabaseReady } from '../useDatabaseReady';
 import { stableStringify } from '../useQuery/library/stableStringify';
+import { NO_KEY } from './constants';
 
 export type { IUseInfiniteQueryProps, IUseInfiniteQueryResult } from './types';
-
-type Row<TSchema extends AnySchema> = InferSelectModel<TSchema>;
-
-interface State<TSchema extends AnySchema> {
-  key: string;
-  pages: Row<TSchema>[][];
-  hasNextPage: boolean;
-  error: unknown;
-}
-
-const NO_KEY = '\0'; // never matches a real `key`, so the first render never reports stale-but-loaded data.
 
 /**
  * Paginated variant of `useQuery`: loads `pageSize` rows at a time via
@@ -39,15 +28,10 @@ export const useInfiniteQuery = <TSchema extends AnySchema>(
   const latest = useRef({ schema, queryFn, pageSize });
   latest.current = { schema, queryFn, pageSize };
 
-  const [state, setState] = useState<State<TSchema>>({ key: NO_KEY, pages: [], hasNextPage: true, error: null });
+  const [state, setState] = useState<IState<TSchema>>({ key: NO_KEY, pages: [], hasNextPage: true, error: null });
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Mirror `pages.length`/`hasNextPage` outside React state, updated synchronously
-  // before the paired `setState` call. `execute()` is synchronous end-to-end, so two
-  // `fetchNextPage()` calls in the same tick (e.g. a double `onEndReached`) would
-  // otherwise both read the same not-yet-committed `stateRef.current.pages.length`
-  // and fetch the same offset twice instead of consecutive ones.
   const pageCountRef = useRef(0);
   const hasNextPageRef = useRef(true);
 
@@ -64,7 +48,6 @@ export const useInfiniteQuery = <TSchema extends AnySchema>(
       hasNextPageRef.current = hasNextPage;
       setState({ key, pages: [firstPage], hasNextPage, error: null });
     } catch (error) {
-      // Keep whatever was already on screen — a transient refetch failure shouldn't blank a loaded list.
       setState((prev) => ({ ...prev, error }));
     }
   }, [key, fetchPage]);
@@ -86,7 +69,7 @@ export const useInfiniteQuery = <TSchema extends AnySchema>(
     if (stateRef.current.key !== key || !hasNextPageRef.current) return;
 
     const pageIndex = pageCountRef.current;
-    pageCountRef.current += 1; // reserve the slot synchronously, before the fetch/setState below
+    pageCountRef.current += 1;
 
     try {
       const nextPage = fetchPage(pageIndex);
@@ -96,7 +79,7 @@ export const useInfiniteQuery = <TSchema extends AnySchema>(
         ? { key, pages: [...prev.pages, nextPage], hasNextPage, error: null }
         : prev);
     } catch (error) {
-      pageCountRef.current -= 1; // this page never landed, release the reserved slot
+      pageCountRef.current -= 1;
       setState((prev) => prev.key === key ? { ...prev, error } : prev);
     }
   }, [key, fetchPage]);
