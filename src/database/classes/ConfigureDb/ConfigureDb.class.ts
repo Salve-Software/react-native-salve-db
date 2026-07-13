@@ -35,6 +35,7 @@ export class ConfigureDb {
       credentials: props.credentials !== undefined
         ? mapCredentials(props.credentials)
         : undefined,
+      walMode: props.walMode ?? true,
     });
 
     ConfigureDb._configured = true;
