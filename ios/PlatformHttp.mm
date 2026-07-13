@@ -34,18 +34,34 @@ HttpOutcome httpExecute(const HttpRequest& request) {
   NSMutableArray<NSString*>* headerNames = [NSMutableArray arrayWithCapacity:request.headers.size()];
   NSMutableArray<NSString*>* headerValues = [NSMutableArray arrayWithCapacity:request.headers.size()];
   for (const auto& [name, value] : request.headers) {
-    [headerNames addObject:[NSString stringWithUTF8String:name.c_str()]];
-    [headerValues addObject:[NSString stringWithUTF8String:value.c_str()]];
+    NSString* headerName = [NSString stringWithUTF8String:name.c_str()];
+    NSString* headerValue = [NSString stringWithUTF8String:value.c_str()];
+    if (headerName == nil || headerValue == nil) {
+      return HttpNetworkError{HttpNetworkErrorKind::Other, "invalid UTF-8 in request header"};
+    }
+    [headerNames addObject:headerName];
+    [headerValues addObject:headerValue];
   }
 
-  NSString* body = request.body.has_value() ? [NSString stringWithUTF8String:request.body->c_str()] : nil;
+  NSString* body = nil;
+  if (request.body.has_value()) {
+    body = [NSString stringWithUTF8String:request.body->c_str()];
+    if (body == nil) {
+      return HttpNetworkError{HttpNetworkErrorKind::Other, "invalid UTF-8 in request body"};
+    }
+  }
+
+  NSString* urlString = [NSString stringWithUTF8String:request.url.c_str()];
+  if (urlString == nil) {
+    return HttpNetworkError{HttpNetworkErrorKind::Other, "invalid UTF-8 in request URL"};
+  }
 
   __block SalveDbHttpBridgeOutcome* result = nil;
   dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
 
   SalveDbHttpBridge* bridge = [SalveDbHttpBridge new];
   [bridge executeWithMethod:[NSString stringWithUTF8String:methodName(request.method)]
-                         url:[NSString stringWithUTF8String:request.url.c_str()]
+                         url:urlString
                  headerNames:headerNames
                 headerValues:headerValues
                         body:body

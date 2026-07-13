@@ -17,7 +17,7 @@ final class HttpAdapterTests: XCTestCase {
     HttpRequest(method: method, url: "https://example.com/path", headers: headers, body: body, timeoutMs: timeoutMs)
   }
 
-  private func execute(_ request: HttpRequest) -> HttpOutcome {
+  private func execute(_ request: HttpRequest) throws -> HttpOutcome {
     let expectation = expectation(description: "completion")
     var result: HttpOutcome?
     HttpAdapter(session: StubURLProtocol.session()).execute(request) {
@@ -25,21 +25,21 @@ final class HttpAdapterTests: XCTestCase {
       expectation.fulfill()
     }
     wait(for: [expectation], timeout: 2)
-    return result!
+    return try XCTUnwrap(result, "completion handler was never called")
   }
 
-  func testGetReturnsTheStubbedStatusAndBody() {
+  func testGetReturnsTheStubbedStatusAndBody() throws {
     StubURLProtocol.handler = { _ in
       (HTTPURLResponse(url: URL(string: "https://example.com/path")!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
        "hello".data(using: .utf8)!)
     }
 
-    guard case .success(let response) = execute(request()) else { return XCTFail("expected success") }
+    guard case .success(let response) = try execute(request()) else { return XCTFail("expected success") }
     XCTAssertEqual(response.statusCode, 200)
     XCTAssertEqual(response.body, "hello")
   }
 
-  func testEachMethodSendsTheCorrectHTTPMethod() {
+  func testEachMethodSendsTheCorrectHTTPMethod() throws {
     for method in [HttpMethod.get, .post, .put, .patch, .delete] {
       var capturedMethod: String?
       StubURLProtocol.handler = { req in
@@ -47,12 +47,12 @@ final class HttpAdapterTests: XCTestCase {
         return (HTTPURLResponse(url: URL(string: "https://example.com/path")!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
       }
 
-      _ = execute(request(method: method))
+      _ = try execute(request(method: method))
       XCTAssertEqual(capturedMethod, method.rawValue)
     }
   }
 
-  func testRequestBodyArrivesIntact() {
+  func testRequestBodyArrivesIntact() throws {
     var capturedBody: Data?
     StubURLProtocol.handler = { req in
       capturedBody = req.httpBody ?? req.httpBodyStream.map { stream -> Data in
@@ -70,55 +70,65 @@ final class HttpAdapterTests: XCTestCase {
       return (HTTPURLResponse(url: URL(string: "https://example.com/path")!, statusCode: 201, httpVersion: nil, headerFields: nil)!, Data())
     }
 
-    _ = execute(request(method: .post, body: #"{"a":1}"#))
+    _ = try execute(request(method: .post, body: #"{"a":1}"#))
     XCTAssertEqual(capturedBody.flatMap { String(data: $0, encoding: .utf8) }, #"{"a":1}"#)
   }
 
-  func testA500ResponseIsSuccessNotNetworkError() {
+  func testA500ResponseIsSuccessNotNetworkError() throws {
     StubURLProtocol.handler = { _ in
       (HTTPURLResponse(url: URL(string: "https://example.com/path")!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
        "boom".data(using: .utf8)!)
     }
 
-    guard case .success(let response) = execute(request()) else { return XCTFail("expected success, not a network error") }
+    guard case .success(let response) = try execute(request()) else { return XCTFail("expected success, not a network error") }
     XCTAssertEqual(response.statusCode, 500)
   }
 
-  func testATransportErrorIsANetworkError() {
+  func testATransportErrorIsANetworkError() throws {
     StubURLProtocol.errorToThrow = URLError(.notConnectedToInternet)
 
-    guard case .networkError(let error) = execute(request()) else { return XCTFail("expected a network error") }
+    guard case .networkError(let error) = try execute(request()) else { return XCTFail("expected a network error") }
     XCTAssertEqual(error.kind, .noConnection)
   }
 
-  func testASlowResponseBeyondTheTimeoutProducesATimeoutError() {
+  func testASlowResponseBeyondTheTimeoutProducesATimeoutError() throws {
     StubURLProtocol.delay = 2
     StubURLProtocol.handler = { _ in
       (HTTPURLResponse(url: URL(string: "https://example.com/path")!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
     }
 
-    guard case .networkError(let error) = execute(request(timeoutMs: 200)) else { return XCTFail("expected a timeout network error") }
+    guard case .networkError(let error) = try execute(request(timeoutMs: 200)) else { return XCTFail("expected a timeout network error") }
     XCTAssertEqual(error.kind, .timeout)
   }
 
-  func testCustomHeadersAndAnAuthLikeHeaderCoexist() {
+  func testCustomHeadersAndAnAuthLikeHeaderCoexist() throws {
     var capturedHeaders: [String: String] = [:]
     StubURLProtocol.handler = { req in
       capturedHeaders = req.allHTTPHeaderFields ?? [:]
       return (HTTPURLResponse(url: URL(string: "https://example.com/path")!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
     }
 
-    _ = execute(request(headers: [(name: "X-Custom", value: "custom-value"), (name: "Authorization", value: "Bearer token")]))
+    _ = try execute(request(headers: [(name: "X-Custom", value: "custom-value"), (name: "Authorization", value: "Bearer token")]))
     XCTAssertEqual(capturedHeaders["X-Custom"], "custom-value")
     XCTAssertEqual(capturedHeaders["Authorization"], "Bearer token")
   }
 
-  func testResponseHeadersAreReturned() {
+  func testResponseHeadersAreReturned() throws {
     StubURLProtocol.handler = { _ in
       (HTTPURLResponse(url: URL(string: "https://example.com/path")!, statusCode: 200, httpVersion: nil, headerFields: ["X-Reply": "value"])!, Data())
     }
 
-    guard case .success(let response) = execute(request()) else { return XCTFail("expected success") }
+    guard case .success(let response) = try execute(request()) else { return XCTFail("expected success") }
     XCTAssertTrue(response.headers.contains { $0.name == "X-Reply" && $0.value == "value" })
+  }
+
+  func testNonUTF8BodyIsDecodedLenientlyWithoutLosingTheStatus() throws {
+    StubURLProtocol.handler = { _ in
+      (HTTPURLResponse(url: URL(string: "https://example.com/path")!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+       Data([0xFF, 0xFE, 0xFD]))
+    }
+
+    guard case .success(let response) = try execute(request()) else { return XCTFail("expected success, not a network error") }
+    XCTAssertEqual(response.statusCode, 200)
   }
 }

@@ -5,7 +5,12 @@ final class StubURLProtocol: URLProtocol {
   static var errorToThrow: Error?
   static var delay: TimeInterval = 0
 
-  private var isCancelled = false
+  private let lock = NSLock()
+  private var _isCancelled = false
+  private var isCancelled: Bool {
+    get { lock.withLock { _isCancelled } }
+    set { lock.withLock { _isCancelled = newValue } }
+  }
 
   override static func canInit(with request: URLRequest) -> Bool { true }
   override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }

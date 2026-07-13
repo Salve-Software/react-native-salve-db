@@ -36,10 +36,10 @@ final class HttpAdapter {
         completion(.networkError(HttpNetworkError(kind: .other, message: "no HTTP response")))
         return
       }
-      guard let data = data, let body = String(data: data, encoding: .utf8) else {
-        completion(.networkError(HttpNetworkError(kind: .other, message: "response body is not valid UTF-8")))
-        return
-      }
+      // String(decoding:as:) never fails — invalid byte sequences become the
+      // replacement character — so a malformed body doesn't hide a completed
+      // HTTP exchange (status/headers) behind a network-error outcome.
+      let body = data.map { String(decoding: $0, as: UTF8.self) } ?? ""
 
       let headers = httpResponse.allHeaderFields.compactMap { key, value -> (name: String, value: String)? in
         guard let name = key as? String, let value = value as? String else { return nil }
