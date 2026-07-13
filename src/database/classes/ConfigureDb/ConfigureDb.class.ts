@@ -1,6 +1,7 @@
 import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { IConfigureProps, ICredentialsDefinition, IRegisterProps } from './types';
 import type { ConfigureParams } from '../../../specs/types/ConfigureParams';
+import { registerAppOpenSync } from './library/registerAppOpenSync';
 
 function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credentials'] {
   switch (creds.provider) {
@@ -20,6 +21,7 @@ function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credent
 
 export class ConfigureDb {
   private static _configured = false;
+  private static _syncOnAppOpen = true;
 
   constructor(private readonly _bridge: SalveDatabase) {}
 
@@ -27,6 +29,8 @@ export class ConfigureDb {
     if (!props.name || props.name.trim() === '') {
       throw new Error("Database.configure: 'name' is required");
     }
+
+    const syncOnAppOpen = props.syncOnAppOpen ?? true;
 
     this._bridge.configure({
       name: props.name,
@@ -36,9 +40,12 @@ export class ConfigureDb {
         ? mapCredentials(props.credentials)
         : undefined,
       walMode: props.walMode ?? true,
+      syncOnAppOpen,
     });
 
     ConfigureDb._configured = true;
+    ConfigureDb._syncOnAppOpen = syncOnAppOpen;
+    registerAppOpenSync(this._bridge, () => ConfigureDb._syncOnAppOpen);
   }
 
   register(props: IRegisterProps): Promise<void> {

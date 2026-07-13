@@ -1,3 +1,7 @@
+jest.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: jest.fn() },
+}));
+
 import { ConfigureDb } from '../../ConfigureDb';
 import { SyncDb } from '../SyncDb.class';
 import type { SalveDatabase } from '../../../../specs/SalveDatabase.nitro';

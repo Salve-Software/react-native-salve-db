@@ -60,6 +60,9 @@ public:
     return *_network;
   }
 
+  void configureSyncOnAppOpen(bool enabled) { _syncOnAppOpen = enabled; }
+  bool syncOnAppOpen() const { return _syncOnAppOpen; }
+
   std::unique_lock<std::mutex> lockSync() {
     return std::unique_lock<std::mutex>(_syncMutex);
   }
@@ -74,6 +77,7 @@ private:
   std::unique_ptr<CredentialProvider> _credentials;
   std::optional<NetworkConfig> _network;
   std::mutex _syncMutex;
+  bool _syncOnAppOpen = true;
 };
 
 } // namespace margelo::nitro::salvedb

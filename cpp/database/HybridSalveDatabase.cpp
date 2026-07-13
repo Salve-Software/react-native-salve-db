@@ -12,6 +12,7 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
     throw std::runtime_error("Database.configure: 'baseUrl' and 'network' must be provided together");
 
   DatabaseManager::shared().open(params.name, params.walMode.value_or(true));
+  DatabaseManager::shared().configureSyncOnAppOpen(params.syncOnAppOpen.value_or(true));
 
   if (params.baseUrl.has_value())
     DatabaseManager::shared().configureNetwork(*params.baseUrl, params.network->timeout);
