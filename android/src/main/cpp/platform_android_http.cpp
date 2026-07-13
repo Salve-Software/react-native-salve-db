@@ -3,6 +3,7 @@
 #include "../../../../cpp/platform/platform.hpp"
 #include "JniSupport.hpp"
 #include <algorithm>
+#include <mutex>
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb::platform {
@@ -28,24 +29,24 @@ jclass httpClientClass() {
   return s_httpClientClass;
 }
 
-// Idempotent — safe if raced from concurrent first calls, every thread
-// computes the same values.
-void ensureCached(JNIEnv* env) {
-  if (s_executeMethod) return;
+std::once_flag s_cacheOnceFlag;
 
-  s_resultClass = resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpJniResult");
-  s_stringClass = resolveGlobalClass(env, "java/lang/String");
-  s_executeMethod = env->GetStaticMethodID(
-    httpClientClass(), "execute",
-    "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;J)Lcom/salvedb/http/SalveDbHttpJniResult;"
-  );
-  s_isSuccessField = env->GetFieldID(s_resultClass, "isSuccess", "Z");
-  s_statusCodeField = env->GetFieldID(s_resultClass, "statusCode", "I");
-  s_responseHeaderNamesField = env->GetFieldID(s_resultClass, "responseHeaderNames", "[Ljava/lang/String;");
-  s_responseHeaderValuesField = env->GetFieldID(s_resultClass, "responseHeaderValues", "[Ljava/lang/String;");
-  s_responseBodyField = env->GetFieldID(s_resultClass, "responseBody", "Ljava/lang/String;");
-  s_errorKindField = env->GetFieldID(s_resultClass, "errorKind", "Ljava/lang/String;");
-  s_errorMessageField = env->GetFieldID(s_resultClass, "errorMessage", "Ljava/lang/String;");
+void ensureCached(JNIEnv* env) {
+  std::call_once(s_cacheOnceFlag, [env]() {
+    s_resultClass = resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpJniResult");
+    s_stringClass = resolveGlobalClass(env, "java/lang/String");
+    s_executeMethod = env->GetStaticMethodID(
+      httpClientClass(), "execute",
+      "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;J)Lcom/salvedb/http/SalveDbHttpJniResult;"
+    );
+    s_isSuccessField = env->GetFieldID(s_resultClass, "isSuccess", "Z");
+    s_statusCodeField = env->GetFieldID(s_resultClass, "statusCode", "I");
+    s_responseHeaderNamesField = env->GetFieldID(s_resultClass, "responseHeaderNames", "[Ljava/lang/String;");
+    s_responseHeaderValuesField = env->GetFieldID(s_resultClass, "responseHeaderValues", "[Ljava/lang/String;");
+    s_responseBodyField = env->GetFieldID(s_resultClass, "responseBody", "Ljava/lang/String;");
+    s_errorKindField = env->GetFieldID(s_resultClass, "errorKind", "Ljava/lang/String;");
+    s_errorMessageField = env->GetFieldID(s_resultClass, "errorMessage", "Ljava/lang/String;");
+  });
 }
 
 const char* methodName(HttpMethod method) {
@@ -77,6 +78,7 @@ jobjectArray toJStringArray(JNIEnv* env, const std::vector<std::string>& values)
 }
 
 std::string jstringToStd(JNIEnv* env, jstring value) {
+  if (!value) return "";
   const char* chars = env->GetStringUTFChars(value, nullptr);
   std::string result(chars);
   env->ReleaseStringUTFChars(value, chars);
@@ -94,6 +96,11 @@ HttpOutcome httpExecute(const HttpRequest& request) {
   JNIEnv* env = scoped.env();
   jclass cls = httpClientClass();
   ensureCached(env);
+
+  // Bounds every local ref created below (request/response strings, arrays,
+  // the result object) — freed on return or on exception unwind, so a reused
+  // attached thread issuing many requests never accumulates local refs.
+  ScopedLocalFrame frame(env);
 
   std::vector<std::string> headerNames;
   std::vector<std::string> headerValues;
@@ -113,12 +120,6 @@ HttpOutcome httpExecute(const HttpRequest& request) {
   jobject jResult = env->CallStaticObjectMethod(
     cls, s_executeMethod, jMethod, jUrl, jHeaderNames, jHeaderValues, jBody, static_cast<jlong>(request.timeoutMs)
   );
-
-  env->DeleteLocalRef(jMethod);
-  env->DeleteLocalRef(jUrl);
-  env->DeleteLocalRef(jHeaderNames);
-  env->DeleteLocalRef(jHeaderValues);
-  if (jBody) env->DeleteLocalRef(jBody);
   throwIfJavaExceptionPending(env, "SalveDbHttpClient.execute");
 
   if (env->GetBooleanField(jResult, s_isSuccessField)) {
@@ -134,8 +135,6 @@ HttpOutcome httpExecute(const HttpRequest& request) {
       auto name = static_cast<jstring>(env->GetObjectArrayElement(jRespHeaderNames, i));
       auto value = static_cast<jstring>(env->GetObjectArrayElement(jRespHeaderValues, i));
       headers.emplace_back(jstringToStd(env, name), jstringToStd(env, value));
-      env->DeleteLocalRef(name);
-      env->DeleteLocalRef(value);
     }
 
     return HttpResponse{statusCode, std::move(headers), jstringToStd(env, jRespBody)};

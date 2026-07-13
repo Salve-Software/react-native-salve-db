@@ -7,11 +7,18 @@ import okhttp3.OkHttpClient
 class OkHttpAdapter {
 
   fun execute(request: SalveDbHttpRequest): SalveDbHttpOutcome {
-    val call = client
-      .newBuilder()
-      .callTimeout(request.timeoutMs, TimeUnit.MILLISECONDS)
-      .build()
-      .newCall(request.toOkHttpRequest())
+    // Building the request/Call can throw IllegalArgumentException (OkHttp's
+    // HttpUrl/Headers.Builder validation) for a malformed URL or header —
+    // handled separately from IOException since no cancellable Call exists yet.
+    val call = try {
+      client
+        .newBuilder()
+        .callTimeout(request.timeoutMs, TimeUnit.MILLISECONDS)
+        .build()
+        .newCall(request.toOkHttpRequest())
+    } catch (e: IllegalArgumentException) {
+      return SalveDbHttpOutcome.NetworkError(SalveDbHttpErrorKind.OTHER, e.message ?: e.toString())
+    }
 
     return try {
       call.execute().use { it.toSalveDbHttpOutcome() }

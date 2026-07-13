@@ -16,11 +16,28 @@ class ScopedJNIEnv {
 public:
   ScopedJNIEnv();
   ~ScopedJNIEnv();
+  ScopedJNIEnv(const ScopedJNIEnv&) = delete;
+  ScopedJNIEnv& operator=(const ScopedJNIEnv&) = delete;
   JNIEnv* env() const { return _env; }
 
 private:
   JNIEnv* _env = nullptr;
   bool _didAttach = false;
+};
+
+// Bounds the lifetime of local refs created after construction — pops them
+// all (via PopLocalFrame) on destruction, including on exception unwind.
+// Use around JNI calls that create several locals (arrays, strings,
+// intermediate objects) without deleting each one individually.
+class ScopedLocalFrame {
+public:
+  explicit ScopedLocalFrame(JNIEnv* env, jint capacityHint = 16);
+  ~ScopedLocalFrame();
+  ScopedLocalFrame(const ScopedLocalFrame&) = delete;
+  ScopedLocalFrame& operator=(const ScopedLocalFrame&) = delete;
+
+private:
+  JNIEnv* _env;
 };
 
 // Throws with `context` if a pending Java exception exists, clearing it —

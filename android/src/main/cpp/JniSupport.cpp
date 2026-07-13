@@ -30,6 +30,16 @@ ScopedJNIEnv::~ScopedJNIEnv() {
   if (_didAttach) s_javaVm->DetachCurrentThread();
 }
 
+ScopedLocalFrame::ScopedLocalFrame(JNIEnv* env, jint capacityHint) : _env(env) {
+  if (_env->PushLocalFrame(capacityHint) != 0) {
+    throw std::runtime_error("SalveDb: PushLocalFrame failed");
+  }
+}
+
+ScopedLocalFrame::~ScopedLocalFrame() {
+  _env->PopLocalFrame(nullptr);
+}
+
 void throwIfJavaExceptionPending(JNIEnv* env, const std::string& context) {
   if (!env->ExceptionCheck()) return;
   env->ExceptionClear();

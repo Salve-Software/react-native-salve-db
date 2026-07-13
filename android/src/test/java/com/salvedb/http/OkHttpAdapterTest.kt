@@ -124,4 +124,10 @@ class OkHttpAdapterTest {
     val outcome = adapter.execute(request(SalveDbHttpMethod.GET)) as SalveDbHttpOutcome.Success
     assertTrue(outcome.headers.any { it.first == "X-Reply" && it.second == "value" })
   }
+
+  @Test
+  fun `a malformed URL produces a NetworkError instead of throwing`() {
+    val outcome = adapter.execute(SalveDbHttpRequest(SalveDbHttpMethod.GET, "ht!tp://[invalid", emptyList(), null, 5000))
+    assertTrue(outcome is SalveDbHttpOutcome.NetworkError)
+  }
 }
