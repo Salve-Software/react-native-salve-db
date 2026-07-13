@@ -17,7 +17,7 @@ std::string uniqueDbPath(const std::string& testName) {
 void registerSyncEnabledCustomers(MigrationEngine& engine) {
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
 }
@@ -29,7 +29,7 @@ TEST_CASE("direct writes outside any apply lock enqueue sync_queue entries", "[s
   MigrationEngine engine(conn);
   registerSyncEnabledCustomers(engine);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
   conn->execute("UPDATE customers SET name = 'b' WHERE id = 1", {});
   conn->execute("DELETE FROM customers WHERE id = 1", {});
 
@@ -47,7 +47,7 @@ TEST_CASE("writes performed inside applyWithBypass are not queued", "[sync][Sync
 
   SyncApplyGuard guard(conn);
   guard.applyWithBypass([&]() {
-    conn->execute("INSERT INTO customers (id, name) VALUES (1, 'from-server')", {});
+    conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'from-server', 100)", {});
     conn->execute("UPDATE customers SET name = 'still-from-server' WHERE id = 1", {});
   });
 
@@ -65,7 +65,7 @@ TEST_CASE("a failed apply rolls back the lock, and normal writes resume being tr
 
   SyncApplyGuard guard(conn);
   CHECK_THROWS(guard.applyWithBypass([&]() {
-    conn->execute("INSERT INTO customers (id, name) VALUES (1, 'partial')", {});
+    conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'partial', 100)", {});
     conn->execute("INSERT INTO no_such_table (id) VALUES (1)", {}); // forces failure mid-apply
   }));
 
@@ -74,7 +74,7 @@ TEST_CASE("a failed apply rolls back the lock, and normal writes resume being tr
   auto lockRows = conn->execute("SELECT COUNT(*) FROM _sync_apply_lock", {});
   REQUIRE(std::get<double>(lockRows.rows[0][0]) == 0.0);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (2, 'normal-write')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (2, 'normal-write', 100)", {});
   auto queued = conn->execute("SELECT COUNT(*) FROM sync_queue WHERE entity_id = '2'", {});
   REQUIRE(std::get<double>(queued.rows[0][0]) == 1.0);
 }

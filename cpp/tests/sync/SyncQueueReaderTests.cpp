@@ -17,7 +17,7 @@ std::string uniqueDbPath(const std::string& testName) {
 void registerSyncEnabledCustomers(MigrationEngine& engine) {
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
 }
@@ -29,7 +29,7 @@ TEST_CASE("readOperations serializes sync_queue rows to the ISyncOperation shape
   MigrationEngine engine(conn);
   registerSyncEnabledCustomers(engine);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
 
   SyncQueueReader reader(conn);
   auto ops = reader.readOperations(10);
@@ -48,9 +48,9 @@ TEST_CASE("readOperations respects the limit and returns oldest-first", "[sync][
   MigrationEngine engine(conn);
   registerSyncEnabledCustomers(engine);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
-  conn->execute("INSERT INTO customers (id, name) VALUES (2, 'b')", {});
-  conn->execute("INSERT INTO customers (id, name) VALUES (3, 'c')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (2, 'b', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (3, 'c', 100)", {});
 
   SyncQueueReader reader(conn);
   auto ops = reader.readOperations(2);
@@ -65,7 +65,7 @@ TEST_CASE("readOperations does not mutate sync_queue", "[sync][SyncQueueReader]"
   MigrationEngine engine(conn);
   registerSyncEnabledCustomers(engine);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
 
   SyncQueueReader reader(conn);
   reader.readOperations(10);
@@ -79,7 +79,7 @@ TEST_CASE("readOperations rejects a negative limit", "[sync][SyncQueueReader]") 
   MigrationEngine engine(conn);
   registerSyncEnabledCustomers(engine);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
 
   SyncQueueReader reader(conn);
   REQUIRE_THROWS_AS(reader.readOperations(-1), std::runtime_error);
@@ -90,9 +90,58 @@ TEST_CASE("readOperations with limit 0 returns an empty array", "[sync][SyncQueu
   MigrationEngine engine(conn);
   registerSyncEnabledCustomers(engine);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
 
   SyncQueueReader reader(conn);
   auto ops = reader.readOperations(0);
   REQUIRE(ops.empty());
+}
+
+TEST_CASE("readPage filters by entity", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("reader_page_entity"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "orders", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  conn->execute("INSERT INTO orders (id, updatedAt) VALUES (100, 100)", {});
+
+  SyncQueueReader reader(conn);
+  auto page = reader.readPage("customers", 10);
+
+  REQUIRE(page.operations.size() == 1);
+  REQUIRE(page.operations[0].asObject().at("entity").asString() == "customers");
+}
+
+TEST_CASE("readPage reports the highest row id in the page for the delete-after-apply cutoff", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("reader_page_maxid"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (2, 'b', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (3, 'c', 100)", {});
+
+  SyncQueueReader reader(conn);
+  auto page = reader.readPage("customers", 2);
+
+  REQUIRE(page.operations.size() == 2);
+  REQUIRE(page.maxId.has_value());
+  REQUIRE(*page.maxId == 2);
+}
+
+TEST_CASE("readPage on an empty queue returns no maxId", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("reader_page_empty"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  SyncQueueReader reader(conn);
+  auto page = reader.readPage("customers", 10);
+
+  REQUIRE(page.operations.empty());
+  REQUIRE_FALSE(page.maxId.has_value());
 }

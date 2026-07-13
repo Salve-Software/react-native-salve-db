@@ -3,7 +3,7 @@ import type { SqlValue } from '../../../../../specs/types';
 import type { AnySchema } from '../../../../../types';
 import type { IInsertQueryBuilder } from '../../types';
 import type { InferInsertModel } from './types';
-import { MAX_BATCH_INSERT_ROWS } from '../../library';
+import { MAX_BATCH_INSERT_ROWS } from '../../constants';
 
 export class InsertQueryBuilder<TSchema extends AnySchema>
   implements IInsertQueryBuilder<TSchema>
