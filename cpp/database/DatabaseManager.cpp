@@ -1,7 +1,6 @@
 #include "DatabaseManager.hpp"
 #include "SchemaRegistry.hpp"
 #include "../platform/platform.hpp"
-#include "../sync/SyncDefinitionRegistry.hpp"
 
 namespace margelo::nitro::salvedb {
 
@@ -9,9 +8,8 @@ void DatabaseManager::open(const std::string& dbName, bool walMode) {
   std::string dir  = platform::getDocumentsDirectory();
   std::string path = dir + "/" + dbName + ".db";
   _db = std::make_shared<SQLiteConnection>(path, walMode);
-  // Registrations are keyed by schema name, not db file — avoid stale leaks across opens.
+  // Keyed by schema name, not db file — avoid stale leaks across opens.
   SchemaRegistry::shared().clear();
-  SyncDefinitionRegistry::shared().clear();
 }
 
 void DatabaseManager::configureCredentials(

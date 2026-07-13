@@ -1,7 +1,7 @@
 #include "SyncOrchestrator.hpp"
 #include "SyncApplyGuard.hpp"
 #include "SyncCursorStore.hpp"
-#include "SyncDefinitionRegistry.hpp"
+#include "SyncDefinitionStore.hpp"
 #include "SyncOperationApplier.hpp"
 #include "SyncQueueReader.hpp"
 #include "../database/DatabaseManager.hpp"
@@ -99,13 +99,15 @@ std::optional<std::string> extractPathString(const json::Value& responseDef, con
 } // namespace
 
 NativeSyncResult SyncOrchestrator::triggerSync(const std::string& schemaName) {
-  auto definition = SyncDefinitionRegistry::shared().definitionFor(schemaName);
+  auto conn = DatabaseManager::shared().connection();
+
+  SyncDefinitionStore defStore(conn);
+  auto definition = defStore.definitionFor(schemaName);
   if (!definition || !definition->getBool("enabled", false)) {
     throw std::runtime_error("SyncOrchestrator: schema '" + schemaName + "' has no sync.enabled contract registered");
   }
   const json::Value& def = *definition;
 
-  auto conn = DatabaseManager::shared().connection();
   auto& credentials   = DatabaseManager::shared().credentials();
   const auto& network = DatabaseManager::shared().network();
 

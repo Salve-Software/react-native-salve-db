@@ -1,7 +1,7 @@
 #include "MigrationEngine.hpp"
 #include "json_parser.hpp"
 #include "SchemaRegistry.hpp"
-#include "../sync/SyncDefinitionRegistry.hpp"
+#include "../sync/SyncDefinitionStore.hpp"
 
 #include <sstream>
 #include <algorithm>
@@ -102,6 +102,13 @@ static constexpr auto kSyncCursorTable = R"sql(
   CREATE TABLE IF NOT EXISTS _salve_sync_cursors (
     entity TEXT PRIMARY KEY,
     cursor TEXT NOT NULL
+  );
+)sql";
+
+static constexpr auto kSyncDefinitionTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_sync_definitions (
+    name       TEXT PRIMARY KEY,
+    definition TEXT NOT NULL
   );
 )sql";
 
@@ -296,6 +303,7 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   _db->exec(kSyncQueueTable);
   _db->exec(kSyncApplyLockTable);
   _db->exec(kSyncCursorTable);
+  _db->exec(kSyncDefinitionTable);
 
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;
@@ -322,6 +330,13 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
     setStoredVersion(schema.name, schema.version);
   }
 
+  SyncDefinitionStore defStore(_db);
+  if (schema.sync.enabled) {
+    defStore.save(schema.name, schema.sync.definition);
+  } else {
+    defStore.remove(schema.name);
+  }
+
   txn.commit();
 
   std::unordered_set<std::string> booleanColumns;
@@ -329,12 +344,6 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
     if (col.type == "boolean") booleanColumns.insert(colName);
   }
   SchemaRegistry::shared().registerBooleanColumns(schema.name, std::move(booleanColumns));
-
-  if (schema.sync.enabled) {
-    SyncDefinitionRegistry::shared().registerDefinition(schema.name, schema.sync.definition);
-  } else {
-    SyncDefinitionRegistry::shared().unregisterDefinition(schema.name);
-  }
 }
 
 // ── JSON parsing ──────────────────────────────────────────────────────────────

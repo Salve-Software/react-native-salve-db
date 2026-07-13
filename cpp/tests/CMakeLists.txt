@@ -116,7 +116,7 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/sync/SyncOrchestrator.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncApplyGuard.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncQueueReader.cpp"
-  "${PROJECT_CPP_DIR}/sync/SyncDefinitionRegistry.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncDefinitionStore.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncCursorStore.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncOperationApplier.cpp"
   "${PROJECT_CPP_DIR}/expression/RequestExpressionEvaluator.cpp"

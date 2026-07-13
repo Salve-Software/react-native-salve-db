@@ -26,7 +26,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/sync/SyncOrchestrator.cpp
 	../cpp/sync/SyncApplyGuard.cpp
 	../cpp/sync/SyncQueueReader.cpp
-	../cpp/sync/SyncDefinitionRegistry.cpp
+	../cpp/sync/SyncDefinitionStore.cpp
 	../cpp/sync/SyncCursorStore.cpp
 	../cpp/sync/SyncOperationApplier.cpp
 	../cpp/expression/RequestExpressionEvaluator.cpp
