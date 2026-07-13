@@ -36,7 +36,7 @@ export function InfiniteQueryScreen(): React.JSX.Element {
     const startIndex = Database.count(FeedItemSchema).execute();
     const base = Date.now();
     const rows = Array.from({ length: SEED_COUNT }, (_, i) => ({
-      id: base + i,
+      id: startIndex + i,
       title: `Item #${startIndex + i + 1}`,
       createdAt: base + i,
     }));
@@ -46,7 +46,7 @@ export function InfiniteQueryScreen(): React.JSX.Element {
   function addOne() {
     const startIndex = Database.count(FeedItemSchema).execute();
     Database.insert(FeedItemSchema)
-      .values({ id: Date.now(), title: `Item #${startIndex + 1}`, createdAt: Date.now() })
+      .values({ id: startIndex, title: `Item #${startIndex + 1}`, createdAt: Date.now() })
       .execute();
   }
 

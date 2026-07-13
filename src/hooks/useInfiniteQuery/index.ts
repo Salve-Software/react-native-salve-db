@@ -48,7 +48,7 @@ export const useInfiniteQuery = <TSchema extends AnySchema>(
       hasNextPageRef.current = hasNextPage;
       setState({ key, pages: [firstPage], hasNextPage, error: null });
     } catch (error) {
-      setState((prev) => ({ ...prev, error }));
+      setState((prev) => (prev.key === key ? { ...prev, error } : { key, pages: [], hasNextPage: true, error }));
     }
   }, [key, fetchPage]);
 
