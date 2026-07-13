@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SQLiteConnection.hpp"
+#include "json_parser.hpp"
 #include <memory>
 #include <string>
 #include <map>
@@ -26,6 +27,7 @@ struct IndexDef {
 
 struct SyncSettings {
   bool enabled = false;
+  json::Value definition; // full `sync` JSON object, unparsed
 };
 
 struct SchemaDef {
