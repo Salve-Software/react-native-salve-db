@@ -265,7 +265,7 @@ TEST_CASE("sync.enabled: true creates 3 triggers matching schema.columns", "[mig
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
 
@@ -306,13 +306,13 @@ TEST_CASE("migrating a sync-enabled schema with a new column regenerates trigger
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 2, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
 
@@ -327,7 +327,7 @@ TEST_CASE("turning sync.enabled off across versions drops orphaned triggers", "[
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
   REQUIRE(triggerCount(*conn, "customers") == 3);
@@ -353,9 +353,16 @@ TEST_CASE("sync.enabled: true without a datetime 'updatedAt' column throws", "[m
     "sync": { "enabled": true }
   })"), std::runtime_error);
 
-  CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
+  // datetime type but nullable (default), no explicit "nullable": false
+  CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime" } },
+    "sync": { "enabled": true }
+  })"), std::runtime_error);
+
+  CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
 }

@@ -119,12 +119,12 @@ TEST_CASE("execute() writes through db.execute fire sync triggers into sync_queu
   harness.run(R"(
     db.registerSchema(JSON.stringify({
       name: 'notes', version: 1, primaryKey: 'id',
-      columns: { id: { type: 'integer' }, body: { type: 'text' }, updatedAt: { type: 'datetime' } },
+      columns: { id: { type: 'integer' }, body: { type: 'text' }, updatedAt: { type: 'datetime', nullable: false } },
       sync: { enabled: true }
     }))
   )");
 
-  harness.run("db.execute('INSERT INTO notes (id, body) VALUES (1, ?)', ['hello'])");
+  harness.run("db.execute('INSERT INTO notes (id, body, updatedAt) VALUES (1, ?, 100)', ['hello'])");
   harness.run("db.execute('UPDATE notes SET body = ? WHERE id = 1', ['updated'])");
   harness.run("db.execute('DELETE FROM notes WHERE id = 1', [])");
 

@@ -26,7 +26,7 @@ void createDb(HybridDatabaseHarness& harness) {
 std::string customersSchemaJson() {
   return R"({
     name: "customers", version: 1, primaryKey: "id",
-    columns: { id: { type: "text" }, name: { type: "text" }, updatedAt: { type: "datetime" } },
+    columns: { id: { type: "text" }, name: { type: "text" }, updatedAt: { type: "datetime", nullable: false } },
     sync: {
       enabled: true,
       endpoint: { method: "POST", path: "/sync/customers" },

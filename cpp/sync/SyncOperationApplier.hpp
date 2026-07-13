@@ -20,7 +20,10 @@ class SyncOperationApplier {
 public:
   explicit SyncOperationApplier(std::shared_ptr<SQLiteConnection> conn);
 
-  ApplyStats apply(const json::Array& operations);
+  // `expectedEntity` is the schema currently being synced — every operation
+  // must target it; anything else is rejected rather than silently writing
+  // to an unrelated (or internal) table.
+  ApplyStats apply(const std::string& expectedEntity, const json::Array& operations);
 
 private:
   std::shared_ptr<SQLiteConnection> _conn;

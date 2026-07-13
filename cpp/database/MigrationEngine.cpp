@@ -92,6 +92,10 @@ static constexpr auto kSyncQueueTable = R"sql(
   );
 )sql";
 
+static constexpr auto kSyncQueueEntityIndex = R"sql(
+  CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_id ON sync_queue (entity, id);
+)sql";
+
 static constexpr auto kSyncApplyLockTable = R"sql(
   CREATE TABLE IF NOT EXISTS _sync_apply_lock (
     id INTEGER PRIMARY KEY CHECK (id = 1)
@@ -301,6 +305,7 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   // Ensure version tracking / sync queue tables exist
   _db->exec(kVersionTable);
   _db->exec(kSyncQueueTable);
+  _db->exec(kSyncQueueEntityIndex);
   _db->exec(kSyncApplyLockTable);
   _db->exec(kSyncCursorTable);
   _db->exec(kSyncDefinitionTable);
@@ -405,9 +410,12 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
 
     if (schema.sync.enabled) {
       auto updatedAt = schema.columns.find("updatedAt");
-      if (updatedAt == schema.columns.end() || updatedAt->second.type != "datetime") {
+      bool valid = updatedAt != schema.columns.end()
+        && updatedAt->second.type == "datetime"
+        && !updatedAt->second.nullable;
+      if (!valid) {
         throw std::runtime_error(
-          "registerSchema: sync.enabled requires a 'datetime' column named 'updatedAt' (used for lastWriteWins)"
+          "registerSchema: sync.enabled requires a NOT NULL 'datetime' column named 'updatedAt' (used for lastWriteWins)"
         );
       }
     }

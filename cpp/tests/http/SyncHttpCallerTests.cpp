@@ -101,6 +101,17 @@ TEST_CASE("throws a clear error when a response body is not valid JSON", "[http]
   );
 }
 
+TEST_CASE("preserves the status code instead of throwing when a non-2xx response has a non-JSON body", "[http][SyncHttpCaller]") {
+  platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    return HttpResponse{401, {}, "<html>Unauthorized</html>"};
+  });
+
+  auto outcome = SyncHttpCaller::send(endpoint("POST", "/sync/customers"), json::Value(nullptr), {"Authorization", "t"}, testNetwork());
+
+  REQUIRE(std::holds_alternative<SyncHttpResponse>(outcome));
+  REQUIRE(std::get<SyncHttpResponse>(outcome).statusCode == 401);
+}
+
 TEST_CASE("throws when endpoint.path is missing", "[http][SyncHttpCaller]") {
   REQUIRE_THROWS_AS(
     SyncHttpCaller::send(json::parse(R"({"method": "POST"})"), json::Value(nullptr), {"Authorization", "t"}, testNetwork()),

@@ -103,10 +103,10 @@ TEST_CASE("composes a full request body with cursor/operations/pageSize wired to
   MigrationEngine engine(conn);
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
 
   SyncQueueReader reader(conn);
   auto resolver = [&](const std::string& refName) -> json::Value {

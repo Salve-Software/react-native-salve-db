@@ -59,12 +59,14 @@ SyncHttpResponse sendPageWithRetryAnd401(
   const NetworkConfig& network
 ) {
   bool refreshed = false;
-  for (int attempt = 1; attempt <= kMaxAttempts; ++attempt) {
+  int failedAttempts = 0; // counts only genuine network failures — a 401 refresh never touches this
+  while (true) {
     auto authHeader = credentials.getAuthHeader();
     SyncHttpOutcome outcome = SyncHttpCaller::send(endpoint, body, authHeader, network);
 
     if (auto* error = std::get_if<HttpNetworkError>(&outcome)) {
-      if (attempt < kMaxAttempts) {
+      ++failedAttempts;
+      if (failedAttempts < kMaxAttempts) {
         std::this_thread::sleep_for(gRetryDelay);
         continue;
       }
@@ -78,7 +80,7 @@ SyncHttpResponse sendPageWithRetryAnd401(
     if (response.statusCode == 401 && !refreshed) {
       refreshed = true;
       credentials.refresh(CredentialHttpCaller::create(network));
-      continue; // reexecute the same page — doesn't consume a retry attempt
+      continue; // reexecute the same page — does not consume a retry attempt
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw std::runtime_error(
@@ -87,7 +89,6 @@ SyncHttpResponse sendPageWithRetryAnd401(
     }
     return response;
   }
-  throw std::runtime_error("SyncOrchestrator: retry loop exhausted without a result");
 }
 
 std::optional<std::string> extractPathString(const json::Value& responseDef, const std::string& field) {
@@ -163,7 +164,7 @@ NativeSyncResult SyncOrchestrator::triggerSync(const std::string& schemaName) {
     }
 
     applyGuard.applyWithBypass([&] {
-      ApplyStats pageStats = applier.apply(appliedOps);
+      ApplyStats pageStats = applier.apply(schemaName, appliedOps);
       totalStats.inserted += pageStats.inserted;
       totalStats.updated  += pageStats.updated;
       totalStats.deleted  += pageStats.deleted;

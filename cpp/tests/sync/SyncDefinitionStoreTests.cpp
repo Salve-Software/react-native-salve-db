@@ -92,7 +92,7 @@ TEST_CASE("MigrationEngine::registerSchema captures the full sync contract", "[s
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
       "endpoint": { "method": "POST", "path": "/sync/customers" },
@@ -114,7 +114,7 @@ TEST_CASE("MigrationEngine::registerSchema removes the definition when sync.enab
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
   SyncDefinitionStore store(conn);
@@ -122,7 +122,7 @@ TEST_CASE("MigrationEngine::registerSchema removes the definition when sync.enab
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 2, "primaryKey": "id",
-    "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": false }
   })"));
   REQUIRE_FALSE(store.definitionFor("customers").has_value());

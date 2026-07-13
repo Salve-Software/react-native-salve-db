@@ -55,9 +55,13 @@ SyncHttpOutcome SyncHttpCaller::send(
   }
 
   const auto& response = std::get<HttpResponse>(outcome);
+  bool isSuccess = response.statusCode >= 200 && response.statusCode < 300;
   try {
     return SyncHttpResponse{response.statusCode, json::parse(response.body)};
   } catch (const std::exception& e) {
+    // Non-2xx error bodies are often empty/plain-text/HTML — the caller only
+    // needs the real statusCode (e.g. for 401 refresh), never the body.
+    if (!isSuccess) return SyncHttpResponse{response.statusCode, json::Value(nullptr)};
     throw std::runtime_error(
       "SyncHttpCaller: failed to parse response body (status " +
       std::to_string(response.statusCode) + ") — " + e.what()

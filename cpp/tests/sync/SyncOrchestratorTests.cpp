@@ -35,7 +35,7 @@ std::shared_ptr<SQLiteConnection> openOrchestratorFixture(
   MigrationEngine engine(DatabaseManager::shared().connection());
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime" } },
+    "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
       "endpoint": { "method": "POST", "path": "/sync/customers" },
@@ -183,6 +183,32 @@ TEST_CASE("triggerSync refreshes the token on 401 and reexecutes the page", "[sy
   REQUIRE(result.cursor.value() == "c1");
   REQUIRE(DatabaseManager::shared().credentials().getAccessToken().value() == "access-2");
   REQUIRE(syncQueueCount(*conn, "customers") == 0);
+}
+
+TEST_CASE("a 401 refresh does not eat into the retry budget for a subsequent network failure", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_401_then_network_failure");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 100)", {});
+
+  int networkAttempts = 0;
+  platform::test::setHttpExecuteResult([&](const HttpRequest& request) -> HttpOutcome {
+    if (request.url.find("/auth/refresh") != std::string::npos) {
+      return HttpResponse{200, {}, R"({"accessToken": "access-2", "refreshToken": "refresh-2"})"};
+    }
+    std::string authHeader;
+    for (auto& [name, value] : request.headers) {
+      if (name == "Authorization") authHeader = value;
+    }
+    if (authHeader == "access-1") {
+      return HttpResponse{401, {}, "{}"};
+    }
+    ++networkAttempts;
+    return HttpNetworkError{HttpNetworkErrorKind::NoConnection, "no connection"};
+  });
+
+  SyncOrchestrator orchestrator;
+  REQUIRE_THROWS_AS(orchestrator.triggerSync("customers"), std::runtime_error);
+
+  REQUIRE(networkAttempts == 3); // full retry budget preserved even though a 401 refresh happened first
 }
 
 TEST_CASE("an operation applied from the server does not get re-queued into sync_queue", "[sync][SyncOrchestrator]") {
