@@ -5,4 +5,5 @@ export interface ISalveDbProviderDeps {
   configure: (props: IConfigureProps) => void;
   register: (schema: AnySchema) => Promise<void>;
   subscribeNative: () => void;
+  unsubscribeNative: () => void;
 }

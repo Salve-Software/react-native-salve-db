@@ -10,6 +10,7 @@ export const SalveDbProvider = (props: ISalveDbProviderProps & ISalveDbProviderD
     configure,
     register,
     subscribeNative,
+    unsubscribeNative,
   } = props;
 
   const [state, setState] = useState<IDatabaseReadyState>({ isReady: false, isLoading: true, error: null });
@@ -35,6 +36,7 @@ export const SalveDbProvider = (props: ISalveDbProviderProps & ISalveDbProviderD
 
     return () => {
       cancelled = true;
+      unsubscribeNative();
     };
   }, []);
 

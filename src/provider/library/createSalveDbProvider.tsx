@@ -14,7 +14,7 @@ import { SalveDbProvider } from '../SalveDbProvider';
  * JSX (not called as a plain function) — this returns a real wrapper
  * component rather than invoking it directly.
  */
-export const createSalveDbProvider = ({ configure, register, subscribeNative }: ISalveDbProviderDeps) => {
+export const createSalveDbProvider = ({ configure, register, subscribeNative, unsubscribeNative }: ISalveDbProviderDeps) => {
   return (props: ISalveDbProviderProps) => {
     return (
       <SalveDbProvider
@@ -22,6 +22,7 @@ export const createSalveDbProvider = ({ configure, register, subscribeNative }: 
         configure={configure}
         register={register}
         subscribeNative={subscribeNative}
+        unsubscribeNative={unsubscribeNative}
       />
     );
   };
