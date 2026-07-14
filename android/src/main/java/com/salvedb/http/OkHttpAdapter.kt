@@ -14,6 +14,9 @@ class OkHttpAdapter {
       client
         .newBuilder()
         .callTimeout(request.timeoutMs, TimeUnit.MILLISECONDS)
+        .connectTimeout(request.timeoutMs, TimeUnit.MILLISECONDS)
+        .readTimeout(request.timeoutMs, TimeUnit.MILLISECONDS)
+        .writeTimeout(request.timeoutMs, TimeUnit.MILLISECONDS)
         .build()
         .newCall(request.toOkHttpRequest())
     } catch (e: IllegalArgumentException) {
