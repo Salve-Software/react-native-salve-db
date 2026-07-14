@@ -85,8 +85,13 @@ SQLiteConnection::~SQLiteConnection() {
 }
 
 void SQLiteConnection::onSqliteUpdate(void* context, int /*op*/, const char* /*dbName*/, const char* table, sqlite3_int64 /*rowid*/) {
+  if (!table) return;
   auto* self = static_cast<SQLiteConnection*>(context);
-  if (table) self->_touchedTables.insert(table);
+  try {
+    self->_touchedTables.insert(table);
+  } catch (...) {
+    // Must not escape into SQLite's C call stack.
+  }
 }
 
 sqlite3_stmt* SQLiteConnection::getOrPrepare(const std::string& sql) {
