@@ -6,18 +6,27 @@ import Salvetron from '@salve-software/salvetron-react-native';
 import { ExpenseSchema } from './src/schemas/ExpenseSchema';
 import { BudgetSchema } from './src/schemas/BudgetSchema';
 import { BenchmarkSchema } from './src/schemas/BenchmarkSchema';
+import { SyncTestItemSchema } from './src/schemas/SyncTestItemSchema';
 import { ExpensesScreen } from './src/screens/ExpensesScreen';
 import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
+import { SyncTestScreen } from './src/screens/SyncTestScreen';
 
 if (__DEV__) {
   Salvetron.connect({ host: 'localhost', port: 8765 });
 }
+
+// TEMPORARY — manual sync testing only. Point this at your machine's LAN IP
+// (see mock-sync-server.js) so a simulator/emulator AND a real device on the
+// same Wi-Fi can both reach it. `localhost`/`10.0.2.2` only work from one or
+// the other, not a real device.
+const MOCK_SYNC_SERVER_BASE_URL = 'http://192.168.0.2:4000';
 
 const ACCENT = '#5B5FEF';
 
 const TABS = [
   { key: 'expenses', label: 'Expenses', icon: '💸' },
   { key: 'benchmark', label: 'Benchmark', icon: '⚡' },
+  { key: 'sync', label: 'Sync Test', icon: '🔄' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -30,6 +39,7 @@ function AppTabs(): React.JSX.Element {
       <View style={styles.flex}>
         {tab === 'expenses' ? <ExpensesScreen /> : null}
         {tab === 'benchmark' ? <BenchmarkScreen /> : null}
+        {tab === 'sync' ? <SyncTestScreen /> : null}
       </View>
 
       <SafeAreaView style={styles.tabBar} edges={['bottom']}>
@@ -48,8 +58,20 @@ function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <SalveDbProvider
-        config={{ name: 'salve-db-example' }}
-        schemas={[ExpenseSchema, BudgetSchema, BenchmarkSchema]}
+        config={{
+          name: 'salve-db-example',
+          baseUrl: MOCK_SYNC_SERVER_BASE_URL,
+          network: { timeout: 5000 },
+          credentials: {
+            provider: 'oauth2',
+            tokens: { accessToken: 'mock-access-token', refreshToken: 'mock-refresh-token' },
+            refresh: {
+              endpoint: '/auth/refresh',
+              response: { accessToken: '$.accessToken', refreshToken: '$.refreshToken' },
+            },
+          },
+        }}
+        schemas={[ExpenseSchema, BudgetSchema, BenchmarkSchema, SyncTestItemSchema]}
       >
         <AppTabs />
       </SalveDbProvider>
