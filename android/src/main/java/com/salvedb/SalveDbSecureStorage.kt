@@ -11,7 +11,7 @@ import androidx.security.crypto.MasterKey
 object SalveDbSecureStorage {
   private const val PREFS_FILE_NAME = "salvedb_secure_credentials"
 
-  private var appContext: Context? = null
+  @Volatile private var appContext: Context? = null
   private var cachedPrefs: SharedPreferences? = null
 
   @JvmStatic
