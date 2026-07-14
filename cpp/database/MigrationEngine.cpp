@@ -322,13 +322,12 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   // If schema.version == stored, nothing to do (idempotent)
 
   if (schema.sync.enabled) {
-    // Triggers are CREATE ... IF NOT EXISTS, so a stale json_object(...) needs an explicit drop+recreate.
     if (columnsChanged) {
       dropSyncTriggers(schema);
-      createSyncTriggers(schema);
     }
+    createSyncTriggers(schema);
   } else {
-    dropSyncTriggers(schema); // no-op unless sync was previously enabled
+    dropSyncTriggers(schema);
   }
 
   if (schema.version != stored) {
