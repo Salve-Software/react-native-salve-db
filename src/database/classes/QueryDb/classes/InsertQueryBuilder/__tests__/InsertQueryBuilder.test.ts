@@ -77,6 +77,14 @@ describe('InsertQueryBuilder', () => {
     );
   });
 
+  test('throws if batch is within MAX_BATCH_INSERT_ROWS but exceeds SQLITE_MAX_BOUND_PARAMS', () => {
+    const bridge = makeBridge();
+    const rows = Array.from({ length: 400 }, (_, i) => ({ id: i, name: 'x', age: 1 }));
+    expect(() => new InsertQueryBuilder(schema, bridge).values(rows).execute()).toThrow(
+      /exceeds SQLITE_MAX_BOUND_PARAMS/
+    );
+  });
+
   test('onConflictDoUpdate() appends ON CONFLICT DO UPDATE targeting the primary key', () => {
     const bridge = makeBridge();
     new InsertQueryBuilder(schema, bridge)

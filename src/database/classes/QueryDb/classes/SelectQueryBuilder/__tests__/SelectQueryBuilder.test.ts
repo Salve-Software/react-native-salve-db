@@ -1,6 +1,6 @@
 import { SelectQueryBuilder } from '../SelectQueryBuilder.class';
 import { eq, and, gt, isNull } from '../../../../../../utils';
-import { MAX_SYNC_PAGE_SIZE } from '../../../library';
+import { MAX_SYNC_PAGE_SIZE } from '../../../constants';
 import type { SalveDatabase } from '../../../../../../specs/SalveDatabase.nitro';
 import type { QueryResult } from '../../../../../../specs/types';
 import type { AnySchema } from '../../../../../../types';

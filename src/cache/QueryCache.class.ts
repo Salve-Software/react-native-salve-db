@@ -55,7 +55,7 @@ export class QueryCache {
    */
   subscribeToTables(tables: string[], listener: () => void): () => void {
     const id = {};
-    this._tableListeners.set(id, { tables, listener });
+    this._tableListeners.set(id, { tables: [...tables], listener });
     return () => { this._tableListeners.delete(id); };
   }
 

@@ -6,7 +6,9 @@ import Salvetron from '@salve-software/salvetron-react-native';
 import { ExpenseSchema } from './src/schemas/ExpenseSchema';
 import { BudgetSchema } from './src/schemas/BudgetSchema';
 import { BenchmarkSchema } from './src/schemas/BenchmarkSchema';
+import { FeedItemSchema } from './src/schemas/FeedItemSchema';
 import { ExpensesScreen } from './src/screens/ExpensesScreen';
+import { InfiniteQueryScreen } from './src/screens/InfiniteQueryScreen';
 import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
 
 if (__DEV__) {
@@ -16,7 +18,8 @@ if (__DEV__) {
 const ACCENT = '#5B5FEF';
 
 const TABS = [
-  { key: 'expenses', label: 'Expenses', icon: '💸' },
+  { key: 'expenses', label: 'Query', icon: '💸' },
+  { key: 'infinite', label: 'Infinite Query', icon: '📜' },
   { key: 'benchmark', label: 'Benchmark', icon: '⚡' },
 ] as const;
 
@@ -29,6 +32,7 @@ function AppTabs(): React.JSX.Element {
     <View style={styles.flex}>
       <View style={styles.flex}>
         {tab === 'expenses' ? <ExpensesScreen /> : null}
+        {tab === 'infinite' ? <InfiniteQueryScreen /> : null}
         {tab === 'benchmark' ? <BenchmarkScreen /> : null}
       </View>
 
@@ -49,7 +53,7 @@ function App(): React.JSX.Element {
     <SafeAreaProvider>
       <SalveDbProvider
         config={{ name: 'salve-db-example' }}
-        schemas={[ExpenseSchema, BudgetSchema, BenchmarkSchema]}
+        schemas={[ExpenseSchema, BudgetSchema, BenchmarkSchema, FeedItemSchema]}
       >
         <AppTabs />
       </SalveDbProvider>

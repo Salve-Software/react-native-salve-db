@@ -9,8 +9,7 @@ void DatabaseManager::open(const std::string& dbName, bool walMode) {
   std::string dir  = platform::getDocumentsDirectory();
   std::string path = dir + "/" + dbName + ".db";
   _db = std::make_shared<SQLiteConnection>(path, walMode);
-  // Boolean-column registrations are keyed by table name, not by db file — a stale
-  // entry from a previously-open database would otherwise silently leak into this one.
+  // Keyed by schema name, not db file — avoid stale leaks across opens.
   SchemaRegistry::shared().clear();
   // So sync_queue reads (e.g. getSyncQueueStatus) work even before registerSchema() runs.
   MigrationEngine::ensureSyncInfra(*_db);
