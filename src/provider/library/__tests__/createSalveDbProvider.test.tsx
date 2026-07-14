@@ -139,7 +139,7 @@ describe('SalveDbProvider', () => {
     await flushMicrotasks();
     expect(unsubscribeNative).not.toHaveBeenCalled();
 
-    unmount();
+    await act(async () => { unmount(); });
 
     expect(unsubscribeNative).toHaveBeenCalledTimes(1);
   });

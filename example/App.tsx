@@ -6,8 +6,10 @@ import Salvetron from '@salve-software/salvetron-react-native';
 import { ExpenseSchema } from './src/schemas/ExpenseSchema';
 import { BudgetSchema } from './src/schemas/BudgetSchema';
 import { BenchmarkSchema } from './src/schemas/BenchmarkSchema';
+import { FeedItemSchema } from './src/schemas/FeedItemSchema';
 import { SyncTestItemSchema } from './src/schemas/SyncTestItemSchema';
 import { ExpensesScreen } from './src/screens/ExpensesScreen';
+import { InfiniteQueryScreen } from './src/screens/InfiniteQueryScreen';
 import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
 import { SyncTestScreen } from './src/screens/SyncTestScreen';
 
@@ -15,16 +17,16 @@ if (__DEV__) {
   Salvetron.connect({ host: 'localhost', port: 8765 });
 }
 
-// TEMPORARY — manual sync testing only. Point this at your machine's LAN IP
-// (see mock-sync-server.js) so a simulator/emulator AND a real device on the
-// same Wi-Fi can both reach it. `localhost`/`10.0.2.2` only work from one or
-// the other, not a real device.
-const MOCK_SYNC_SERVER_BASE_URL = 'http://192.168.0.2:4000';
+// TEMPORARY — manual sync testing only, against mock-sync-server/. `localhost`
+// only reaches the iOS Simulator. For Android emulator use `10.0.2.2`, and for
+// a real device use your machine's LAN IP — edit this line locally as needed.
+const MOCK_SYNC_SERVER_BASE_URL = 'http://localhost:4000';
 
 const ACCENT = '#5B5FEF';
 
 const TABS = [
-  { key: 'expenses', label: 'Expenses', icon: '💸' },
+  { key: 'expenses', label: 'Query', icon: '💸' },
+  { key: 'infinite', label: 'Infinite Query', icon: '📜' },
   { key: 'benchmark', label: 'Benchmark', icon: '⚡' },
   { key: 'sync', label: 'Sync Test', icon: '🔄' },
 ] as const;
@@ -38,6 +40,7 @@ function AppTabs(): React.JSX.Element {
     <View style={styles.flex}>
       <View style={styles.flex}>
         {tab === 'expenses' ? <ExpensesScreen /> : null}
+        {tab === 'infinite' ? <InfiniteQueryScreen /> : null}
         {tab === 'benchmark' ? <BenchmarkScreen /> : null}
         {tab === 'sync' ? <SyncTestScreen /> : null}
       </View>
@@ -71,7 +74,7 @@ function App(): React.JSX.Element {
             },
           },
         }}
-        schemas={[ExpenseSchema, BudgetSchema, BenchmarkSchema, SyncTestItemSchema]}
+        schemas={[ExpenseSchema, BudgetSchema, BenchmarkSchema, FeedItemSchema, SyncTestItemSchema]}
       >
         <AppTabs />
       </SalveDbProvider>
