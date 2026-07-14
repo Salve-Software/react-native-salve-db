@@ -34,18 +34,25 @@ describe('SalveDbProvider + useDatabaseReady — real async configure/register l
       columns: { id: { type: 'integer' } },
     } satisfies AnySchema;
 
-    let latest: IDatabaseReadyState | undefined;
+    const states: IDatabaseReadyState[] = [];
 
     await render(
       <SalveDbProvider config={{ name: uniqueName('e2e_provider_ready') }} schemas={[schema]}>
-        <ReadyProbe onState={(state) => { latest = state; }} />
+        <ReadyProbe onState={(state) => { states.push(state); }} />
       </SalveDbProvider>
     );
 
-    expect(latest).toEqual({ isReady: false, isLoading: true, error: null });
+    await waitFor(() => expect(states.at(-1)?.isReady).toBe(true));
 
-    await waitFor(() => expect(latest?.isReady).toBe(true));
-    expect(latest).toEqual({ isReady: true, isLoading: false, error: null });
+    // configure() is synchronous but register() is a real async native call,
+    // so a loading state is only guaranteed to be observable if it wasn't
+    // fast enough to resolve inside render()'s own initial flush — assert on
+    // every state actually seen instead of a fixed capture count.
+    const [ready, ...loading] = [...states].reverse();
+    expect(ready).toEqual({ isReady: true, isLoading: false, error: null });
+    loading.forEach((state) => {
+      expect(state).toEqual({ isReady: false, isLoading: true, error: null });
+    });
   });
 
   it('surfaces a register() failure as the error state instead of throwing', async () => {

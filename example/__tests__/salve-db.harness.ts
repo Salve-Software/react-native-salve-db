@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'react-native-harness';
+import { describe, it, expect, waitFor } from 'react-native-harness';
 import { Database, eq } from '@salve-software/react-native-salve-db';
 import type { AnySchema } from '@salve-software/react-native-salve-db';
 
@@ -330,7 +330,10 @@ describe('subscribeToChanges — real native write notifications', () => {
 
     try {
       Database.insert(schema).values({ id: 1, title: 'reactive note' }).execute();
-      expect(seen).toEqual([['notes']]);
+      // Nitro dispatches void-returning JS callbacks asynchronously (fire-and-forget),
+      // even when the native write that triggers them is synchronous — the
+      // notification is never observable in the same tick as execute().
+      await waitFor(() => expect(seen).toEqual([['notes']]));
     } finally {
       Database.unsubscribeFromChanges(subscriptionId);
     }
