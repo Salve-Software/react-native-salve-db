@@ -13,6 +13,7 @@ import UIKit
 
   private let queue = DispatchQueue(label: "com.salvedb.connectivity-monitor")
   private var monitor: NWPathMonitor?
+  private var wasSatisfied = false
   private lazy var debouncer = SyncTriggerDebouncer(windowSeconds: 5) {
     SalveDbSyncBridge.triggerSyncAll()
   }
@@ -33,10 +34,16 @@ import UIKit
   }
 
   @objc private func didBecomeActive() {
+    queue.async { self.wasSatisfied = false }
+
     let pathMonitor = NWPathMonitor()
     pathMonitor.pathUpdateHandler = { [weak self] path in
-      guard path.status == .satisfied else { return }
-      self?.debouncer.signal()
+      guard let self else { return }
+      let isSatisfied = path.status == .satisfied
+      defer { self.wasSatisfied = isSatisfied }
+
+      guard isSatisfied && !self.wasSatisfied else { return }
+      self.debouncer.signal()
     }
     monitor = pathMonitor
     pathMonitor.start(queue: queue)
