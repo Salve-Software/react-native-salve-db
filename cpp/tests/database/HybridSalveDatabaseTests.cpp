@@ -229,3 +229,36 @@ TEST_CASE("blob ArrayBuffer params survive the async JSI thread hop", "[thread-s
     REQUIRE(result == "[1,2,3,4," + std::to_string(i) + "]");
   }
 }
+
+TEST_CASE("getSyncQueueStatus reads pending count/oldest updatedAt through the real JSI bridge", "[sync]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("sync_status")));
+
+  harness.run(R"(
+    db.registerSchema(JSON.stringify({
+      name: 'customers', version: 1, primaryKey: 'id',
+      columns: { id: { type: 'integer' }, name: { type: 'text' }, updatedAt: { type: 'datetime', nullable: false } },
+      sync: { enabled: true }
+    }))
+  )");
+
+  auto empty = harness.run("db.getSyncQueueStatus('customers')");
+  REQUIRE(empty == R"({"pendingCount":0})");
+
+  harness.run("db.execute('INSERT INTO customers (id, name, updatedAt) VALUES (1, ?, 100)', ['a'])");
+  harness.run("db.execute('INSERT INTO customers (id, name, updatedAt) VALUES (2, ?, 100)', ['b'])");
+
+  auto pending = harness.run("db.getSyncQueueStatus('customers')");
+  REQUIRE(pending.find(R"("pendingCount":2)") != std::string::npos);
+  REQUIRE(pending.find("oldestPendingUpdatedAt") != std::string::npos);
+}
+
+TEST_CASE("getSyncQueueStatus works right after configure(), before any registerSchema() call", "[sync]") {
+  HybridDatabaseHarness harness;
+  harness.run("(() => { globalThis.db = globalThis.NitroModulesProxy.createHybridObject('SalveDatabase'); return true; })()");
+  harness.run(configureExpr(uniqueDbName("sync_status_no_schema")));
+
+  auto status = harness.run("db.getSyncQueueStatus('customers')");
+  REQUIRE(status == R"({"pendingCount":0})");
+}

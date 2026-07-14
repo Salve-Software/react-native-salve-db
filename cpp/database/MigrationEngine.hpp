@@ -48,6 +48,11 @@ public:
 
   static SchemaDef parseSchemaJson(const std::string& json);
 
+  // Creates sync_queue/_sync_apply_lock/their index if absent (idempotent).
+  // Called eagerly by DatabaseManager::open() so sync-status reads work even
+  // before the first registerSchema() call.
+  static void ensureSyncInfra(SQLiteConnection& db);
+
 private:
   std::shared_ptr<SQLiteConnection> _db;
 

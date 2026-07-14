@@ -1,6 +1,7 @@
 import type { HybridObject } from "react-native-nitro-modules";
 import type { ConfigureParams, SqlValue, QueryResult } from "./types";
 import type { NativeSyncResult } from "../types/sync/NativeSyncResult";
+import type { SyncQueueStatus } from "../types/sync/SyncQueueStatus";
 
 export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++" }> {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -39,6 +40,13 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
    * @param schemaName Name of an already-registered schema.
    */
   triggerSync(schemaName: string): Promise<NativeSyncResult>;
+
+  /**
+   * Reads `sync_queue` for `schemaName` without running a sync — how many
+   * writes are waiting to go out, and since when. Synchronous: a single
+   * indexed `COUNT`/`MIN`, no network involved.
+   */
+  getSyncQueueStatus(schemaName: string): SyncQueueStatus;
 
   // ── Change notification ─────────────────────────────────────────────────────
 

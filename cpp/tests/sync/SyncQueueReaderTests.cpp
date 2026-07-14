@@ -97,6 +97,69 @@ TEST_CASE("readOperations with limit 0 returns an empty array", "[sync][SyncQueu
   REQUIRE(ops.empty());
 }
 
+TEST_CASE("getStatus reports zero pending and no oldest timestamp for an empty queue", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("status_empty"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  SyncQueueReader reader(conn);
+  auto status = reader.getStatus("customers");
+
+  REQUIRE(status.pendingCount == 0);
+  REQUIRE_FALSE(status.oldestPendingUpdatedAt.has_value());
+}
+
+TEST_CASE("getStatus counts pending rows and reports the oldest updated_at", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("status_pending"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (2, 'b', 100)", {});
+
+  SyncQueueReader reader(conn);
+  auto status = reader.getStatus("customers");
+
+  REQUIRE(status.pendingCount == 2);
+  REQUIRE(status.oldestPendingUpdatedAt.has_value());
+
+  auto rows = conn->execute("SELECT MIN(updated_at) FROM sync_queue WHERE entity = 'customers'", {});
+  REQUIRE(*status.oldestPendingUpdatedAt == std::get<double>(rows.rows[0][0]));
+}
+
+TEST_CASE("getStatus only counts rows for the requested entity", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("status_scoped"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "orders", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  conn->execute("INSERT INTO orders (id, updatedAt) VALUES (1, 100)", {});
+  conn->execute("INSERT INTO orders (id, updatedAt) VALUES (2, 100)", {});
+
+  SyncQueueReader reader(conn);
+  REQUIRE(reader.getStatus("customers").pendingCount == 1);
+  REQUIRE(reader.getStatus("orders").pendingCount == 2);
+}
+
+TEST_CASE("getStatus does not mutate sync_queue", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("status_readonly"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+
+  SyncQueueReader reader(conn);
+  reader.getStatus("customers");
+
+  auto rows = conn->execute("SELECT COUNT(*) FROM sync_queue", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 1.0);
+}
+
 TEST_CASE("readPage filters by entity", "[sync][SyncQueueReader]") {
   auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("reader_page_entity"));
   MigrationEngine engine(conn);

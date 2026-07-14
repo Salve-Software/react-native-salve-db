@@ -1,5 +1,6 @@
 #include "DatabaseManager.hpp"
 #include "SchemaRegistry.hpp"
+#include "MigrationEngine.hpp"
 #include "../platform/platform.hpp"
 
 namespace margelo::nitro::salvedb {
@@ -10,6 +11,8 @@ void DatabaseManager::open(const std::string& dbName, bool walMode) {
   _db = std::make_shared<SQLiteConnection>(path, walMode);
   // Keyed by schema name, not db file — avoid stale leaks across opens.
   SchemaRegistry::shared().clear();
+  // So sync_queue reads (e.g. getSyncQueueStatus) work even before registerSchema() runs.
+  MigrationEngine::ensureSyncInfra(*_db);
 }
 
 void DatabaseManager::configureCredentials(

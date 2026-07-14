@@ -1,6 +1,7 @@
 #include "HybridSalveDatabase.hpp"
 #include "DatabaseManager.hpp"
 #include "MigrationEngine.hpp"
+#include "../sync/SyncQueueReader.hpp"
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
@@ -67,6 +68,14 @@ std::shared_ptr<Promise<NativeSyncResult>> HybridSalveDatabase::triggerSync(cons
   return Promise<NativeSyncResult>::async([this, schemaName]() {
     return _syncOrchestrator.triggerSync(schemaName);
   });
+}
+
+SyncQueueStatus HybridSalveDatabase::getSyncQueueStatus(const std::string& schemaName) {
+  auto& mgr = DatabaseManager::shared();
+  if (!mgr.isOpen())
+    throw std::runtime_error("Database.getSyncQueueStatus: call Database.configure() before querying sync status");
+  SyncQueueReader reader(mgr.connection());
+  return reader.getStatus(schemaName);
 }
 
 double HybridSalveDatabase::subscribeToChanges(const std::function<void(const std::vector<std::string>&)>& callback) {

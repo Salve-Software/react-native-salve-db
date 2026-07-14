@@ -32,6 +32,7 @@ SQLite offline-first pra React Native. Sync engine roda 100% na camada nativa (S
 | **Raw SQL** | `db.execute(sql, params)` como escape hatch, sem type-safety | builder não cobre 100% dos casos; como trigger é a nível de tabela, raw SQL ainda fica rastreado pela sync_queue |
 | **Tipo de `datetime`** | mapeado pra `number` (epoch millis) no TS, não `Date` | mesma convenção já usada em `SyncOperation.updatedAt`, evita ambiguidade de timezone |
 | **Trigger bypass no apply do sync** | tabela `_sync_apply_lock` (1 linha), trigger usa `WHEN NOT EXISTS (SELECT 1 FROM _sync_apply_lock)`. Engine faz `INSERT`/apply/`DELETE` numa única transação. SQL completo em [`query-layer.md`](./query-layer.md#trigger-bypass-durante-apply-do-sync) | sem isso, dado baixado do servidor reentra na sync_queue como se fosse mudança local — loop |
+| **Observabilidade do sync** | `Database.getSyncQueueStatus(schema)` / hook `useSyncStatus(schema)` — lê `pendingCount` + `oldestPendingUpdatedAt` de `sync_queue` por entidade, sem depender do orchestrator (`triggerSync`). Índice em `sync_queue(entity)` evita full scan. Reativo via a mesma assinatura nativa compartilhada do `useQuery` (`QueryCache.subscribeToTables`) | app offline-first precisa mostrar "N pendentes / desde quando" na UI antes mesmo do orchestrator (TASK-012) estar pronto — o dado já existe em `sync_queue`, só faltava expor |
 
 ## Fora do MVP (tipado como futuro, não implementado)
 

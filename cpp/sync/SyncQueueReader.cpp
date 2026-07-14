@@ -43,6 +43,21 @@ json::Array SyncQueueReader::readOperations(int limit) {
   return operations;
 }
 
+SyncQueueStatus SyncQueueReader::getStatus(const std::string& entity) {
+  auto result = _conn->execute(
+    "SELECT COUNT(*), MIN(updated_at) FROM sync_queue WHERE entity = ?",
+    { entity }
+  );
+
+  double pendingCount = std::get<double>(result.rows[0][0]);
+  std::optional<double> oldestPendingUpdatedAt;
+  if (pendingCount > 0 && std::holds_alternative<double>(result.rows[0][1])) {
+    oldestPendingUpdatedAt = std::get<double>(result.rows[0][1]);
+  }
+
+  return SyncQueueStatus(pendingCount, oldestPendingUpdatedAt);
+}
+
 SyncQueuePage SyncQueueReader::readPage(const std::string& entity, int limit) {
   if (limit < 0) {
     throw std::runtime_error("SyncQueueReader: limit must be >= 0, got " + std::to_string(limit));

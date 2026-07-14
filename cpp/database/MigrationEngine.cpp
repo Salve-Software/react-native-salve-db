@@ -92,6 +92,8 @@ static constexpr auto kSyncQueueTable = R"sql(
   );
 )sql";
 
+// Backs SyncQueueReader::getStatus's per-entity pending count and readPage's
+// oldest-first per-entity scan, without a full table scan.
 static constexpr auto kSyncQueueEntityIndex = R"sql(
   CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_id ON sync_queue (entity, id);
 )sql";
@@ -299,16 +301,20 @@ void MigrationEngine::dropSyncTriggers(const SchemaDef& schema) {
 
 // ── Public: registerSchema ────────────────────────────────────────────────────
 
+void MigrationEngine::ensureSyncInfra(SQLiteConnection& db) {
+  db.exec(kSyncQueueTable);
+  db.exec(kSyncQueueEntityIndex);
+  db.exec(kSyncApplyLockTable);
+  db.exec(kSyncCursorTable);
+  db.exec(kSyncDefinitionTable);
+}
+
 void MigrationEngine::registerSchema(const SchemaDef& schema) {
   TransactionGuard txn(*_db);
 
   // Ensure version tracking / sync queue tables exist
   _db->exec(kVersionTable);
-  _db->exec(kSyncQueueTable);
-  _db->exec(kSyncQueueEntityIndex);
-  _db->exec(kSyncApplyLockTable);
-  _db->exec(kSyncCursorTable);
-  _db->exec(kSyncDefinitionTable);
+  ensureSyncInfra(*_db);
 
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;

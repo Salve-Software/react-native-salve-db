@@ -19,6 +19,8 @@ namespace margelo::nitro::salvedb { struct ConfigureParams; }
 namespace margelo::nitro::salvedb { struct QueryResult; }
 // Forward declaration of `NativeSyncResult` to properly resolve imports.
 namespace margelo::nitro::salvedb { struct NativeSyncResult; }
+// Forward declaration of `SyncQueueStatus` to properly resolve imports.
+namespace margelo::nitro::salvedb { struct SyncQueueStatus; }
 
 #include "ConfigureParams.hpp"
 #include <NitroModules/Promise.hpp>
@@ -29,6 +31,7 @@ namespace margelo::nitro::salvedb { struct NativeSyncResult; }
 #include <variant>
 #include <vector>
 #include "NativeSyncResult.hpp"
+#include "SyncQueueStatus.hpp"
 #include <functional>
 
 namespace margelo::nitro::salvedb {
@@ -69,6 +72,7 @@ namespace margelo::nitro::salvedb {
       virtual void commit() = 0;
       virtual void rollback() = 0;
       virtual std::shared_ptr<Promise<NativeSyncResult>> triggerSync(const std::string& schemaName) = 0;
+      virtual SyncQueueStatus getSyncQueueStatus(const std::string& schemaName) = 0;
       virtual double subscribeToChanges(const std::function<void(const std::vector<std::string>& /* tables */)>& callback) = 0;
       virtual void unsubscribeFromChanges(double id) = 0;
       virtual double debugPreparedStatementCount() = 0;
