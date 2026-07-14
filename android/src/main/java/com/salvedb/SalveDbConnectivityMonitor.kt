@@ -5,6 +5,8 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Handler
+import android.os.Looper
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -26,7 +28,9 @@ object SalveDbConnectivityMonitor : DefaultLifecycleObserver {
   @JvmStatic
   fun init(context: Context) {
     appContext = context.applicationContext
-    ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+    Handler(Looper.getMainLooper()).post {
+      ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+    }
   }
 
   override fun onStart(owner: LifecycleOwner) {
