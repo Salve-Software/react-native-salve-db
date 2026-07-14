@@ -270,6 +270,7 @@ describe('sync_queue side effects from real writes', () => {
       columns: {
         id: { type: 'integer' },
         name: { type: 'text' },
+        updatedAt: { type: 'datetime', nullable: false },
       },
       sync: {
         enabled: true,
@@ -294,7 +295,7 @@ describe('sync_queue side effects from real writes', () => {
     };
     await Database.register({ schema });
 
-    Database.insert(schema).values({ id: 1, name: 'first' }).execute();
+    Database.insert(schema).values({ id: 1, name: 'first', updatedAt: Date.now() }).execute();
     Database.update(schema).set({ name: 'renamed' }).where(eq('id', 1)).execute();
     Database.delete(schema).where(eq('id', 1)).execute();
 
