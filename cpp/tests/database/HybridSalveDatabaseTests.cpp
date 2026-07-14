@@ -238,7 +238,7 @@ TEST_CASE("getSyncQueueStatus reads pending count/oldest updatedAt through the r
   harness.run(R"(
     db.registerSchema(JSON.stringify({
       name: 'customers', version: 1, primaryKey: 'id',
-      columns: { id: { type: 'integer' }, name: { type: 'text' } },
+      columns: { id: { type: 'integer' }, name: { type: 'text' }, updatedAt: { type: 'datetime', nullable: false } },
       sync: { enabled: true }
     }))
   )");
@@ -246,8 +246,8 @@ TEST_CASE("getSyncQueueStatus reads pending count/oldest updatedAt through the r
   auto empty = harness.run("db.getSyncQueueStatus('customers')");
   REQUIRE(empty == R"({"pendingCount":0})");
 
-  harness.run("db.execute('INSERT INTO customers (id, name) VALUES (1, ?)', ['a'])");
-  harness.run("db.execute('INSERT INTO customers (id, name) VALUES (2, ?)', ['b'])");
+  harness.run("db.execute('INSERT INTO customers (id, name, updatedAt) VALUES (1, ?, 100)', ['a'])");
+  harness.run("db.execute('INSERT INTO customers (id, name, updatedAt) VALUES (2, ?, 100)', ['b'])");
 
   auto pending = harness.run("db.getSyncQueueStatus('customers')");
   REQUIRE(pending.find(R"("pendingCount":2)") != std::string::npos);

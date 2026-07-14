@@ -114,8 +114,8 @@ TEST_CASE("getStatus counts pending rows and reports the oldest updated_at", "[s
   MigrationEngine engine(conn);
   registerSyncEnabledCustomers(engine);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
-  conn->execute("INSERT INTO customers (id, name) VALUES (2, 'b')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (2, 'b', 100)", {});
 
   SyncQueueReader reader(conn);
   auto status = reader.getStatus("customers");
@@ -133,13 +133,13 @@ TEST_CASE("getStatus only counts rows for the requested entity", "[sync][SyncQue
   registerSyncEnabledCustomers(engine);
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "orders", "version": 1, "primaryKey": "id",
-    "columns": { "id": { "type": "integer" } },
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
-  conn->execute("INSERT INTO orders (id) VALUES (1)", {});
-  conn->execute("INSERT INTO orders (id) VALUES (2)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  conn->execute("INSERT INTO orders (id, updatedAt) VALUES (1, 100)", {});
+  conn->execute("INSERT INTO orders (id, updatedAt) VALUES (2, 100)", {});
 
   SyncQueueReader reader(conn);
   REQUIRE(reader.getStatus("customers").pendingCount == 1);
@@ -151,7 +151,7 @@ TEST_CASE("getStatus does not mutate sync_queue", "[sync][SyncQueueReader]") {
   MigrationEngine engine(conn);
   registerSyncEnabledCustomers(engine);
 
-  conn->execute("INSERT INTO customers (id, name) VALUES (1, 'a')", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
 
   SyncQueueReader reader(conn);
   reader.getStatus("customers");
