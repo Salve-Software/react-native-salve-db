@@ -65,6 +65,21 @@ describe('registerAppOpenSync', () => {
     expect(bridge.triggerSyncAll).not.toHaveBeenCalled();
   });
 
+  test('registering again removes the previous subscription', () => {
+    const removeFirst = jest.fn();
+    const removeSecond = jest.fn();
+    (AppState.addEventListener as jest.Mock)
+      .mockReturnValueOnce({ remove: removeFirst })
+      .mockReturnValueOnce({ remove: removeSecond });
+
+    const bridge = makeBridge();
+    registerAppOpenSync(bridge, () => true);
+    registerAppOpenSync(bridge, () => true);
+
+    expect(removeFirst).toHaveBeenCalledTimes(1);
+    expect(removeSecond).not.toHaveBeenCalled();
+  });
+
   test('a rejected triggerSyncAll promise is swallowed, not thrown', async () => {
     const bridge = {
       triggerSyncAll: jest.fn().mockRejectedValue(new Error('network down')),
