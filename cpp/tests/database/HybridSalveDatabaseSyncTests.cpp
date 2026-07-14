@@ -3,6 +3,9 @@
 #include "../../platform/platform.hpp"
 #include "../support/HybridDatabaseHarness.hpp"
 #include "../support/platform_test.hpp"
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 using margelo::nitro::salvedb::DatabaseManager;
 using margelo::nitro::salvedb::platform::deleteSecureValue;
@@ -69,6 +72,30 @@ TEST_CASE("db.triggerSync() runs a full sync cycle through the real JSI bridge",
 
   auto rows = DatabaseManager::shared().connection()->execute("SELECT COUNT(*) FROM sync_queue WHERE entity = 'customers'", {});
   REQUIRE(std::get<double>(rows.rows[0][0]) == 0.0);
+}
+
+TEST_CASE("db.configure() is serialized against an in-flight sync session", "[database][sync][concurrency]") {
+  deleteSecureValue("salvedb.credentials.accessToken");
+  deleteSecureValue("salvedb.credentials.refreshToken");
+
+  HybridDatabaseHarness harness;
+  createDb(harness);
+  harness.run("db.configure({ name: '" + uniqueDbName("e2e_configure_lock") + "' })");
+
+  auto held = DatabaseManager::shared().lockSync();
+
+  std::atomic<bool> reconfigured{false};
+  std::thread t([&]() {
+    harness.run("db.configure({ name: '" + uniqueDbName("e2e_configure_lock_second") + "' })");
+    reconfigured = true;
+  });
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  REQUIRE_FALSE(reconfigured.load());
+
+  held.unlock();
+  t.join();
+  REQUIRE(reconfigured.load());
 }
 
 TEST_CASE("db.triggerSync() refreshes the token on 401 through the real JSI bridge", "[database][sync]") {
