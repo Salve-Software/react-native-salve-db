@@ -27,8 +27,8 @@ Pod::Spec.new do |s|
 
   # Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
   s.pod_target_xcconfig = { 'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SQLITE_ENABLE_COLUMN_METADATA=1' }
-  # NWPathMonitor, used by the native connectivity sync monitor.
-  s.frameworks = 'Network'
+  # NWPathMonitor (connectivity monitor) and BGTaskScheduler (background scheduler).
+  s.frameworks = 'Network', 'BackgroundTasks'
   # Exposes SalveDbSyncBridge to SalveDbConnectivityMonitor.swift.
   s.public_header_files = ["ios/Sync/SalveDbSyncBridge.h"]
 

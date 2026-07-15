@@ -8,6 +8,8 @@
 
 + (void)load {
   [SalveDbConnectivityMonitor start];
+  [SalveDbBackgroundScheduler register];
+  [SalveDbBackgroundScheduler scheduleNext];
 }
 
 @end
