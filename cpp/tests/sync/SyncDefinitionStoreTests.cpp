@@ -3,6 +3,7 @@
 #include "../../database/SQLiteConnection.hpp"
 #include "../../platform/platform.hpp"
 #include "../../sync/SyncDefinitionStore.hpp"
+#include <algorithm>
 #include <memory>
 
 using namespace margelo::nitro::salvedb;
@@ -84,6 +85,21 @@ TEST_CASE("a saved definition survives constructing a new SyncDefinitionStore ov
 
   SyncDefinitionStore reopened(conn);
   REQUIRE(reopened.definitionFor("customers")->get("endpoint")->get().getString("path") == "/sync/customers");
+}
+
+TEST_CASE("enabledSchemas returns exactly the saved schemas, never a disabled one", "[sync][SyncDefinitionStore]") {
+  auto conn = openWithDefinitionTable("definition_enabled_schemas");
+  SyncDefinitionStore store(conn);
+
+  store.save("customers", contract("/sync/customers", false));
+  store.save("orders", contract("/sync/orders", false));
+  // Never saved: MigrationEngine only calls save() when sync.enabled is
+  // true (see the [integration] test below) — a disabled schema is simply
+  // absent from this table, not present with enabled=false.
+
+  auto names = store.enabledSchemas();
+  std::sort(names.begin(), names.end());
+  REQUIRE(names == std::vector<std::string>{"customers", "orders"});
 }
 
 TEST_CASE("MigrationEngine::registerSchema captures the full sync contract", "[sync][SyncDefinitionStore][integration]") {

@@ -114,6 +114,7 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/database/SchemaRegistry.cpp"
   "${PROJECT_CPP_DIR}/query/QueryExecutor.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncOrchestrator.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncNativeEntryPoint.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncApplyGuard.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncQueueReader.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncDefinitionStore.cpp"

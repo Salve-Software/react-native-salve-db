@@ -46,6 +46,7 @@ void ensureCached(JNIEnv* env) {
     s_responseBodyField = env->GetFieldID(s_resultClass, "responseBody", "Ljava/lang/String;");
     s_errorKindField = env->GetFieldID(s_resultClass, "errorKind", "Ljava/lang/String;");
     s_errorMessageField = env->GetFieldID(s_resultClass, "errorMessage", "Ljava/lang/String;");
+    throwIfJavaExceptionPending(env, "SalveDbHttpClient JNI cache resolution");
   });
 }
 

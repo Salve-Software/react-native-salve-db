@@ -3,6 +3,9 @@
 #include "../../platform/platform.hpp"
 #include "../support/HybridDatabaseHarness.hpp"
 #include "../support/platform_test.hpp"
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 using margelo::nitro::salvedb::DatabaseManager;
 using margelo::nitro::salvedb::platform::deleteSecureValue;
@@ -71,6 +74,30 @@ TEST_CASE("db.triggerSync() runs a full sync cycle through the real JSI bridge",
   REQUIRE(std::get<double>(rows.rows[0][0]) == 0.0);
 }
 
+TEST_CASE("db.configure() is serialized against an in-flight sync session", "[database][sync][concurrency]") {
+  deleteSecureValue("salvedb.credentials.accessToken");
+  deleteSecureValue("salvedb.credentials.refreshToken");
+
+  HybridDatabaseHarness harness;
+  createDb(harness);
+  harness.run("db.configure({ name: '" + uniqueDbName("e2e_configure_lock") + "' })");
+
+  auto held = DatabaseManager::shared().lockSync();
+
+  std::atomic<bool> reconfigured{false};
+  std::thread t([&]() {
+    harness.run("db.configure({ name: '" + uniqueDbName("e2e_configure_lock_second") + "' })");
+    reconfigured = true;
+  });
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  REQUIRE_FALSE(reconfigured.load());
+
+  held.unlock();
+  t.join();
+  REQUIRE(reconfigured.load());
+}
+
 TEST_CASE("db.triggerSync() refreshes the token on 401 through the real JSI bridge", "[database][sync]") {
   deleteSecureValue("salvedb.credentials.accessToken");
   deleteSecureValue("salvedb.credentials.refreshToken");
@@ -105,4 +132,41 @@ TEST_CASE("db.triggerSync() refreshes the token on 401 through the real JSI brid
   harness.run("db.triggerSync('customers')");
 
   REQUIRE(DatabaseManager::shared().credentials().getAccessToken().value() == "access-2");
+}
+
+TEST_CASE("db.triggerSyncAll() runs every enabled schema through the real JSI bridge", "[database][sync]") {
+  deleteSecureValue("salvedb.credentials.accessToken");
+  deleteSecureValue("salvedb.credentials.refreshToken");
+
+  setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    return HttpResponse{200, {}, R"({"cursor": "c1", "hasMore": false, "operations": []})"};
+  });
+
+  HybridDatabaseHarness harness;
+  createDb(harness);
+
+  harness.run(R"(db.configure({
+    name: ')" + uniqueDbName("e2e_sync_all") + R"(',
+    baseUrl: 'https://api.company.com',
+    network: { timeout: 5000 },
+    credentials: {
+      provider: 'oauth2', accessTokenHeaderName: 'Authorization',
+      tokens: { accessToken: 'access-1', refreshToken: 'refresh-1' },
+      refresh: { endpoint: '/auth/refresh', responseAccessTokenPath: '$.accessToken', responseRefreshTokenPath: '$.refreshToken' }
+    }
+  }))");
+
+  harness.run("db.registerSchema(JSON.stringify(" + customersSchemaJson() + "))");
+  harness.run(R"JS(db.execute("INSERT INTO customers (id, name, updatedAt) VALUES (?, ?, ?)", ['1', 'a', 100]))JS");
+
+  auto resultJson = harness.run("db.triggerSyncAll(false)");
+
+  // Assert on the actual array shape — one result, for "customers" — not
+  // just that the promise resolved.
+  REQUIRE(resultJson.front() == '[');
+  REQUIRE(resultJson.find(R"("cursor":"c1")") != std::string::npos);
+  REQUIRE(resultJson.find("},{") == std::string::npos); // exactly one element
+
+  auto rows = DatabaseManager::shared().connection()->execute("SELECT COUNT(*) FROM sync_queue WHERE entity = 'customers'", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 0.0);
 }

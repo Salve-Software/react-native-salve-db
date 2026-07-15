@@ -32,7 +32,8 @@ describe('SalveDbProvider', () => {
       return Promise.resolve();
     });
     const subscribeNative = jest.fn(() => { calls.push('subscribeNative'); });
-    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative });
+    const unsubscribeNative = jest.fn();
+    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative, unsubscribeNative });
 
     const { result } = await renderHook(() => useDatabaseReady(), {
       wrapper: ({ children }) => (
@@ -56,7 +57,8 @@ describe('SalveDbProvider', () => {
     const configure = jest.fn(() => { throw failure; });
     const register = jest.fn().mockResolvedValue(undefined);
     const subscribeNative = jest.fn();
-    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative });
+    const unsubscribeNative = jest.fn();
+    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative, unsubscribeNative });
 
     const { result } = await renderHook(() => useDatabaseReady(), {
       wrapper: ({ children }) => (
@@ -78,7 +80,8 @@ describe('SalveDbProvider', () => {
     const configure = jest.fn();
     const register = jest.fn().mockRejectedValue(failure);
     const subscribeNative = jest.fn();
-    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative });
+    const unsubscribeNative = jest.fn();
+    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative, unsubscribeNative });
 
     const { result } = await renderHook(() => useDatabaseReady(), {
       wrapper: ({ children }) => (
@@ -99,7 +102,8 @@ describe('SalveDbProvider', () => {
     const configure = jest.fn();
     const register = jest.fn().mockResolvedValue(undefined);
     const subscribeNative = jest.fn();
-    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative });
+    const unsubscribeNative = jest.fn();
+    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative, unsubscribeNative });
 
     await renderHook(() => useDatabaseReady(), {
       wrapper: ({ children }) => (
@@ -115,5 +119,28 @@ describe('SalveDbProvider', () => {
 
     expect(configure).toHaveBeenCalledTimes(1);
     expect(register).toHaveBeenCalledTimes(1);
+  });
+
+  test('calls unsubscribeNative on unmount', async () => {
+    const configure = jest.fn();
+    const register = jest.fn().mockResolvedValue(undefined);
+    const subscribeNative = jest.fn();
+    const unsubscribeNative = jest.fn();
+    const SalveDbProvider = createSalveDbProvider({ configure, register, subscribeNative, unsubscribeNative });
+
+    const { unmount } = await renderHook(() => useDatabaseReady(), {
+      wrapper: ({ children }) => (
+        <SalveDbProvider config={{ name: 'db' }} schemas={[schemaA]}>
+          {children}
+        </SalveDbProvider>
+      ),
+    });
+
+    await flushMicrotasks();
+    expect(unsubscribeNative).not.toHaveBeenCalled();
+
+    await act(async () => { unmount(); });
+
+    expect(unsubscribeNative).toHaveBeenCalledTimes(1);
   });
 });

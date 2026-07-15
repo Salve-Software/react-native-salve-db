@@ -2,7 +2,7 @@ import type { SalveDatabase } from '../specs/SalveDatabase.nitro';
 import type { AnySchema } from '../types';
 import type { IConfigureProps, IQueryClient, IRegisterProps } from './classes';
 import { NitroModules } from 'react-native-nitro-modules';
-import { ConfigureDb, QueryDb } from './classes';
+import { ConfigureDb, QueryDb, SyncDb } from './classes';
 
 const _bridge = NitroModules.createHybridObject<SalveDatabase>('SalveDatabase');
 
@@ -14,6 +14,7 @@ const _bridge = NitroModules.createHybridObject<SalveDatabase>('SalveDatabase');
 export class Database {
   private static readonly configureDb = new ConfigureDb(_bridge)
   private static readonly queryDb = new QueryDb(_bridge)
+  private static readonly syncDb = new SyncDb(_bridge)
 
   private constructor() {}
 
@@ -82,5 +83,15 @@ export class Database {
   /** Stops a subscription previously created by `subscribeToChanges`. */
   static unsubscribeFromChanges = (id: number) => {
     return this.queryDb.unsubscribeFromChanges(id);
+  }
+
+  /** Triggers a sync session for a single schema. */
+  static sync = (schemaName: string) => {
+    return this.syncDb.sync(schemaName);
+  }
+
+  /** Triggers a sync session for every schema registered with `sync.enabled`. */
+  static syncAll = () => {
+    return this.syncDb.syncAll();
   }
 }

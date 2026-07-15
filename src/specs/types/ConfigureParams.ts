@@ -46,4 +46,10 @@ export interface ConfigureParams {
    * @default true
    */
   walMode?: boolean;
+  /**
+   * Automatically triggers a sync of every sync-enabled schema when the app
+   * returns to the foreground.
+   * @default true
+   */
+  syncOnAppOpen?: boolean;
 }

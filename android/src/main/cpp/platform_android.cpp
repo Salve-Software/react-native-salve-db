@@ -44,6 +44,7 @@ void setSecureValue(const std::string& key, const std::string& value) {
   jclass cls = secureStorageClass();
 
   jmethodID mid = env->GetStaticMethodID(cls, "setValue", "(Ljava/lang/String;Ljava/lang/String;)V");
+  throwIfJavaExceptionPending(env, "SalveDbSecureStorage.setValue lookup");
   jstring jKey = env->NewStringUTF(key.c_str());
   jstring jValue = env->NewStringUTF(value.c_str());
 
@@ -60,6 +61,7 @@ std::optional<std::string> getSecureValue(const std::string& key) {
   jclass cls = secureStorageClass();
 
   jmethodID mid = env->GetStaticMethodID(cls, "getValue", "(Ljava/lang/String;)Ljava/lang/String;");
+  throwIfJavaExceptionPending(env, "SalveDbSecureStorage.getValue lookup");
   jstring jKey = env->NewStringUTF(key.c_str());
 
   auto jResult = static_cast<jstring>(env->CallStaticObjectMethod(cls, mid, jKey));
@@ -81,6 +83,7 @@ void deleteSecureValue(const std::string& key) {
   jclass cls = secureStorageClass();
 
   jmethodID mid = env->GetStaticMethodID(cls, "deleteValue", "(Ljava/lang/String;)V");
+  throwIfJavaExceptionPending(env, "SalveDbSecureStorage.deleteValue lookup");
   jstring jKey = env->NewStringUTF(key.c_str());
 
   env->CallStaticVoidMethod(cls, mid, jKey);

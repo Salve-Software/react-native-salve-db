@@ -7,9 +7,14 @@ import { ExpenseSchema } from './src/schemas/ExpenseSchema';
 import { BudgetSchema } from './src/schemas/BudgetSchema';
 import { BenchmarkSchema } from './src/schemas/BenchmarkSchema';
 import { FeedItemSchema } from './src/schemas/FeedItemSchema';
+import { SyncTestItemSchema } from './src/schemas/SyncTestItemSchema';
+import { SyncTestNoteSchema } from './src/schemas/SyncTestNoteSchema';
+import { SyncTestTagSchema } from './src/schemas/SyncTestTagSchema';
 import { ExpensesScreen } from './src/screens/ExpensesScreen';
 import { InfiniteQueryScreen } from './src/screens/InfiniteQueryScreen';
 import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
+import { SyncTestScreen } from './src/screens/SyncTestScreen';
+import { MOCK_SYNC_SERVER_BASE_URL } from './src/library/mockSyncServer';
 
 if (__DEV__) {
   Salvetron.connect({ host: 'localhost', port: 8765 });
@@ -21,6 +26,7 @@ const TABS = [
   { key: 'expenses', label: 'Query', icon: '💸' },
   { key: 'infinite', label: 'Infinite Query', icon: '📜' },
   { key: 'benchmark', label: 'Benchmark', icon: '⚡' },
+  { key: 'sync', label: 'Sync Test', icon: '🔄' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -34,6 +40,7 @@ function AppTabs(): React.JSX.Element {
         {tab === 'expenses' ? <ExpensesScreen /> : null}
         {tab === 'infinite' ? <InfiniteQueryScreen /> : null}
         {tab === 'benchmark' ? <BenchmarkScreen /> : null}
+        {tab === 'sync' ? <SyncTestScreen /> : null}
       </View>
 
       <SafeAreaView style={styles.tabBar} edges={['bottom']}>
@@ -52,8 +59,28 @@ function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <SalveDbProvider
-        config={{ name: 'salve-db-example' }}
-        schemas={[ExpenseSchema, BudgetSchema, BenchmarkSchema, FeedItemSchema]}
+        config={{
+          name: 'salve-db-example',
+          baseUrl: MOCK_SYNC_SERVER_BASE_URL,
+          network: { timeout: 5000 },
+          credentials: {
+            provider: 'oauth2',
+            tokens: { accessToken: 'mock-access-token', refreshToken: 'mock-refresh-token' },
+            refresh: {
+              endpoint: '/auth/refresh',
+              response: { accessToken: '$.accessToken', refreshToken: '$.refreshToken' },
+            },
+          },
+        }}
+        schemas={[
+          ExpenseSchema,
+          BudgetSchema,
+          BenchmarkSchema,
+          FeedItemSchema,
+          SyncTestItemSchema,
+          SyncTestNoteSchema,
+          SyncTestTagSchema,
+        ]}
       >
         <AppTabs />
       </SalveDbProvider>

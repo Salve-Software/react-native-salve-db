@@ -27,6 +27,10 @@ Pod::Spec.new do |s|
 
   # Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
   s.pod_target_xcconfig = { 'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SQLITE_ENABLE_COLUMN_METADATA=1' }
+  # NWPathMonitor, used by the native connectivity sync monitor.
+  s.frameworks = 'Network'
+  # Exposes SalveDbSyncBridge to SalveDbConnectivityMonitor.swift.
+  s.public_header_files = ["ios/Sync/SalveDbSyncBridge.h"]
 
   load 'nitrogen/generated/ios/SalveDb+autolinking.rb'
   add_nitrogen_files(s)

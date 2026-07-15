@@ -15,6 +15,7 @@ add_library(${PACKAGE_NAME} SHARED
 	src/main/cpp/platform_android.cpp
 	src/main/cpp/JniSupport.cpp
 	src/main/cpp/platform_android_http.cpp
+	src/main/cpp/SyncConnectivityJni.cpp
 	../cpp/http/HttpUrlBuilder.cpp
 	../cpp/http/CredentialHttpCaller.cpp
 	../cpp/database/HybridSalveDatabase.cpp
@@ -24,6 +25,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/SchemaRegistry.cpp
 	../cpp/query/QueryExecutor.cpp
 	../cpp/sync/SyncOrchestrator.cpp
+	../cpp/sync/SyncNativeEntryPoint.cpp
 	../cpp/sync/SyncApplyGuard.cpp
 	../cpp/sync/SyncQueueReader.cpp
 	../cpp/sync/SyncDefinitionStore.cpp

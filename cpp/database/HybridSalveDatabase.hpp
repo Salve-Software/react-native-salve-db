@@ -18,6 +18,7 @@ public:
   void commit() override;
   void rollback() override;
   std::shared_ptr<Promise<NativeSyncResult>> triggerSync(const std::string& schemaName) override;
+  std::shared_ptr<Promise<std::vector<NativeSyncResult>>> triggerSyncAll(bool discardIfBusy) override;
   double subscribeToChanges(const std::function<void(const std::vector<std::string>&)>& callback) override;
   void unsubscribeFromChanges(double id) override;
   double debugPreparedStatementCount() override;

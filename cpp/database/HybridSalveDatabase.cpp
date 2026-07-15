@@ -11,7 +11,10 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.baseUrl.has_value() != params.network.has_value())
     throw std::runtime_error("Database.configure: 'baseUrl' and 'network' must be provided together");
 
+  auto lock = DatabaseManager::shared().lockSync();
+
   DatabaseManager::shared().open(params.name, params.walMode.value_or(true));
+  DatabaseManager::shared().configureSyncOnAppOpen(params.syncOnAppOpen.value_or(true));
 
   if (params.baseUrl.has_value())
     DatabaseManager::shared().configureNetwork(*params.baseUrl, params.network->timeout);
@@ -66,6 +69,12 @@ void HybridSalveDatabase::rollback() {
 std::shared_ptr<Promise<NativeSyncResult>> HybridSalveDatabase::triggerSync(const std::string& schemaName) {
   return Promise<NativeSyncResult>::async([this, schemaName]() {
     return _syncOrchestrator.triggerSync(schemaName);
+  });
+}
+
+std::shared_ptr<Promise<std::vector<NativeSyncResult>>> HybridSalveDatabase::triggerSyncAll(bool discardIfBusy) {
+  return Promise<std::vector<NativeSyncResult>>::async([this, discardIfBusy]() {
+    return _syncOrchestrator.triggerSyncAll(discardIfBusy);
   });
 }
 

@@ -50,10 +50,11 @@ namespace margelo::nitro::salvedb {
     std::optional<NetworkParams> network     SWIFT_PRIVATE;
     std::optional<CredentialsParams> credentials     SWIFT_PRIVATE;
     std::optional<bool> walMode     SWIFT_PRIVATE;
+    std::optional<bool> syncOnAppOpen     SWIFT_PRIVATE;
 
   public:
     ConfigureParams() = default;
-    explicit ConfigureParams(std::string name, std::optional<std::string> baseUrl, std::optional<NetworkParams> network, std::optional<CredentialsParams> credentials, std::optional<bool> walMode): name(name), baseUrl(baseUrl), network(network), credentials(credentials), walMode(walMode) {}
+    explicit ConfigureParams(std::string name, std::optional<std::string> baseUrl, std::optional<NetworkParams> network, std::optional<CredentialsParams> credentials, std::optional<bool> walMode, std::optional<bool> syncOnAppOpen): name(name), baseUrl(baseUrl), network(network), credentials(credentials), walMode(walMode), syncOnAppOpen(syncOnAppOpen) {}
 
   public:
     friend bool operator==(const ConfigureParams& lhs, const ConfigureParams& rhs) = default;
@@ -73,7 +74,8 @@ namespace margelo::nitro {
         JSIConverter<std::optional<std::string>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "baseUrl"))),
         JSIConverter<std::optional<margelo::nitro::salvedb::NetworkParams>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "network"))),
         JSIConverter<std::optional<margelo::nitro::salvedb::CredentialsParams>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "credentials"))),
-        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "walMode")))
+        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "walMode"))),
+        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "syncOnAppOpen")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::salvedb::ConfigureParams& arg) {
@@ -83,6 +85,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "network"), JSIConverter<std::optional<margelo::nitro::salvedb::NetworkParams>>::toJSI(runtime, arg.network));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "credentials"), JSIConverter<std::optional<margelo::nitro::salvedb::CredentialsParams>>::toJSI(runtime, arg.credentials));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "walMode"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.walMode));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "syncOnAppOpen"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.syncOnAppOpen));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -98,6 +101,7 @@ namespace margelo::nitro {
       if (!JSIConverter<std::optional<margelo::nitro::salvedb::NetworkParams>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "network")))) return false;
       if (!JSIConverter<std::optional<margelo::nitro::salvedb::CredentialsParams>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "credentials")))) return false;
       if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "walMode")))) return false;
+      if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "syncOnAppOpen")))) return false;
       return true;
     }
   };

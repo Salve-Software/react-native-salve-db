@@ -300,6 +300,30 @@ TEST_CASE("sync.enabled: false or absent creates no triggers", "[migration][sync
   REQUIRE(triggerCount(*conn, "sync_off") == 0);
 }
 
+TEST_CASE("enabling sync.enabled with no column change still creates triggers", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_enable_no_version_bump"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } }
+  })"));
+  REQUIRE(triggerCount(*conn, "customers") == 0);
+
+  // Same version, no column change — only sync.enabled flips to true.
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
+
+  REQUIRE(triggerCount(*conn, "customers") == 3);
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  auto rows = conn->execute("SELECT COUNT(*) FROM sync_queue WHERE entity = 'customers'", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 1.0);
+}
+
 TEST_CASE("migrating a sync-enabled schema with a new column regenerates triggers", "[migration][sync]") {
   auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_migrate_regen"));
   MigrationEngine engine(conn);

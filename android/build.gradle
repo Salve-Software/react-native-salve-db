@@ -144,6 +144,9 @@ dependencies {
   // Native HTTP client backing platform::httpExecute.
   implementation "com.squareup.okhttp3:okhttp:4.12.0"
 
+  // ProcessLifecycleOwner, for the connectivity monitor's foreground scope.
+  implementation "androidx.lifecycle:lifecycle-process:2.8.7"
+
   testImplementation "junit:junit:4.13.2"
   testImplementation "com.squareup.okhttp3:mockwebserver:4.12.0"
 }

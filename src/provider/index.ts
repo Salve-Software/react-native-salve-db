@@ -10,4 +10,5 @@ export const SalveDbProvider = createSalveDbProvider({
   configure: Database.configure,
   register: (schema: AnySchema) => Database.register({ schema }),
   subscribeNative: () => queryCache.subscribeNative(),
+  unsubscribeNative: () => queryCache.unsubscribeNative(),
 });
