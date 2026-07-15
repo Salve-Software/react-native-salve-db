@@ -11,6 +11,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (void)triggerSyncAll;
 
++ (void)wakeBackgroundSync;
++ (BOOL)backgroundHasConfig;
++ (double)backgroundMinimumIntervalMs;
++ (BOOL)backgroundRequiresNetwork;
++ (BOOL)backgroundRequiresCharging;
+
 @end
 
 NS_ASSUME_NONNULL_END

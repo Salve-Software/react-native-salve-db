@@ -28,3 +28,32 @@ TEST_CASE("triggerSyncAllFromNative swallows contention instead of throwing", "[
 
   REQUIRE_NOTHROW(triggerSyncAllFromNative());
 }
+
+TEST_CASE("wakeBackgroundSyncFromNative does not throw when already open and locked", "[sync][SyncNativeEntryPoint]") {
+  DatabaseManager::shared().open(uniqueDbName("wake_background_contention"));
+
+  auto held = DatabaseManager::shared().lockSync();
+
+  REQUIRE_NOTHROW(wakeBackgroundSyncFromNative());
+}
+
+TEST_CASE("nativeBackgroundConstraints reflects DatabaseManager's configured background", "[sync][SyncNativeEntryPoint]") {
+  DatabaseManager::shared().open(uniqueDbName("native_background_constraints"));
+  DatabaseManager::shared().configureBackground(BackgroundConfig{450000.0, true, false});
+
+  auto constraints = nativeBackgroundConstraints();
+
+  REQUIRE(constraints.hasConfig);
+  REQUIRE(constraints.minimumIntervalMs == 450000.0);
+  REQUIRE(constraints.requiresNetwork == true);
+  REQUIRE(constraints.requiresCharging == false);
+}
+
+TEST_CASE("nativeBackgroundConstraints reports hasConfig=false when none was set", "[sync][SyncNativeEntryPoint]") {
+  DatabaseManager::shared().open(uniqueDbName("native_background_constraints_none"));
+  DatabaseManager::shared().configureBackground(std::nullopt);
+
+  auto constraints = nativeBackgroundConstraints();
+
+  REQUIRE_FALSE(constraints.hasConfig);
+}

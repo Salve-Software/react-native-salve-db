@@ -34,6 +34,8 @@ void DatabaseManager::configureNetwork(const std::string& baseUrl, double timeou
 }
 
 bool DatabaseManager::reopenFromPersistedConfigIfNeeded() {
+  if (isOpen()) return true;
+
   auto lock = lockSync();
   if (isOpen()) return true;
 

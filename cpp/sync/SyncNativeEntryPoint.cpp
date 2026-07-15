@@ -21,4 +21,38 @@ void triggerSyncAllFromNative() {
   }
 }
 
+void wakeBackgroundSyncFromNative() {
+  bool ready;
+  try {
+    ready = DatabaseManager::shared().reopenFromPersistedConfigIfNeeded();
+  } catch (const std::exception& e) {
+    std::cerr << "SyncNativeEntryPoint: wakeBackgroundSyncFromNative failed to rehydrate: " << e.what() << std::endl;
+    return;
+  } catch (...) {
+    std::cerr << "SyncNativeEntryPoint: wakeBackgroundSyncFromNative failed to rehydrate with an unknown exception" << std::endl;
+    return;
+  }
+
+  if (!ready) {
+    std::cerr << "SyncNativeEntryPoint: no persisted config, skipping background wake" << std::endl;
+    return;
+  }
+
+  triggerSyncAllFromNative();
+}
+
+NativeBackgroundConstraints nativeBackgroundConstraints() {
+  try {
+    DatabaseManager::shared().reopenFromPersistedConfigIfNeeded();
+  } catch (...) {}
+
+  auto background = DatabaseManager::shared().background();
+  if (!background.has_value()) {
+    return NativeBackgroundConstraints{false, 0, false, false};
+  }
+  return NativeBackgroundConstraints{
+    true, background->minimumIntervalMs, background->requiresNetwork, background->requiresCharging
+  };
+}
+
 } // namespace margelo::nitro::salvedb
