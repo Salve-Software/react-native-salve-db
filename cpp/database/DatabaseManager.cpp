@@ -1,4 +1,5 @@
 #include "DatabaseManager.hpp"
+#include "NativeConfigStore.hpp"
 #include "SchemaRegistry.hpp"
 #include "../platform/platform.hpp"
 
@@ -30,6 +31,37 @@ void DatabaseManager::configureCredentials(
 
 void DatabaseManager::configureNetwork(const std::string& baseUrl, double timeoutMs) {
   _network = NetworkConfig{baseUrl, timeoutMs};
+}
+
+bool DatabaseManager::reopenFromPersistedConfigIfNeeded() {
+  auto lock = lockSync();
+  if (isOpen()) return true;
+
+  auto persisted = NativeConfigStore::load();
+  if (!persisted.has_value()) return false;
+
+  open(persisted->dbName, persisted->walMode);
+  configureSyncOnAppOpen(persisted->syncOnAppOpen);
+
+  if (persisted->baseUrl.has_value() && persisted->networkTimeoutMs.has_value()) {
+    configureNetwork(*persisted->baseUrl, *persisted->networkTimeoutMs);
+  }
+
+  if (persisted->credentials.has_value()) {
+    const auto& creds = *persisted->credentials;
+    configureCredentials(
+      creds.provider,
+      creds.accessTokenHeaderName,
+      creds.refreshEndpoint,
+      creds.responseAccessTokenPath,
+      creds.responseRefreshTokenPath,
+      std::nullopt
+    );
+  }
+
+  configureBackground(persisted->background);
+
+  return true;
 }
 
 } // namespace margelo::nitro::salvedb

@@ -21,6 +21,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/HybridSalveDatabase.cpp
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
+	../cpp/database/NativeConfigStore.cpp
 	../cpp/database/MigrationEngine.cpp
 	../cpp/database/SchemaRegistry.cpp
 	../cpp/query/QueryExecutor.cpp

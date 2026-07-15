@@ -1,6 +1,7 @@
 #include "HybridSalveDatabase.hpp"
 #include "DatabaseManager.hpp"
 #include "MigrationEngine.hpp"
+#include "NativeConfigStore.hpp"
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
@@ -34,6 +35,36 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
       initialTokens
     );
   }
+
+  std::optional<BackgroundConfig> background;
+  if (params.background.has_value()) {
+    background = BackgroundConfig{
+      params.background->minimumInterval,
+      params.background->requiresNetwork.value_or(false),
+      params.background->requiresCharging.value_or(false)
+    };
+  }
+  DatabaseManager::shared().configureBackground(background);
+
+  PersistedConfig persisted;
+  persisted.dbName = params.name;
+  persisted.walMode = params.walMode.value_or(true);
+  persisted.syncOnAppOpen = params.syncOnAppOpen.value_or(true);
+  persisted.baseUrl = params.baseUrl;
+  if (params.network.has_value()) persisted.networkTimeoutMs = params.network->timeout;
+  if (params.credentials.has_value()) {
+    const auto& creds = *params.credentials;
+    persisted.credentials = PersistedCredentialConfig{
+      creds.provider,
+      creds.accessTokenHeaderName,
+      creds.refresh.endpoint,
+      creds.refresh.responseAccessTokenPath,
+      creds.refresh.responseRefreshTokenPath
+    };
+  }
+  persisted.background = background;
+
+  NativeConfigStore::save(persisted);
 }
 
 std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::string& schemaJson) {
