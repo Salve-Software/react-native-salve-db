@@ -8,19 +8,17 @@ import { BudgetSchema } from './src/schemas/BudgetSchema';
 import { BenchmarkSchema } from './src/schemas/BenchmarkSchema';
 import { FeedItemSchema } from './src/schemas/FeedItemSchema';
 import { SyncTestItemSchema } from './src/schemas/SyncTestItemSchema';
+import { SyncTestNoteSchema } from './src/schemas/SyncTestNoteSchema';
+import { SyncTestTagSchema } from './src/schemas/SyncTestTagSchema';
 import { ExpensesScreen } from './src/screens/ExpensesScreen';
 import { InfiniteQueryScreen } from './src/screens/InfiniteQueryScreen';
 import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
 import { SyncTestScreen } from './src/screens/SyncTestScreen';
+import { MOCK_SYNC_SERVER_BASE_URL } from './src/library/mockSyncServer';
 
 if (__DEV__) {
   Salvetron.connect({ host: 'localhost', port: 8765 });
 }
-
-// TEMPORARY — manual sync testing only, against mock-sync-server/. `localhost`
-// only reaches the iOS Simulator. For Android emulator use `10.0.2.2`, and for
-// a real device use your machine's LAN IP — edit this line locally as needed.
-const MOCK_SYNC_SERVER_BASE_URL = 'http://localhost:4000';
 
 const ACCENT = '#5B5FEF';
 
@@ -74,7 +72,15 @@ function App(): React.JSX.Element {
             },
           },
         }}
-        schemas={[ExpenseSchema, BudgetSchema, BenchmarkSchema, FeedItemSchema, SyncTestItemSchema]}
+        schemas={[
+          ExpenseSchema,
+          BudgetSchema,
+          BenchmarkSchema,
+          FeedItemSchema,
+          SyncTestItemSchema,
+          SyncTestNoteSchema,
+          SyncTestTagSchema,
+        ]}
       >
         <AppTabs />
       </SalveDbProvider>
