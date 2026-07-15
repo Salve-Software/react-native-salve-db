@@ -2,6 +2,7 @@
 #include "DatabaseManager.hpp"
 #include "MigrationEngine.hpp"
 #include "NativeConfigStore.hpp"
+#include "../platform/platform.hpp"
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
@@ -65,6 +66,7 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
   persisted.background = background;
 
   NativeConfigStore::save(persisted);
+  platform::scheduleBackgroundSync();
 }
 
 std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::string& schemaJson) {

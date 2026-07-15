@@ -9,6 +9,7 @@ namespace margelo::nitro::salvedb::platform {
 
 static std::string s_documentsDirectory;
 static jclass s_secureStorageClass = nullptr;
+static jclass s_backgroundSchedulerClass = nullptr;
 
 void setDocumentsDirectory(const std::string& path) {
   s_documentsDirectory = path;
@@ -24,6 +25,7 @@ void setJavaVM(JavaVM* vm) {
   JNIEnv* env = nullptr;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
   s_secureStorageClass = resolveGlobalClass(env, "com/salvedb/SalveDbSecureStorage");
+  s_backgroundSchedulerClass = resolveGlobalClass(env, "com/salvedb/SalveDbBackgroundScheduler");
   registerHttpClientClass(resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpClient"));
 }
 
@@ -90,6 +92,22 @@ void deleteSecureValue(const std::string& key) {
 
   env->DeleteLocalRef(jKey);
   throwIfJavaExceptionPending(env, "SalveDbSecureStorage.deleteValue(\"" + key + "\")");
+}
+
+void scheduleBackgroundSync() {
+  if (!s_backgroundSchedulerClass) return;
+
+  ScopedJNIEnv scoped;
+  JNIEnv* env = scoped.env();
+
+  jmethodID mid = env->GetStaticMethodID(s_backgroundSchedulerClass, "scheduleFromNative", "()V");
+  if (!mid) {
+    env->ExceptionClear();
+    return;
+  }
+
+  env->CallStaticVoidMethod(s_backgroundSchedulerClass, mid);
+  env->ExceptionClear();
 }
 
 } // namespace margelo::nitro::salvedb::platform

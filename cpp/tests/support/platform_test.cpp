@@ -46,6 +46,8 @@ void deleteSecureValue(const std::string& key) {
   secureStore().erase(key);
 }
 
+void scheduleBackgroundSync() {}
+
 // Host test double for httpExecute: no real network, tests configure the
 // outcome via platform::test::setHttpExecuteResult before calling code
 // under test.

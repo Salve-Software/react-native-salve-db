@@ -21,6 +21,7 @@ public class SalveDbPackage : BaseReactPackage() {
       nativeSetDocumentsDir(reactContext.filesDir.absolutePath)
       SalveDbSecureStorage.init(reactContext)
       SalveDbConnectivityMonitor.init(reactContext)
+      SalveDbBackgroundScheduler.init(reactContext)
     }
     return emptyList()
   }
