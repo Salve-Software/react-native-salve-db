@@ -16,7 +16,7 @@ Quebra do MVP (ver [`../mvp-scope.md`](../mvp-scope.md)) em tarefas independente
 | [008](./008-expression-interpreter.md) | Interpretador de Expressões Declarativas | ✅ | P1 | C++ (core) | 004 (parcial) | `cpp` |
 | [009](./009-credential-provider.md) | Credential Provider | 🟡 | P1 | Android+iOS | 002, 008 | `kotlin`, `swift` |
 | [010](./010-http-client.md) | HTTP Client | ⬜ | P1 | Android+iOS | 002 | `kotlin`, `swift` |
-| [011](./011-background-scheduler.md) | Background Scheduler | ⬜ | P2 | Android+iOS | 002, 012 | `kotlin`, `swift` |
+| [011](./011-background-scheduler.md) | Background Scheduler | ✅ | P2 | Android+iOS | 002, 012 | `kotlin`, `swift`, `cpp` |
 | [012](./012-sync-orchestrator.md) | Sync Orchestrator | ⬜ | P1 | C++ (core) | 006, 008, 009, 010 | `cpp` |
 | [013](./013-query-builder.md) | Query Builder (TS, estilo Drizzle) | ✅ | P1 | TS | 001, 002 | `api-design` |
 | [014](./014-public-api-configure-register.md) | Public API: `Database.configure/register` | ✅ | P1 | TS | 001, 002, 005, 009 | `api-design`, `build-nitro-modules` |

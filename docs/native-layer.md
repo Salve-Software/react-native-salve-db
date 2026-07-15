@@ -41,42 +41,44 @@ HttpOutcome httpExecute(const HttpRequest& request);
 } // namespace margelo::nitro::salvedb::platform
 ```
 
-`IBackgroundScheduler` below is still the planned shape for TASK-011 (not implemented yet) — it may end up following the same free-function pattern instead of a virtual class once that task starts, for consistency with `httpExecute`/credential storage.
+TASK-011 (background scheduler) ended up following the same free-function pattern as `httpExecute`/credential storage instead of a virtual interface — consistent with the rest of this file, and simpler since each build is already single-platform.
 
 ```cpp
-class IBackgroundScheduler {
-public:
-    virtual void scheduleSync(int intervalSeconds) = 0;
-    virtual void cancelSync() = 0;
-    virtual ~IBackgroundScheduler() = default;
-};
+// C++ — cpp/platform/platform.hpp
+namespace margelo::nitro::salvedb::platform {
+
+// Called at the end of Database.configure() to (re)register the native
+// job from DatabaseManager's current background config.
+void scheduleBackgroundSync();
+
+} // namespace margelo::nitro::salvedb::platform
 ```
 
+```cpp
+// C++ — cpp/sync/SyncNativeEntryPoint.hpp, the job handler's entry point
+void wakeBackgroundSyncFromNative(); // rehydrate (if needed) + trigger sync
+NativeBackgroundConstraints nativeBackgroundConstraints(); // read persisted schedule
+```
+
+Cold start (app fully killed, job wakes a fresh process) is handled by `NativeConfigStore` (`cpp/database/`): `Database.configure()` mirrors what it needs to a JSON file next to the SQLite database (not a SQLite table — the DB path isn't known until the file is read), and `DatabaseManager::reopenFromPersistedConfigIfNeeded()` rebuilds `DatabaseManager`'s in-memory state from it before the job tries to sync, with no JS involved.
+
 ```swift
-// Swift (iOS) — implements IBackgroundScheduler
-class BGTaskSchedulerAdapter: IBackgroundSchedulerProtocol {
-    func scheduleSync(_ intervalSeconds: Int32) {
-        // BGTaskScheduler registration + submit
-    }
-    func cancelSync() {
-        // BGTaskScheduler cancel
-    }
+// Swift (iOS) — ios/Sync/SalveDbBackgroundScheduler.swift
+BGTaskScheduler.shared.register(forTaskWithIdentifier: taskIdentifier, using: nil) { task in
+    // reschedule, call SalveDbSyncBridge.wakeBackgroundSync(), complete the task
 }
 ```
 
 ```kotlin
-// Kotlin (Android) — implements IBackgroundScheduler
-class WorkManagerAdapter(context: Context) : IBackgroundScheduler {
-    override fun scheduleSync(intervalSeconds: Int) {
-        // WorkManager PeriodicWorkRequest
-    }
-    override fun cancelSync() {
-        // WorkManager cancelUniqueWork
+// Kotlin (Android) — android/src/main/java/com/salvedb/SalveDbBackgroundWorker.kt
+class SalveDbBackgroundWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        // bootstrap documents dir + secure storage, call nativeWakeBackgroundSync()
     }
 }
 ```
 
-The `SyncOrchestrator` in C++ holds pointers to these interfaces and never knows which platform it is running on.
+`platform::scheduleBackgroundSync()` reaches Kotlin the same way `platform::setSecureValue` does — a reverse JNI call from `platform_android.cpp` into a static Kotlin method — and reaches Swift directly via the generated `SalveDb-Swift.h` bridging header from `SalveDbPlatform.mm`, no JNI involved on that side.
 
 ---
 
@@ -93,8 +95,8 @@ C++ Core
   ├── MigrationEngine
   ├── ConflictResolver (lastWriteWins)
   └── SyncOrchestrator
-        ├── IBackgroundScheduler   ←──── Swift: BGTaskSchedulerAdapter (not implemented yet, TASK-011)
-        │                                Kotlin: WorkManagerAdapter (not implemented yet, TASK-011)
+        ├── platform::scheduleBackgroundSync ←── Swift: SalveDbBackgroundScheduler (BGTaskScheduler)
+        │                                        Kotlin: SalveDbBackgroundScheduler (WorkManager)
         ├── platform::httpExecute ←──── Swift: HttpAdapter (URLSession) + PlatformHttp.mm
         │                                Kotlin: OkHttpAdapter + platform_android_http.cpp
         └── platform::*SecureValue←──── Swift: SalveDbPlatform.mm (Keychain)
