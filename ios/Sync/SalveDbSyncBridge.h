@@ -3,10 +3,10 @@
 NS_ASSUME_NONNULL_BEGIN
 
 typedef struct {
-  BOOL hasConfig;
+  bool hasConfig;
   double minimumIntervalMs;
-  BOOL requiresNetwork;
-  BOOL requiresCharging;
+  bool requiresNetwork;
+  bool requiresCharging;
 } SalveDbBackgroundConstraints;
 
 // ObjC-visible entry point into the C++ sync engine, for
