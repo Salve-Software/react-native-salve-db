@@ -1,6 +1,6 @@
 # TASK-011 — Background Scheduler (Android+iOS)
 
-**Status:** ✅ Implementado
+**Status:** 🟡 Implementado — validação de release pendente (build Xcode/CocoaPods real e verificação de SO, ver checklist abaixo)
 **Prioridade:** P2 (pode esperar)
 **Área:** Android+iOS (+ C++ core — escopo expandido, ver nota abaixo)
 **Depende de:** TASK-002, TASK-012 (o wake real precisa do Sync Orchestrator pronto pra ser acionado)
@@ -35,16 +35,26 @@ Implementado:
 
 ## Critérios de aceite
 
-- [x] Um único job nativo registrado por plataforma — coberto por unit tests (C++/Kotlin/Swift) na lógica de decisão; contagem de jobs no SO requer verificação manual/instrumentada (ver checklist abaixo).
-- [x] Job acordando aciona o Sync Orchestrator sem inicialização de JS engine — `wakeBackgroundSyncFromNative` coberto por Catch2; ausência de JS thread requer verificação manual.
-- [x] `requiresNetwork`/`requiresCharging` respeitados como constraint do job — cobertos por `BackgroundScheduleDecisionTest`/`BackgroundScheduleDecisionTests` (Kotlin/Swift).
-- [x] Reagendamento correto — `enqueueUniquePeriodicWork(UPDATE)` e resubmit em `+load`/`handle()`; sobrevivência a restart real requer verificação manual/instrumentada.
+Os `[x]` abaixo significam "lógica implementada e coberta por teste automatizado (C++/Kotlin/Swift)" — **não** "verificado em dispositivo/SO real". Essa segunda parte é o checklist manual logo abaixo, que ainda não foi executado.
 
-Checklist de verificação manual (não coberta por unit test, roda contra `example/`):
+- [x] Um único job nativo registrado por plataforma — lógica coberta por unit tests; contagem real de jobs no SO ainda pendente.
+- [x] Job acordando aciona o Sync Orchestrator sem inicialização de JS engine — `wakeBackgroundSyncFromNative` coberto por Catch2 (inclusive a partir de estado fechado/cold-start); ausência real de JS thread ainda pendente.
+- [x] `requiresNetwork`/`requiresCharging` respeitados como constraint do job — cobertos por `BackgroundScheduleDecisionTest`/`BackgroundScheduleDecisionTests` (Kotlin/Swift).
+- [x] Reagendamento correto — `enqueueUniquePeriodicWork(UPDATE)` e resubmit em `+load`/`handle()`; sobrevivência a restart real ainda pendente.
+
+Checklist de verificação manual (não coberta por unit test, roda contra `example/`) — **pendente**:
 - Android: `adb shell dumpsys jobscheduler | grep salve` com ≥2 schemas `background.enabled` confirma 1 job só.
 - Android: `adb shell am force-stop` + `adb shell cmd jobscheduler run` confirma sync sem bridge RN ativa.
 - Android: `adb reboot` confirma reagendamento.
 - iOS: lldb `_simulateLaunchForTaskWithIdentifier:@"com.salvedb.background.sync"` confirma wake e resubmit.
+- iOS: build real via Xcode/CocoaPods (`pod install` local está bloqueado por um mismatch de bundler/Ruby, não verificado nesta sessão).
+
+## Riscos e limitações conhecidas
+
+- iOS `BGTaskScheduler` é best-effort do SO — `earliestBeginDate` é um piso, não uma garantia de quando a task roda.
+- Android `PeriodicWorkRequest` impõe piso de 15min; `minimumInterval` menor é clampado.
+- `SalveDbBackgroundWorker` roda dentro da janela de ~10min do `CoroutineWorker` chamando `nativeWakeBackgroundSync()` (bloqueante, sem retry explícito). Aceito como limitação: o job é periódico (WorkManager roda de novo no próximo ciclo) e `maxPagesPerSession` já limita o tamanho de uma sessão de sync; promover pra foreground worker exigiria notificação persistente ao usuário, desproporcional pra sync de dados em background.
+- `wakeBackgroundSync()` no iOS não tem cancelamento real — se a `expirationHandler` disparar, a chamada nativa síncrona continua até terminar mesmo assim (só o double-`setTaskCompleted` é evitado). `SyncOrchestrator` não tem suporte a cancelamento no C++ hoje.
 
 ## Fora de escopo
 
