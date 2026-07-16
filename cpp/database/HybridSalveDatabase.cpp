@@ -17,30 +17,6 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
       (!std::isfinite(params.background->minimumInterval) || params.background->minimumInterval <= 0))
     throw std::runtime_error("Database.configure: 'background.minimumInterval' must be a finite number greater than 0");
 
-  auto lock = DatabaseManager::shared().lockSync();
-
-  DatabaseManager::shared().open(params.name, params.walMode.value_or(true));
-  DatabaseManager::shared().configureSyncOnAppOpen(params.syncOnAppOpen.value_or(true));
-
-  if (params.baseUrl.has_value())
-    DatabaseManager::shared().configureNetwork(*params.baseUrl, params.network->timeout);
-
-  if (params.credentials.has_value()) {
-    const auto& creds = *params.credentials;
-    std::optional<InitialCredentialTokens> initialTokens;
-    if (creds.tokens.has_value()) {
-      initialTokens = InitialCredentialTokens{creds.tokens->accessToken, creds.tokens->refreshToken};
-    }
-    DatabaseManager::shared().configureCredentials(
-      creds.provider,
-      creds.accessTokenHeaderName,
-      creds.refresh.endpoint,
-      creds.refresh.responseAccessTokenPath,
-      creds.refresh.responseRefreshTokenPath,
-      initialTokens
-    );
-  }
-
   std::optional<BackgroundConfig> background;
   if (params.background.has_value()) {
     background = BackgroundConfig{
@@ -49,7 +25,34 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
       params.background->requiresCharging.value_or(false)
     };
   }
-  DatabaseManager::shared().configureBackground(background);
+
+  {
+    auto lock = DatabaseManager::shared().lockSync();
+
+    DatabaseManager::shared().open(params.name, params.walMode.value_or(true));
+    DatabaseManager::shared().configureSyncOnAppOpen(params.syncOnAppOpen.value_or(true));
+
+    if (params.baseUrl.has_value())
+      DatabaseManager::shared().configureNetwork(*params.baseUrl, params.network->timeout);
+
+    if (params.credentials.has_value()) {
+      const auto& creds = *params.credentials;
+      std::optional<InitialCredentialTokens> initialTokens;
+      if (creds.tokens.has_value()) {
+        initialTokens = InitialCredentialTokens{creds.tokens->accessToken, creds.tokens->refreshToken};
+      }
+      DatabaseManager::shared().configureCredentials(
+        creds.provider,
+        creds.accessTokenHeaderName,
+        creds.refresh.endpoint,
+        creds.refresh.responseAccessTokenPath,
+        creds.refresh.responseRefreshTokenPath,
+        initialTokens
+      );
+    }
+
+    DatabaseManager::shared().configureBackground(background);
+  }
 
   PersistedConfig persisted;
   persisted.dbName = params.name;
