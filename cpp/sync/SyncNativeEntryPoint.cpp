@@ -44,7 +44,13 @@ void wakeBackgroundSyncFromNative() {
 NativeBackgroundConstraints nativeBackgroundConstraints() {
   try {
     DatabaseManager::shared().reopenFromPersistedConfigIfNeeded();
-  } catch (...) {}
+  } catch (const std::exception& e) {
+    std::cerr << "SyncNativeEntryPoint: nativeBackgroundConstraints failed to rehydrate: " << e.what() << std::endl;
+    return NativeBackgroundConstraints{false, 0, false, false};
+  } catch (...) {
+    std::cerr << "SyncNativeEntryPoint: nativeBackgroundConstraints failed to rehydrate with an unknown exception" << std::endl;
+    return NativeBackgroundConstraints{false, 0, false, false};
+  }
 
   auto background = DatabaseManager::shared().background();
   if (!background.has_value()) {

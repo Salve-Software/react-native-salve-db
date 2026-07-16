@@ -78,6 +78,17 @@ void NativeConfigStore::save(const PersistedConfig& config) {
       throw std::runtime_error("NativeConfigStore: failed to open " + tmpPath + " for writing");
     }
     out << serialized;
+    out.flush();
+    if (!out) {
+      out.close();
+      std::remove(tmpPath.c_str());
+      throw std::runtime_error("NativeConfigStore: failed to write " + tmpPath);
+    }
+    out.close();
+    if (out.fail()) {
+      std::remove(tmpPath.c_str());
+      throw std::runtime_error("NativeConfigStore: failed to close " + tmpPath);
+    }
   }
   if (std::rename(tmpPath.c_str(), path.c_str()) != 0) {
     throw std::runtime_error("NativeConfigStore: failed to replace " + path);

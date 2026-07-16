@@ -65,7 +65,11 @@ public:
   bool syncOnAppOpen() const { return _syncOnAppOpen; }
 
   void configureBackground(const std::optional<BackgroundConfig>& background) { _background = background; }
-  std::optional<BackgroundConfig> background() const { return _background; }
+
+  std::optional<BackgroundConfig> background() {
+    auto lock = lockSync();
+    return _background;
+  }
 
   bool reopenFromPersistedConfigIfNeeded();
 
@@ -75,6 +79,15 @@ public:
 
   std::unique_lock<std::mutex> tryLockSync() {
     return std::unique_lock<std::mutex>(_syncMutex, std::try_to_lock);
+  }
+
+  void closeForTesting() {
+    auto lock = lockSync();
+    _db.reset();
+    _credentials.reset();
+    _network.reset();
+    _background.reset();
+    _syncOnAppOpen = true;
   }
 
 private:
