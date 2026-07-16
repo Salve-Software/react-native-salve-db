@@ -11,24 +11,18 @@ Java_com_salvedb_SalveDbBackgroundScheduler_nativeWakeBackgroundSync(JNIEnv*, jc
   wakeBackgroundSyncFromNative();
 }
 
-JNIEXPORT jboolean JNICALL
-Java_com_salvedb_SalveDbBackgroundScheduler_nativeBackgroundHasConfig(JNIEnv*, jclass) {
-  return nativeBackgroundConstraints().hasConfig;
-}
-
-JNIEXPORT jdouble JNICALL
-Java_com_salvedb_SalveDbBackgroundScheduler_nativeBackgroundMinimumIntervalMs(JNIEnv*, jclass) {
-  return nativeBackgroundConstraints().minimumIntervalMs;
-}
-
-JNIEXPORT jboolean JNICALL
-Java_com_salvedb_SalveDbBackgroundScheduler_nativeBackgroundRequiresNetwork(JNIEnv*, jclass) {
-  return nativeBackgroundConstraints().requiresNetwork;
-}
-
-JNIEXPORT jboolean JNICALL
-Java_com_salvedb_SalveDbBackgroundScheduler_nativeBackgroundRequiresCharging(JNIEnv*, jclass) {
-  return nativeBackgroundConstraints().requiresCharging;
+JNIEXPORT jdoubleArray JNICALL
+Java_com_salvedb_SalveDbBackgroundScheduler_nativeBackgroundConstraintsSnapshot(JNIEnv* env, jclass) {
+  auto constraints = nativeBackgroundConstraints();
+  jdouble values[4] = {
+    constraints.hasConfig ? 1.0 : 0.0,
+    constraints.minimumIntervalMs,
+    constraints.requiresNetwork ? 1.0 : 0.0,
+    constraints.requiresCharging ? 1.0 : 0.0,
+  };
+  jdoubleArray result = env->NewDoubleArray(4);
+  env->SetDoubleArrayRegion(result, 0, 4, values);
+  return result;
 }
 
 } // extern "C"

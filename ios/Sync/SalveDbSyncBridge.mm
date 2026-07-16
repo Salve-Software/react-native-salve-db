@@ -11,20 +11,14 @@
   margelo::nitro::salvedb::wakeBackgroundSyncFromNative();
 }
 
-+ (BOOL)backgroundHasConfig {
-  return margelo::nitro::salvedb::nativeBackgroundConstraints().hasConfig;
-}
-
-+ (double)backgroundMinimumIntervalMs {
-  return margelo::nitro::salvedb::nativeBackgroundConstraints().minimumIntervalMs;
-}
-
-+ (BOOL)backgroundRequiresNetwork {
-  return margelo::nitro::salvedb::nativeBackgroundConstraints().requiresNetwork;
-}
-
-+ (BOOL)backgroundRequiresCharging {
-  return margelo::nitro::salvedb::nativeBackgroundConstraints().requiresCharging;
++ (SalveDbBackgroundConstraints)backgroundConstraints {
+  auto constraints = margelo::nitro::salvedb::nativeBackgroundConstraints();
+  return SalveDbBackgroundConstraints{
+    constraints.hasConfig,
+    constraints.minimumIntervalMs,
+    constraints.requiresNetwork,
+    constraints.requiresCharging,
+  };
 }
 
 @end

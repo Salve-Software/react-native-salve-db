@@ -14,11 +14,12 @@ import Foundation
   }
 
   @objc public static func scheduleNext() {
+    let snapshot = SalveDbSyncBridge.backgroundConstraints()
     let decision = backgroundScheduleDecision(
-      hasConfig: SalveDbSyncBridge.backgroundHasConfig(),
-      minimumIntervalMs: SalveDbSyncBridge.backgroundMinimumIntervalMs(),
-      requiresNetwork: SalveDbSyncBridge.backgroundRequiresNetwork(),
-      requiresCharging: SalveDbSyncBridge.backgroundRequiresCharging()
+      hasConfig: snapshot.hasConfig,
+      minimumIntervalMs: snapshot.minimumIntervalMs,
+      requiresNetwork: snapshot.requiresNetwork,
+      requiresCharging: snapshot.requiresCharging
     )
 
     BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskIdentifier)

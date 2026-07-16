@@ -2,6 +2,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef struct {
+  BOOL hasConfig;
+  double minimumIntervalMs;
+  BOOL requiresNetwork;
+  BOOL requiresCharging;
+} SalveDbBackgroundConstraints;
+
 // ObjC-visible entry point into the C++ sync engine, for
 // SalveDbConnectivityMonitor.swift — Swift/C++ direct interop isn't used
 // elsewhere in this module yet, so this mirrors the existing
@@ -12,10 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)triggerSyncAll;
 
 + (void)wakeBackgroundSync;
-+ (BOOL)backgroundHasConfig;
-+ (double)backgroundMinimumIntervalMs;
-+ (BOOL)backgroundRequiresNetwork;
-+ (BOOL)backgroundRequiresCharging;
++ (SalveDbBackgroundConstraints)backgroundConstraints;
 
 @end
 

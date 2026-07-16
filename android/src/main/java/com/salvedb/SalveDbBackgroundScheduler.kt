@@ -34,11 +34,12 @@ object SalveDbBackgroundScheduler {
     val context = appContext ?: return
     val workManager = WorkManager.getInstance(context)
 
+    val snapshot = nativeBackgroundConstraintsSnapshot()
     val decision = backgroundScheduleDecision(
-      hasConfig = nativeBackgroundHasConfig(),
-      minimumIntervalMs = nativeBackgroundMinimumIntervalMs(),
-      requiresNetwork = nativeBackgroundRequiresNetwork(),
-      requiresCharging = nativeBackgroundRequiresCharging(),
+      hasConfig = snapshot[0] != 0.0,
+      minimumIntervalMs = snapshot[1],
+      requiresNetwork = snapshot[2] != 0.0,
+      requiresCharging = snapshot[3] != 0.0,
       floorMs = PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS,
     )
 
@@ -60,8 +61,5 @@ object SalveDbBackgroundScheduler {
   }
 
   @JvmStatic private external fun nativeWakeBackgroundSync()
-  @JvmStatic private external fun nativeBackgroundHasConfig(): Boolean
-  @JvmStatic private external fun nativeBackgroundMinimumIntervalMs(): Double
-  @JvmStatic private external fun nativeBackgroundRequiresNetwork(): Boolean
-  @JvmStatic private external fun nativeBackgroundRequiresCharging(): Boolean
+  @JvmStatic private external fun nativeBackgroundConstraintsSnapshot(): DoubleArray
 }
