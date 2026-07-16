@@ -33,16 +33,31 @@ import Foundation
     request.requiresNetworkConnectivity = requiresNetwork
     request.requiresExternalPower = requiresCharging
 
-    try? BGTaskScheduler.shared.submit(request)
+    do {
+      try BGTaskScheduler.shared.submit(request)
+    } catch {
+      NSLog("SalveDb: BGTaskScheduler.submit failed, will retry on next handle()/configure(): \(error)")
+    }
   }
 
   private static func handle(_ task: BGProcessingTask) {
     scheduleNext()
+
+    let completionLock = NSLock()
+    var didComplete = false
+    func completeOnce(success: Bool) {
+      completionLock.lock()
+      defer { completionLock.unlock() }
+      guard !didComplete else { return }
+      didComplete = true
+      task.setTaskCompleted(success: success)
+    }
+
     task.expirationHandler = {
-      task.setTaskCompleted(success: false)
+      completeOnce(success: false)
     }
 
     SalveDbSyncBridge.wakeBackgroundSync()
-    task.setTaskCompleted(success: true)
+    completeOnce(success: true)
   }
 }
