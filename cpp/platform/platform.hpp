@@ -24,8 +24,8 @@ void deleteSecureValue(const std::string& key);
 
 // Notifies the platform layer to (re)register the native background job
 // from DatabaseManager's current background config. Called at the end of
-// Database.configure(). Android/iOS implementations must not throw.
-void scheduleBackgroundSync();
+// Database.configure().
+void scheduleBackgroundSync() noexcept;
 
 // Executes an HTTP request and blocks the calling thread until it completes.
 // Same discipline as the functions above: only call from a native background

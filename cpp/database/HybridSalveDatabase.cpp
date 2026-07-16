@@ -3,6 +3,7 @@
 #include "MigrationEngine.hpp"
 #include "NativeConfigStore.hpp"
 #include "../platform/platform.hpp"
+#include <cmath>
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
@@ -12,6 +13,9 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
     throw std::runtime_error("Database.configure: 'name' is required");
   if (params.baseUrl.has_value() != params.network.has_value())
     throw std::runtime_error("Database.configure: 'baseUrl' and 'network' must be provided together");
+  if (params.background.has_value() &&
+      (!std::isfinite(params.background->minimumInterval) || params.background->minimumInterval <= 0))
+    throw std::runtime_error("Database.configure: 'background.minimumInterval' must be a finite number greater than 0");
 
   auto lock = DatabaseManager::shared().lockSync();
 

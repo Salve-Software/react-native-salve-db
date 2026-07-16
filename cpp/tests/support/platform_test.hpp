@@ -9,4 +9,7 @@ namespace margelo::nitro::salvedb::platform::test {
 // code under test calls platform::httpExecute.
 void setHttpExecuteResult(std::function<HttpOutcome(const HttpRequest&)> handler);
 
+// Test-only hook: how many times scheduleBackgroundSync() has been called.
+int& scheduleBackgroundSyncCallCount();
+
 } // namespace margelo::nitro::salvedb::platform::test

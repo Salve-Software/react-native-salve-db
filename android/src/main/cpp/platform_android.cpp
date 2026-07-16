@@ -94,7 +94,7 @@ void deleteSecureValue(const std::string& key) {
   throwIfJavaExceptionPending(env, "SalveDbSecureStorage.deleteValue(\"" + key + "\")");
 }
 
-void scheduleBackgroundSync() {
+void scheduleBackgroundSync() noexcept {
   if (!s_backgroundSchedulerClass) return;
 
   ScopedJNIEnv scoped;

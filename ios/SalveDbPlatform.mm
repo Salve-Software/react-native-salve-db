@@ -77,7 +77,7 @@ void deleteSecureValue(const std::string& key) {
   }
 }
 
-void scheduleBackgroundSync() {
+void scheduleBackgroundSync() noexcept {
   [SalveDbBackgroundScheduler scheduleNext];
 }
 
