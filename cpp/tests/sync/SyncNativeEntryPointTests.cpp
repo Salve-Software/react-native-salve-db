@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include "../../database/DatabaseManager.hpp"
+#include "../../database/NativeConfigStore.hpp"
 #include "../../sync/SyncNativeEntryPoint.hpp"
 
 using namespace margelo::nitro::salvedb;
@@ -12,14 +13,6 @@ std::string uniqueDbName(const std::string& testName) {
 }
 
 } // namespace
-
-// Note: the "DatabaseManager not open yet" guard (native calls arriving
-// before JS has run Database.configure()) is not covered here — this test
-// binary shares one process-wide DatabaseManager singleton with no reset,
-// so once any other test has opened it, "not open" can't be reproduced
-// deterministically. Verified by code inspection instead (see
-// triggerSyncAllFromNative's isOpen() check) and by the manual verification
-// checklist for issue #60.
 
 TEST_CASE("triggerSyncAllFromNative swallows contention instead of throwing", "[sync][SyncNativeEntryPoint]") {
   DatabaseManager::shared().open(uniqueDbName("native_entry_point_contention"));
@@ -56,4 +49,35 @@ TEST_CASE("nativeBackgroundConstraints reports hasConfig=false when none was set
   auto constraints = nativeBackgroundConstraints();
 
   REQUIRE_FALSE(constraints.hasConfig);
+}
+
+TEST_CASE("wakeBackgroundSyncFromNative rehydrates and runs from a closed state", "[sync][SyncNativeEntryPoint]") {
+  DatabaseManager::shared().closeForTesting();
+
+  PersistedConfig config;
+  config.dbName = uniqueDbName("wake_cold_start");
+  config.walMode = true;
+  config.syncOnAppOpen = true;
+  NativeConfigStore::save(config);
+
+  REQUIRE_NOTHROW(wakeBackgroundSyncFromNative());
+  REQUIRE(DatabaseManager::shared().isOpen());
+}
+
+TEST_CASE("nativeBackgroundConstraints rehydrates background config from a closed state", "[sync][SyncNativeEntryPoint]") {
+  DatabaseManager::shared().closeForTesting();
+
+  PersistedConfig config;
+  config.dbName = uniqueDbName("constraints_cold_start");
+  config.walMode = true;
+  config.syncOnAppOpen = true;
+  config.background = BackgroundConfig{300000.0, false, true};
+  NativeConfigStore::save(config);
+
+  auto constraints = nativeBackgroundConstraints();
+
+  REQUIRE(constraints.hasConfig);
+  REQUIRE(constraints.minimumIntervalMs == 300000.0);
+  REQUIRE(constraints.requiresNetwork == false);
+  REQUIRE(constraints.requiresCharging == true);
 }
