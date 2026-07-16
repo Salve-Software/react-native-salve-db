@@ -12,9 +12,16 @@ std::string configFilePath() {
   return platform::getDocumentsDirectory() + "/_salve_config.json";
 }
 
+struct ConfigFileGuard {
+  ConfigFileGuard() { std::remove(configFilePath().c_str()); }
+  ~ConfigFileGuard() { std::remove(configFilePath().c_str()); }
+};
+
 } // namespace
 
 TEST_CASE("NativeConfigStore round-trips every field", "[database][NativeConfigStore]") {
+  ConfigFileGuard guard;
+
   PersistedConfig config;
   config.dbName = "round_trip_db";
   config.walMode = false;
@@ -48,6 +55,8 @@ TEST_CASE("NativeConfigStore round-trips every field", "[database][NativeConfigS
 }
 
 TEST_CASE("NativeConfigStore round-trips a config with no optional fields", "[database][NativeConfigStore]") {
+  ConfigFileGuard guard;
+
   PersistedConfig config;
   config.dbName = "minimal_db";
   config.walMode = true;
@@ -65,12 +74,14 @@ TEST_CASE("NativeConfigStore round-trips a config with no optional fields", "[da
 }
 
 TEST_CASE("NativeConfigStore::load returns nullopt when no file exists", "[database][NativeConfigStore]") {
-  std::remove(configFilePath().c_str());
+  ConfigFileGuard guard;
 
   REQUIRE_FALSE(NativeConfigStore::load().has_value());
 }
 
 TEST_CASE("NativeConfigStore::load returns nullopt for corrupted content", "[database][NativeConfigStore]") {
+  ConfigFileGuard guard;
+
   std::ofstream out(configFilePath(), std::ios::binary | std::ios::trunc);
   out << "{ not valid json";
   out.close();
