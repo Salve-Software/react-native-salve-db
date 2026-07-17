@@ -27,7 +27,7 @@ void setJavaVM(JavaVM* vm) {
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
   s_secureStorageClass = resolveGlobalClass(env, "com/salvedb/SalveDbSecureStorage");
   s_backgroundSchedulerClass = resolveGlobalClass(env, "com/salvedb/SalveDbBackgroundScheduler");
-  registerHttpClientClass(resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpClient"));
+  registerHttpClientClass(resolveGlobalClass(env, "com/salvedb/SalveDbHttpClient"));
 }
 
 namespace {
