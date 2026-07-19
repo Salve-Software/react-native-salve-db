@@ -1,6 +1,7 @@
 #include "../../platform/platform.hpp"
 #include "platform_test.hpp"
 #include <cstdlib>
+#include <iostream>
 #include <stdexcept>
 #include <unistd.h>
 #include <unordered_map>
@@ -48,6 +49,10 @@ void deleteSecureValue(const std::string& key) {
 
 void scheduleBackgroundSync() noexcept {
   test::scheduleBackgroundSyncCallCount()++;
+}
+
+void logError(const std::string& tag, const std::string& message) noexcept {
+  std::cerr << "[" << tag << "] " << message << std::endl;
 }
 
 namespace test {

@@ -81,4 +81,8 @@ void scheduleBackgroundSync() noexcept {
   [SalveDbBackgroundScheduler scheduleNext];
 }
 
+void logError(const std::string& tag, const std::string& message) noexcept {
+  NSLog(@"[%s] %s", tag.c_str(), message.c_str());
+}
+
 } // namespace margelo::nitro::salvedb::platform

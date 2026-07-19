@@ -32,4 +32,9 @@ void scheduleBackgroundSync() noexcept;
 // thread (e.g. inside Promise<T>::async), never from the JS thread.
 HttpOutcome httpExecute(const HttpRequest& request);
 
+// Logs a diagnostic message through the platform's native logging channel.
+// Android: __android_log_print (plain std::cerr never reaches logcat).
+// iOS: NSLog. Tests: std::cerr.
+void logError(const std::string& tag, const std::string& message) noexcept;
+
 } // namespace margelo::nitro::salvedb::platform

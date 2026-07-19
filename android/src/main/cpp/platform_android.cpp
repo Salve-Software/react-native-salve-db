@@ -2,11 +2,15 @@
 #include "../../../../cpp/platform/platform_android_jni.hpp"
 #include "JniSupport.hpp"
 #include "platform_android_http.hpp"
-#include <iostream>
+#include <android/log.h>
 #include <stdexcept>
 #include <string>
 
 namespace margelo::nitro::salvedb::platform {
+
+void logError(const std::string& tag, const std::string& message) noexcept {
+  __android_log_print(ANDROID_LOG_ERROR, tag.c_str(), "%s", message.c_str());
+}
 
 static std::string s_documentsDirectory;
 static jclass s_secureStorageClass = nullptr;
@@ -97,7 +101,7 @@ void deleteSecureValue(const std::string& key) {
 
 void scheduleBackgroundSync() noexcept {
   if (!s_backgroundSchedulerClass) {
-    std::cerr << "SalveDb: scheduleBackgroundSync skipped, SalveDbBackgroundScheduler class was not resolved" << std::endl;
+    logError("SalveDb", "scheduleBackgroundSync skipped, SalveDbBackgroundScheduler class was not resolved");
     return;
   }
 
@@ -106,14 +110,14 @@ void scheduleBackgroundSync() noexcept {
 
   jmethodID mid = env->GetStaticMethodID(s_backgroundSchedulerClass, "scheduleFromNative", "()V");
   if (!mid) {
-    std::cerr << "SalveDb: scheduleBackgroundSync failed, SalveDbBackgroundScheduler.scheduleFromNative lookup failed — will retry on next process start" << std::endl;
+    logError("SalveDb", "scheduleBackgroundSync failed, SalveDbBackgroundScheduler.scheduleFromNative lookup failed — will retry on next process start");
     env->ExceptionClear();
     return;
   }
 
   env->CallStaticVoidMethod(s_backgroundSchedulerClass, mid);
   if (env->ExceptionCheck()) {
-    std::cerr << "SalveDb: scheduleBackgroundSync failed, SalveDbBackgroundScheduler.scheduleFromNative threw — will retry on next process start" << std::endl;
+    logError("SalveDb", "scheduleBackgroundSync failed, SalveDbBackgroundScheduler.scheduleFromNative threw — will retry on next process start");
     env->ExceptionClear();
   }
 }
