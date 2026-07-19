@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SalveDbProvider } from '@salve-software/react-native-salve-db';
-// import Salvetron from '@salve-software/salvetron-react-native';
+import Salvetron from '@salve-software/salvetron-react-native';
 import { ExpenseSchema } from './src/schemas/ExpenseSchema';
 import { BudgetSchema } from './src/schemas/BudgetSchema';
 import { BenchmarkSchema } from './src/schemas/BenchmarkSchema';
@@ -16,9 +16,9 @@ import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
 import { SyncTestScreen } from './src/screens/SyncTestScreen';
 import { MOCK_SYNC_SERVER_BASE_URL } from './src/library/mockSyncServer';
 
-// if (__DEV__) {
-//   Salvetron.connect({ host: 'localhost', port: 8765 });
-// }
+if (__DEV__) {
+  Salvetron.connect({ host: 'localhost', port: 8765 });
+}
 
 const ACCENT = '#5B5FEF';
 
