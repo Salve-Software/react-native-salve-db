@@ -52,8 +52,8 @@ Tipos não implementados continuam existindo no union (não quebram contrato fut
 ## Inconsistências resolvidas
 
 1. **Credentials/refresh sem home no architecture.md** → agora vive em `Database.configure()`, global, único provider por app. `EndpointDefinition.authentication` sai do MVP.
-2. **`Database.configure()` sem contrato tipado** → precisa ser formalizado (`DatabaseConfigDefinition` com `baseUrl`, `network.timeout`, `credentials`).
-3. **Background per-schema vs wake global** → `BackgroundDefinition` continua per-schema (`minimumInterval`, `requiresNetwork`), mas existe **um único job nativo** (WorkManager/BGTaskScheduler) que acorda o engine, que por sua vez itera todos os schemas com `background.enabled: true`. Não é um job por schema.
+2. **`Database.configure()` sem contrato tipado** → precisa ser formalizado (`DatabaseConfigDefinition` com `baseUrl`, `network.timeout`, `credentials`, `background` — ver `docs/architecture.md`).
+3. **Background per-schema vs wake global** → existe **um único job nativo** (WorkManager/BGTaskScheduler) que acorda o engine, que por sua vez itera todos os schemas com `background.enabled: true`. Não é um job por schema — essa parte da decisão não muda. O que mudou na implementação (TASK-011): como só existe um job, `minimumInterval`/`requiresNetwork`/`requiresCharging` não fazem sentido como propriedade per-schema (agregar valores divergentes de N schemas exigiria uma política arbitrária) — migraram para `Database.configure({ background })`, global. `SyncDefinition.background` ficou reduzido a `{ enabled }`, o critério per-schema que o Sync Orchestrator lê quando o job já acordou.
 4. **Migration Engine sem comportamento definido** → auto-diff de coluna por `version`, sem scripts.
 5. **Paginação ausente do fluxo principal** (só citada em "Futuras extensões" do architecture.md) → `PaginationDefinition` (`pageSize` + `maxPagesPerSession`) entra no MVP, engine faz loop de página dentro da mesma sessão de sync via `hasMore`.
 

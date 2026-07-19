@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import "SalveDb-Swift.h"
 #include "../cpp/platform/platform.hpp"
 
 namespace margelo::nitro::salvedb::platform {
@@ -74,6 +75,10 @@ void deleteSecureValue(const std::string& key) {
   if (status != errSecSuccess && status != errSecItemNotFound) {
     throw std::runtime_error("Keychain: failed to delete value for key \"" + key + "\" (OSStatus " + std::to_string(status) + ")");
   }
+}
+
+void scheduleBackgroundSync() noexcept {
+  [SalveDbBackgroundScheduler scheduleNext];
 }
 
 } // namespace margelo::nitro::salvedb::platform

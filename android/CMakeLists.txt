@@ -16,11 +16,13 @@ add_library(${PACKAGE_NAME} SHARED
 	src/main/cpp/JniSupport.cpp
 	src/main/cpp/platform_android_http.cpp
 	src/main/cpp/SyncConnectivityJni.cpp
+	src/main/cpp/BackgroundSchedulerJni.cpp
 	../cpp/http/HttpUrlBuilder.cpp
 	../cpp/http/CredentialHttpCaller.cpp
 	../cpp/database/HybridSalveDatabase.cpp
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
+	../cpp/database/NativeConfigStore.cpp
 	../cpp/database/MigrationEngine.cpp
 	../cpp/database/SchemaRegistry.cpp
 	../cpp/query/QueryExecutor.cpp

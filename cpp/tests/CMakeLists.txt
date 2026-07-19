@@ -110,6 +110,7 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/database/HybridSalveDatabase.cpp"
   "${PROJECT_CPP_DIR}/database/SQLiteConnection.cpp"
   "${PROJECT_CPP_DIR}/database/DatabaseManager.cpp"
+  "${PROJECT_CPP_DIR}/database/NativeConfigStore.cpp"
   "${PROJECT_CPP_DIR}/database/MigrationEngine.cpp"
   "${PROJECT_CPP_DIR}/database/SchemaRegistry.cpp"
   "${PROJECT_CPP_DIR}/query/QueryExecutor.cpp"

@@ -188,7 +188,7 @@ Cada campo abaixo é uma decisão deliberada, não um placeholder.
 
 **`pagination`** — `pageSize` limita quantos itens vão por request (tanto no pull quanto no lote de push). `maxPagesPerSession` é um teto de segurança: mesmo com `hasMore: true`, o engine para depois de N páginas pra não drenar bateria numa única wake do scheduler. O resto do dataset é pego na próxima wake, porque o cursor já avançou.
 
-**`background`** — configura o *critério* de agendamento daquele schema especificamente (intervalo mínimo, exigir rede). Mas isso **não** significa um job nativo por schema: existe um único job nativo (WorkManager no Android, BGTaskScheduler no iOS) que acorda o Native Sync Engine, e o engine é quem itera todos os schemas com `background.enabled: true` e decide o que sincronizar naquela wake.
+**`background: { enabled }`** — decide se este schema participa da wake do job global. Existe um único job nativo (WorkManager no Android, BGTaskScheduler no iOS) que acorda o Native Sync Engine, e o engine é quem itera todos os schemas com `background.enabled: true` e decide o que sincronizar naquela wake — a agenda do job em si (intervalo, exigir rede/carregamento) não vive aqui, porque não faz sentido um único job ter N agendas divergentes; ela é global, configurada em `Database.configure({ background })` (ver seção abaixo).
 
 ---
 
@@ -212,6 +212,10 @@ Database.configure({
       },
     },
   },
+  background: {
+    minimumInterval: 15 * 60 * 1000,
+    requiresNetwork: true,
+  },
 })
 ```
 
@@ -224,6 +228,12 @@ Sync → Access Token → 401? → Refresh Token → salva novos tokens → reex
 ```
 
 Tokens ficam no Keychain (iOS) / Keystore (Android). O JavaScript nunca vê o token nem participa do refresh.
+
+`background` é opcional — omitido, nenhum job nativo é agendado. Quando presente, requer duas coisas do lado do app consumidor (a lib não injeta isso automaticamente):
+
+- **iOS:** `Info.plist` precisa declarar `BGTaskSchedulerPermittedIdentifiers` com `com.salvedb.background.sync` e `UIBackgroundModes` com `processing` (ver `example/ios/SalveDbExample/Info.plist`).
+- **iOS:** um launch causado só pelo BGTaskScheduler ainda passa por `application(_:didFinishLaunchingWithOptions:)` — se o `AppDelegate` chamar `startReactNative` incondicionalmente ali, a JS engine sobe mesmo em background, violando a proposta de "sem JS em background". Recomendado guardar essa chamada atrás de um check do motivo do launch.
+- **Android:** nenhuma configuração extra — `androidx.work` se auto-inicializa via `ContentProvider`.
 
 ---
 

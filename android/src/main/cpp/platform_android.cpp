@@ -2,6 +2,7 @@
 #include "../../../../cpp/platform/platform_android_jni.hpp"
 #include "JniSupport.hpp"
 #include "platform_android_http.hpp"
+#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -9,6 +10,7 @@ namespace margelo::nitro::salvedb::platform {
 
 static std::string s_documentsDirectory;
 static jclass s_secureStorageClass = nullptr;
+static jclass s_backgroundSchedulerClass = nullptr;
 
 void setDocumentsDirectory(const std::string& path) {
   s_documentsDirectory = path;
@@ -24,7 +26,8 @@ void setJavaVM(JavaVM* vm) {
   JNIEnv* env = nullptr;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
   s_secureStorageClass = resolveGlobalClass(env, "com/salvedb/SalveDbSecureStorage");
-  registerHttpClientClass(resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpClient"));
+  s_backgroundSchedulerClass = resolveGlobalClass(env, "com/salvedb/SalveDbBackgroundScheduler");
+  registerHttpClientClass(resolveGlobalClass(env, "com/salvedb/SalveDbHttpClient"));
 }
 
 namespace {
@@ -90,6 +93,29 @@ void deleteSecureValue(const std::string& key) {
 
   env->DeleteLocalRef(jKey);
   throwIfJavaExceptionPending(env, "SalveDbSecureStorage.deleteValue(\"" + key + "\")");
+}
+
+void scheduleBackgroundSync() noexcept {
+  if (!s_backgroundSchedulerClass) {
+    std::cerr << "SalveDb: scheduleBackgroundSync skipped, SalveDbBackgroundScheduler class was not resolved" << std::endl;
+    return;
+  }
+
+  ScopedJNIEnv scoped;
+  JNIEnv* env = scoped.env();
+
+  jmethodID mid = env->GetStaticMethodID(s_backgroundSchedulerClass, "scheduleFromNative", "()V");
+  if (!mid) {
+    std::cerr << "SalveDb: scheduleBackgroundSync failed, SalveDbBackgroundScheduler.scheduleFromNative lookup failed — will retry on next process start" << std::endl;
+    env->ExceptionClear();
+    return;
+  }
+
+  env->CallStaticVoidMethod(s_backgroundSchedulerClass, mid);
+  if (env->ExceptionCheck()) {
+    std::cerr << "SalveDb: scheduleBackgroundSync failed, SalveDbBackgroundScheduler.scheduleFromNative threw — will retry on next process start" << std::endl;
+    env->ExceptionClear();
+  }
 }
 
 } // namespace margelo::nitro::salvedb::platform

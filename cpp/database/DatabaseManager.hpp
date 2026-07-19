@@ -2,6 +2,7 @@
 
 #include "../credentials/CredentialProvider.hpp"
 #include "../http/NetworkConfig.hpp"
+#include "BackgroundConfig.hpp"
 #include "SQLiteConnection.hpp"
 #include <memory>
 #include <mutex>
@@ -63,6 +64,15 @@ public:
   void configureSyncOnAppOpen(bool enabled) { _syncOnAppOpen = enabled; }
   bool syncOnAppOpen() const { return _syncOnAppOpen; }
 
+  void configureBackground(const std::optional<BackgroundConfig>& background) { _background = background; }
+
+  std::optional<BackgroundConfig> background() {
+    auto lock = lockSync();
+    return _background;
+  }
+
+  bool reopenFromPersistedConfigIfNeeded();
+
   std::unique_lock<std::mutex> lockSync() {
     return std::unique_lock<std::mutex>(_syncMutex);
   }
@@ -71,11 +81,21 @@ public:
     return std::unique_lock<std::mutex>(_syncMutex, std::try_to_lock);
   }
 
+  void closeForTesting() {
+    auto lock = lockSync();
+    _db.reset();
+    _credentials.reset();
+    _network.reset();
+    _background.reset();
+    _syncOnAppOpen = true;
+  }
+
 private:
   DatabaseManager() = default;
   std::shared_ptr<SQLiteConnection> _db;
   std::unique_ptr<CredentialProvider> _credentials;
   std::optional<NetworkConfig> _network;
+  std::optional<BackgroundConfig> _background;
   std::mutex _syncMutex;
   bool _syncOnAppOpen = true;
 };

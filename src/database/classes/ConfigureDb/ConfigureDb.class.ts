@@ -41,6 +41,7 @@ export class ConfigureDb {
         : undefined,
       walMode: props.walMode ?? true,
       syncOnAppOpen,
+      background: props.background,
     });
 
     ConfigureDb._configured = true;

@@ -1,6 +1,9 @@
 #include "HybridSalveDatabase.hpp"
 #include "DatabaseManager.hpp"
 #include "MigrationEngine.hpp"
+#include "NativeConfigStore.hpp"
+#include "../platform/platform.hpp"
+#include <cmath>
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
@@ -10,30 +13,67 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
     throw std::runtime_error("Database.configure: 'name' is required");
   if (params.baseUrl.has_value() != params.network.has_value())
     throw std::runtime_error("Database.configure: 'baseUrl' and 'network' must be provided together");
+  if (params.background.has_value() &&
+      (!std::isfinite(params.background->minimumInterval) || params.background->minimumInterval <= 0))
+    throw std::runtime_error("Database.configure: 'background.minimumInterval' must be a finite number greater than 0");
 
-  auto lock = DatabaseManager::shared().lockSync();
+  std::optional<BackgroundConfig> background;
+  if (params.background.has_value()) {
+    background = BackgroundConfig{
+      params.background->minimumInterval,
+      params.background->requiresNetwork.value_or(false),
+      params.background->requiresCharging.value_or(false)
+    };
+  }
 
-  DatabaseManager::shared().open(params.name, params.walMode.value_or(true));
-  DatabaseManager::shared().configureSyncOnAppOpen(params.syncOnAppOpen.value_or(true));
+  {
+    auto lock = DatabaseManager::shared().lockSync();
 
-  if (params.baseUrl.has_value())
-    DatabaseManager::shared().configureNetwork(*params.baseUrl, params.network->timeout);
+    DatabaseManager::shared().open(params.name, params.walMode.value_or(true));
+    DatabaseManager::shared().configureSyncOnAppOpen(params.syncOnAppOpen.value_or(true));
 
+    if (params.baseUrl.has_value())
+      DatabaseManager::shared().configureNetwork(*params.baseUrl, params.network->timeout);
+
+    if (params.credentials.has_value()) {
+      const auto& creds = *params.credentials;
+      std::optional<InitialCredentialTokens> initialTokens;
+      if (creds.tokens.has_value()) {
+        initialTokens = InitialCredentialTokens{creds.tokens->accessToken, creds.tokens->refreshToken};
+      }
+      DatabaseManager::shared().configureCredentials(
+        creds.provider,
+        creds.accessTokenHeaderName,
+        creds.refresh.endpoint,
+        creds.refresh.responseAccessTokenPath,
+        creds.refresh.responseRefreshTokenPath,
+        initialTokens
+      );
+    }
+
+    DatabaseManager::shared().configureBackground(background);
+  }
+
+  PersistedConfig persisted;
+  persisted.dbName = params.name;
+  persisted.walMode = params.walMode.value_or(true);
+  persisted.syncOnAppOpen = params.syncOnAppOpen.value_or(true);
+  persisted.baseUrl = params.baseUrl;
+  if (params.network.has_value()) persisted.networkTimeoutMs = params.network->timeout;
   if (params.credentials.has_value()) {
     const auto& creds = *params.credentials;
-    std::optional<InitialCredentialTokens> initialTokens;
-    if (creds.tokens.has_value()) {
-      initialTokens = InitialCredentialTokens{creds.tokens->accessToken, creds.tokens->refreshToken};
-    }
-    DatabaseManager::shared().configureCredentials(
+    persisted.credentials = PersistedCredentialConfig{
       creds.provider,
       creds.accessTokenHeaderName,
       creds.refresh.endpoint,
       creds.refresh.responseAccessTokenPath,
-      creds.refresh.responseRefreshTokenPath,
-      initialTokens
-    );
+      creds.refresh.responseRefreshTokenPath
+    };
   }
+  persisted.background = background;
+
+  NativeConfigStore::save(persisted);
+  platform::scheduleBackgroundSync();
 }
 
 std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::string& schemaJson) {

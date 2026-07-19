@@ -32,11 +32,14 @@
 namespace margelo::nitro::salvedb { struct NetworkParams; }
 // Forward declaration of `CredentialsParams` to properly resolve imports.
 namespace margelo::nitro::salvedb { struct CredentialsParams; }
+// Forward declaration of `BackgroundParams` to properly resolve imports.
+namespace margelo::nitro::salvedb { struct BackgroundParams; }
 
 #include <string>
 #include <optional>
 #include "NetworkParams.hpp"
 #include "CredentialsParams.hpp"
+#include "BackgroundParams.hpp"
 
 namespace margelo::nitro::salvedb {
 
@@ -51,10 +54,11 @@ namespace margelo::nitro::salvedb {
     std::optional<CredentialsParams> credentials     SWIFT_PRIVATE;
     std::optional<bool> walMode     SWIFT_PRIVATE;
     std::optional<bool> syncOnAppOpen     SWIFT_PRIVATE;
+    std::optional<BackgroundParams> background     SWIFT_PRIVATE;
 
   public:
     ConfigureParams() = default;
-    explicit ConfigureParams(std::string name, std::optional<std::string> baseUrl, std::optional<NetworkParams> network, std::optional<CredentialsParams> credentials, std::optional<bool> walMode, std::optional<bool> syncOnAppOpen): name(name), baseUrl(baseUrl), network(network), credentials(credentials), walMode(walMode), syncOnAppOpen(syncOnAppOpen) {}
+    explicit ConfigureParams(std::string name, std::optional<std::string> baseUrl, std::optional<NetworkParams> network, std::optional<CredentialsParams> credentials, std::optional<bool> walMode, std::optional<bool> syncOnAppOpen, std::optional<BackgroundParams> background): name(name), baseUrl(baseUrl), network(network), credentials(credentials), walMode(walMode), syncOnAppOpen(syncOnAppOpen), background(background) {}
 
   public:
     friend bool operator==(const ConfigureParams& lhs, const ConfigureParams& rhs) = default;
@@ -75,7 +79,8 @@ namespace margelo::nitro {
         JSIConverter<std::optional<margelo::nitro::salvedb::NetworkParams>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "network"))),
         JSIConverter<std::optional<margelo::nitro::salvedb::CredentialsParams>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "credentials"))),
         JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "walMode"))),
-        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "syncOnAppOpen")))
+        JSIConverter<std::optional<bool>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "syncOnAppOpen"))),
+        JSIConverter<std::optional<margelo::nitro::salvedb::BackgroundParams>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "background")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::salvedb::ConfigureParams& arg) {
@@ -86,6 +91,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "credentials"), JSIConverter<std::optional<margelo::nitro::salvedb::CredentialsParams>>::toJSI(runtime, arg.credentials));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "walMode"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.walMode));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "syncOnAppOpen"), JSIConverter<std::optional<bool>>::toJSI(runtime, arg.syncOnAppOpen));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "background"), JSIConverter<std::optional<margelo::nitro::salvedb::BackgroundParams>>::toJSI(runtime, arg.background));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -102,6 +108,7 @@ namespace margelo::nitro {
       if (!JSIConverter<std::optional<margelo::nitro::salvedb::CredentialsParams>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "credentials")))) return false;
       if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "walMode")))) return false;
       if (!JSIConverter<std::optional<bool>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "syncOnAppOpen")))) return false;
+      if (!JSIConverter<std::optional<margelo::nitro::salvedb::BackgroundParams>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "background")))) return false;
       return true;
     }
   };
