@@ -71,6 +71,7 @@ function App(): React.JSX.Element {
               response: { accessToken: '$.accessToken', refreshToken: '$.refreshToken' },
             },
           },
+          background: { minimumInterval: 15 * 60 * 1000, requiresNetwork: false },
         }}
         schemas={[
           ExpenseSchema,

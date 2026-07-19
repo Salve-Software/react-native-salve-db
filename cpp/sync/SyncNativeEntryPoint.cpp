@@ -1,23 +1,23 @@
 #include "SyncNativeEntryPoint.hpp"
 #include "SyncOrchestrator.hpp"
 #include "../database/DatabaseManager.hpp"
+#include "../platform/platform.hpp"
 #include <exception>
-#include <iostream>
 
 namespace margelo::nitro::salvedb {
 
 void triggerSyncAllFromNative() {
   if (!DatabaseManager::shared().isOpen()) {
-    std::cerr << "SyncNativeEntryPoint: database not configured yet, skipping" << std::endl;
+    platform::logError("SalveDb", "SyncNativeEntryPoint: database not configured yet, skipping");
     return;
   }
 
   try {
     SyncOrchestrator().triggerSyncAll(/*discardIfBusy*/ true);
   } catch (const std::exception& e) {
-    std::cerr << "SyncNativeEntryPoint: triggerSyncAllFromNative failed: " << e.what() << std::endl;
+    platform::logError("SalveDb", std::string("SyncNativeEntryPoint: triggerSyncAllFromNative failed: ") + e.what());
   } catch (...) {
-    std::cerr << "SyncNativeEntryPoint: triggerSyncAllFromNative failed with an unknown exception" << std::endl;
+    platform::logError("SalveDb", "SyncNativeEntryPoint: triggerSyncAllFromNative failed with an unknown exception");
   }
 }
 
@@ -26,15 +26,15 @@ void wakeBackgroundSyncFromNative() {
   try {
     ready = DatabaseManager::shared().reopenFromPersistedConfigIfNeeded();
   } catch (const std::exception& e) {
-    std::cerr << "SyncNativeEntryPoint: wakeBackgroundSyncFromNative failed to rehydrate: " << e.what() << std::endl;
+    platform::logError("SalveDb", std::string("SyncNativeEntryPoint: wakeBackgroundSyncFromNative failed to rehydrate: ") + e.what());
     return;
   } catch (...) {
-    std::cerr << "SyncNativeEntryPoint: wakeBackgroundSyncFromNative failed to rehydrate with an unknown exception" << std::endl;
+    platform::logError("SalveDb", "SyncNativeEntryPoint: wakeBackgroundSyncFromNative failed to rehydrate with an unknown exception");
     return;
   }
 
   if (!ready) {
-    std::cerr << "SyncNativeEntryPoint: no persisted config, skipping background wake" << std::endl;
+    platform::logError("SalveDb", "SyncNativeEntryPoint: no persisted config, skipping background wake");
     return;
   }
 
@@ -45,10 +45,10 @@ NativeBackgroundConstraints nativeBackgroundConstraints() {
   try {
     DatabaseManager::shared().reopenFromPersistedConfigIfNeeded();
   } catch (const std::exception& e) {
-    std::cerr << "SyncNativeEntryPoint: nativeBackgroundConstraints failed to rehydrate: " << e.what() << std::endl;
+    platform::logError("SalveDb", std::string("SyncNativeEntryPoint: nativeBackgroundConstraints failed to rehydrate: ") + e.what());
     return NativeBackgroundConstraints{false, 0, false, false};
   } catch (...) {
-    std::cerr << "SyncNativeEntryPoint: nativeBackgroundConstraints failed to rehydrate with an unknown exception" << std::endl;
+    platform::logError("SalveDb", "SyncNativeEntryPoint: nativeBackgroundConstraints failed to rehydrate with an unknown exception");
     return NativeBackgroundConstraints{false, 0, false, false};
   }
 

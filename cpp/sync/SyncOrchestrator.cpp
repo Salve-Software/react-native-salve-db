@@ -9,7 +9,7 @@
 #include "../expression/RequestExpressionEvaluator.hpp"
 #include "../http/CredentialHttpCaller.hpp"
 #include "../http/SyncHttpCaller.hpp"
-#include <iostream>
+#include "../platform/platform.hpp"
 #include <stdexcept>
 #include <thread>
 #include <variant>
@@ -210,7 +210,7 @@ std::vector<NativeSyncResult> SyncOrchestrator::triggerSyncAll(bool discardIfBus
     : DatabaseManager::shared().lockSync();
 
   if (discardIfBusy && !lock.owns_lock()) {
-    std::cerr << "SyncOrchestrator: sync already in progress, discarding triggerSyncAll" << std::endl;
+    platform::logError("SalveDb", "SyncOrchestrator: sync already in progress, discarding triggerSyncAll");
     return {};
   }
 
@@ -221,7 +221,7 @@ std::vector<NativeSyncResult> SyncOrchestrator::triggerSyncAll(bool discardIfBus
     try {
       results.push_back(runSyncSession(schemaName));
     } catch (const std::exception& e) {
-      std::cerr << "SyncOrchestrator: triggerSyncAll — schema '" << schemaName << "' failed: " << e.what() << std::endl;
+      platform::logError("SalveDb", "SyncOrchestrator: triggerSyncAll — schema '" + schemaName + "' failed: " + e.what());
     }
   }
   return results;
