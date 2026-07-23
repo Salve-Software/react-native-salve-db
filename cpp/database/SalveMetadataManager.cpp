@@ -8,6 +8,7 @@ SalveMetadataManager::SalveMetadataManager(std::shared_ptr<SQLiteConnection> con
   : _conn(std::move(conn)) {}
 
 void SalveMetadataManager::upsert(const SyncMetadataRow& row) {
+  using margelo::nitro::NullType;
   _conn->execute(
     "INSERT INTO _salve_sync_metadata"
     " (tableName, localId, remoteId, operation, status, retryCount, lastError, version, createdAt, updatedAt, syncedAt)"
@@ -19,15 +20,15 @@ void SalveMetadataManager::upsert(const SyncMetadataRow& row) {
     {
       row.tableName,
       row.localId,
-      row.remoteId.has_value() ? row.remoteId.value() : "",
+      row.remoteId.has_value() ? SqlValue(row.remoteId.value()) : NullType{},
       row.operation,
       row.status,
       static_cast<double>(row.retryCount),
-      row.lastError.has_value() ? row.lastError.value() : "",
-      row.version.has_value() ? static_cast<double>(row.version.value()) : 0.0,
+      row.lastError.has_value() ? SqlValue(row.lastError.value()) : NullType{},
+      row.version.has_value() ? SqlValue(static_cast<double>(row.version.value())) : NullType{},
       static_cast<double>(row.createdAt),
       static_cast<double>(row.updatedAt),
-      row.syncedAt.has_value() ? static_cast<double>(row.syncedAt.value()) : 0.0
+      row.syncedAt.has_value() ? SqlValue(static_cast<double>(row.syncedAt.value())) : NullType{}
     }
   );
 }
@@ -135,14 +136,14 @@ void SalveMetadataManager::backfillSyncedRows(const std::string& tableName, cons
   std::ostringstream sql;
   sql << "INSERT INTO _salve_sync_metadata"
       << " (tableName, localId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)"
-      << " SELECT ?, \"" << primaryKeyColumn << "\", NULL, 'insert', 'PENDING', 0, NULL, ?, ?, ?"
+      << " SELECT ?, \"" << primaryKeyColumn << "\", NULL, 'insert', 'PENDING', 0, NULL, ?, ?, NULL"
       << " FROM \"" << tableName << "\""
       << " WHERE NOT EXISTS ("
       << "   SELECT 1 FROM _salve_sync_metadata"
       << "   WHERE tableName = ? AND localId = \"" << tableName << "\".\"" << primaryKeyColumn << "\""
       << " )";
 
-  _conn->execute(sql.str(), { tableName, static_cast<double>(nowMs), static_cast<double>(nowMs), static_cast<double>(nowMs), tableName });
+  _conn->execute(sql.str(), { tableName, static_cast<double>(nowMs), static_cast<double>(nowMs), tableName });
 }
 
 } // namespace margelo::nitro::salvedb
