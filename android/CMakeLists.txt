@@ -35,6 +35,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/sync/SyncCursorStore.cpp
 	../cpp/sync/SyncOperationApplier.cpp
 	../cpp/sync/RelationStore.cpp
+	../cpp/sync/RelationCascadeRewriter.cpp
 	../cpp/expression/RequestExpressionEvaluator.cpp
 	../cpp/expression/JsonPathExtractor.cpp
 	../cpp/credentials/CredentialProvider.cpp
