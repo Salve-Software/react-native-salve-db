@@ -2,6 +2,7 @@
 
 #include "SQLiteConnection.hpp"
 #include "json_parser.hpp"
+#include "../sync/RelationStore.hpp"
 #include <memory>
 #include <string>
 #include <map>
@@ -36,6 +37,7 @@ struct SchemaDef {
   std::string primaryKey;
   std::map<std::string, ColumnDef> columns;
   std::vector<IndexDef> indexes;
+  std::vector<RelationDef> relations;
   SyncSettings sync;
 };
 
@@ -62,6 +64,8 @@ private:
 
   void createSyncTriggers(const SchemaDef& schema);
   void dropSyncTriggers(const SchemaDef& schema);
+
+  void createRelationIndexes(const SchemaDef& schema);
 };
 
 } // namespace margelo::nitro::salvedb
