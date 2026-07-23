@@ -5,4 +5,6 @@ export interface ISyncOperation {
   primaryKey: string;
   payload: Record<string, unknown>;
   updatedAt: number;
+  localId?: string;
+  remoteId?: string | null;
 }
