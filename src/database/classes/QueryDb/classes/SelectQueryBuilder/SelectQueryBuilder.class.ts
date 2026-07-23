@@ -5,7 +5,7 @@ import type { SqlValue } from '../../../../../specs/types';
 import type { AnySchema } from '../../../../../types';
 import type { ISelectQueryBuilder } from '../../types';
 import type { InferSelectModel } from './types';
-import { assertIndexedColumns, collectConditionColumns, compileCondition } from '../../library';
+import { assertIndexedColumns, collectConditionColumns, compileCondition, withReservedColumns } from '../../library';
 import { MAX_SYNC_PAGE_SIZE } from '../../constants';
 
 export class SelectQueryBuilder<TSchema extends AnySchema>
@@ -59,9 +59,8 @@ export class SelectQueryBuilder<TSchema extends AnySchema>
     const params: SqlValue[] = [];
     let sql = `SELECT * FROM "${this._schema.name}"`;
 
-    if (this._condition) {
-      sql += ` WHERE ${compileCondition(this._condition as unknown as ConditionNode, params)}`;
-    }
+    const userWhere = this._condition ? compileCondition(this._condition as unknown as ConditionNode, params) : undefined;
+    sql += ` WHERE ${['"deletedAt" IS NULL', ...(userWhere ? [userWhere] : [])].join(' AND ')}`;
 
     if (this._orderByColumn) {
       sql += ` ORDER BY "${this._orderByColumn}" ${this._orderByDir.toUpperCase()}`;
@@ -74,19 +73,20 @@ export class SelectQueryBuilder<TSchema extends AnySchema>
     }
 
     const result = this._bridge.execute(sql, params);
+    const schema = withReservedColumns(this._schema);
 
     return result.rows.map((row) => {
       const obj: Record<string, unknown> = {};
-      
+
       result.columns.forEach((col, i) => {
-        const colDef = this._schema.columns[col]
+        const colDef = schema.columns[col]
         let value: unknown = row[i]
         if (colDef?.type === 'boolean' && typeof value === 'number') {
           value = value !== 0
         }
         obj[col] = value
       });
-      
+
       return obj as InferSelectModel<TSchema>;
     })
   }
