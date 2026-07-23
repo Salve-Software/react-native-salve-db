@@ -26,8 +26,8 @@ export class DeleteQueryBuilder<TSchema extends AnySchema>
       assertIndexedColumns(this._schema, collectConditionColumns(this._condition as unknown as ConditionNode));
     }
 
-    const params: SqlValue[] = [];
-    let sql = `DELETE FROM "${this._schema.name}"`;
+    const params: SqlValue[] = [Date.now()];
+    let sql = `UPDATE "${this._schema.name}" SET "deletedAt" = ?`;
 
     if (this._condition) {
       sql += ` WHERE ${compileCondition(this._condition as unknown as ConditionNode, params)}`;

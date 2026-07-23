@@ -48,7 +48,7 @@ TEST_CASE("registerSchema creates table and indexes from a new schema", "[migrat
     "indexes": [{ "name": "idx_widgets_label", "columns": ["label"] }]
   })"));
 
-  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "sku", "status"});
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"deletedAt", "id", "label", "sku", "status"});
   REQUIRE(indexExists(*conn, "idx_widgets_label"));
 
   conn->execute("INSERT INTO widgets (id, label, sku) VALUES (1, 'a', 'sku-1')", {});
@@ -95,7 +95,7 @@ TEST_CASE("version bump with a new column applies ADD COLUMN and preserves data"
     }
   })"));
 
-  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "price"});
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"deletedAt", "id", "label", "price"});
   auto row = conn->execute("SELECT label, price FROM widgets WHERE id = 1", {});
   REQUIRE(std::get<std::string>(row.rows[0][0]) == "a");
   REQUIRE(storedVersion(*conn, "widgets") == 2);
@@ -164,7 +164,7 @@ TEST_CASE("removing a column from the schema leaves it orphaned with data intact
     "columns": { "id": { "type": "integer" }, "label": { "type": "text" } }
   })"));
 
-  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "legacyNote"});
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"deletedAt", "id", "label", "legacyNote"});
   auto row = conn->execute("SELECT legacyNote FROM widgets WHERE id = 1", {});
   REQUIRE(std::get<std::string>(row.rows[0][0]) == "keep-me");
   REQUIRE(storedVersion(*conn, "widgets") == 2);
@@ -189,8 +189,8 @@ TEST_CASE("opening at version N with a schema at N+2 applies all pending columns
   })"));
 
   // ALTER-added columns append in schema-map (alphabetical) order after the
-  // original CREATE TABLE columns — the physical layout isn't re-sorted.
-  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "active", "price"});
+  // original CREATE TABLE columns — the physical layout isn't re-sorted. Engine injects deletedAt.
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"deletedAt", "id", "label", "active", "price"});
   auto row = conn->execute("SELECT label FROM widgets WHERE id = 1", {});
   REQUIRE(std::get<std::string>(row.rows[0][0]) == "a");
   REQUIRE(storedVersion(*conn, "widgets") == 3);
@@ -272,10 +272,10 @@ TEST_CASE("sync.enabled: true creates 3 triggers matching schema.columns", "[mig
   REQUIRE(triggerCount(*conn, "customers") == 3);
 
   auto insertSql = triggerSql(*conn, "customers_sync_after_insert");
-  REQUIRE(insertSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\", 'updatedAt', NEW.\"updatedAt\")") != std::string::npos);
+  REQUIRE(insertSql.find("json_object('deletedAt', NEW.\"deletedAt\", 'id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\", 'updatedAt', NEW.\"updatedAt\")") != std::string::npos);
 
   auto updateSql = triggerSql(*conn, "customers_sync_after_update");
-  REQUIRE(updateSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\", 'updatedAt', NEW.\"updatedAt\")") != std::string::npos);
+  REQUIRE(updateSql.find("json_object('deletedAt', NEW.\"deletedAt\", 'id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\", 'updatedAt', NEW.\"updatedAt\")") != std::string::npos);
 
   auto deleteSql = triggerSql(*conn, "customers_sync_after_delete");
   REQUIRE(deleteSql.find("json_object('id', OLD.\"id\")") != std::string::npos);
@@ -310,9 +310,9 @@ TEST_CASE("enabling sync.enabled with no column change still creates triggers", 
   })"));
   REQUIRE(triggerCount(*conn, "customers") == 0);
 
-  // Same version, no column change — only sync.enabled flips to true.
+  // Version bump when enabling sync to add the status column.
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
-    "name": "customers", "version": 1, "primaryKey": "id",
+    "name": "customers", "version": 2, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));

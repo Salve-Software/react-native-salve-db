@@ -29,9 +29,8 @@ export class CountQueryBuilder<TSchema extends AnySchema>
     const params: SqlValue[] = [];
     let sql = `SELECT COUNT(*) FROM "${this._schema.name}"`;
 
-    if (this._condition) {
-      sql += ` WHERE ${compileCondition(this._condition as unknown as ConditionNode, params)}`;
-    }
+    const userWhere = this._condition ? compileCondition(this._condition as unknown as ConditionNode, params) : undefined;
+    sql += ` WHERE ${['"deletedAt" IS NULL', ...(userWhere ? [userWhere] : [])].join(' AND ')}`;
 
     const result = this._bridge.execute(sql, params);
     return Number(result.rows[0]?.[0] ?? 0);

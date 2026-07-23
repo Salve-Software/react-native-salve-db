@@ -12,5 +12,6 @@ export type * from './IResponseDefinition';
 export type * from './ISyncDefinition';
 export type * from './SyncDirection';
 export type * from './ISyncOperation';
+export type * from './SyncMetadataStatus';
 export type * from './SyncStrategy';
 export type * from './ITransport';

@@ -1,6 +1,7 @@
 #include "MigrationEngine.hpp"
 #include "json_parser.hpp"
 #include "SchemaRegistry.hpp"
+#include "SalveMetadataManager.hpp"
 #include "../sync/SyncDefinitionStore.hpp"
 
 #include <sstream>
@@ -114,6 +115,28 @@ static constexpr auto kSyncDefinitionTable = R"sql(
     name       TEXT PRIMARY KEY,
     definition TEXT NOT NULL
   );
+)sql";
+
+static constexpr auto kSyncMetadataTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_sync_metadata (
+    tableName  TEXT NOT NULL,
+    localId    TEXT NOT NULL,
+    remoteId   TEXT,
+    operation  TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    retryCount INTEGER DEFAULT 0,
+    lastError  TEXT,
+    version    INTEGER,
+    createdAt  INTEGER NOT NULL,
+    updatedAt  INTEGER NOT NULL,
+    syncedAt   INTEGER,
+    PRIMARY KEY (tableName, localId)
+  );
+)sql";
+
+static constexpr auto kSyncMetadataRemoteIdIndex = R"sql(
+  CREATE INDEX IF NOT EXISTS idx_salve_sync_metadata_remote_id
+    ON _salve_sync_metadata (tableName, remoteId);
 )sql";
 
 int MigrationEngine::storedVersion(const std::string& schemaName) {
@@ -261,6 +284,15 @@ void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
              << "  VALUES ('insert', '" << t << "', NEW.\"" << pk << "\",\n"
              << "    json_object(" << rowCols << "),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "  INSERT INTO _salve_sync_metadata\n"
+             << "    (tableName, localId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', NEW.\"" << pk << "\", NULL, 'insert', 'PENDING', 0, NULL,\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
+             << "  ON CONFLICT(tableName, localId) DO UPDATE SET\n"
+             << "    operation = excluded.operation,\n"
+             << "    status    = excluded.status,\n"
+             << "    updatedAt = excluded.updatedAt;\n"
              << "END;";
   _db->exec(insertTrig.str());
 
@@ -273,6 +305,18 @@ void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
              << "  VALUES ('update', '" << t << "', NEW.\"" << pk << "\",\n"
              << "    json_object(" << rowCols << "),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "  INSERT INTO _salve_sync_metadata\n"
+             << "    (tableName, localId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', NEW.\"" << pk << "\", NULL,\n"
+             << "    CASE WHEN NEW.\"deletedAt\" IS NOT NULL THEN 'delete' ELSE 'update' END,\n"
+             << "    CASE WHEN NEW.\"deletedAt\" IS NOT NULL THEN 'DELETED' ELSE 'PENDING' END,\n"
+             << "    0, NULL,\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
+             << "  ON CONFLICT(tableName, localId) DO UPDATE SET\n"
+             << "    operation = excluded.operation,\n"
+             << "    status    = excluded.status,\n"
+             << "    updatedAt = excluded.updatedAt;\n"
              << "END;";
   _db->exec(updateTrig.str());
 
@@ -286,6 +330,15 @@ void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
              << "  VALUES ('delete', '" << t << "', OLD.\"" << pk << "\",\n"
              << "    json_object('" << pk << "', OLD.\"" << pk << "\"),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "  INSERT INTO _salve_sync_metadata\n"
+             << "    (tableName, localId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', OLD.\"" << pk << "\", NULL, 'delete', 'DELETED', 0, NULL,\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
+             << "  ON CONFLICT(tableName, localId) DO UPDATE SET\n"
+             << "    operation = excluded.operation,\n"
+             << "    status    = excluded.status,\n"
+             << "    updatedAt = excluded.updatedAt;\n"
              << "END;";
   _db->exec(deleteTrig.str());
 }
@@ -309,6 +362,8 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   _db->exec(kSyncApplyLockTable);
   _db->exec(kSyncCursorTable);
   _db->exec(kSyncDefinitionTable);
+  _db->exec(kSyncMetadataTable);
+  _db->exec(kSyncMetadataRemoteIdIndex);
 
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;
@@ -318,14 +373,24 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
     columnsChanged = true;
   } else if (schema.version > stored) {
     columnsChanged = migrateTable(schema);
+  } else {
+    // Even at same version, ensure reserved columns exist (for library upgrades).
+    columnsChanged = migrateTable(schema);
   }
-  // If schema.version == stored, nothing to do (idempotent)
 
   if (schema.sync.enabled) {
     if (columnsChanged) {
       dropSyncTriggers(schema);
     }
     createSyncTriggers(schema);
+    // Backfill only once (first time metadata table is used for this schema).
+    auto backfillCheck = _db->execute(
+      "SELECT 1 FROM _salve_sync_metadata WHERE tableName = ? LIMIT 1",
+      { schema.name }
+    );
+    if (backfillCheck.rows.empty()) {
+      SalveMetadataManager(_db).backfillSyncedRows(schema.name, schema.primaryKey);
+    }
   } else {
     dropSyncTriggers(schema);
   }
@@ -419,6 +484,14 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
       }
     }
   }
+
+  if (schema.columns.count("deletedAt")) {
+    throw std::runtime_error("registerSchema: 'deletedAt' is a reserved column managed by SalveDb");
+  }
+  ColumnDef deletedAtCol;
+  deletedAtCol.type = "datetime";
+  deletedAtCol.nullable = true;
+  schema.columns["deletedAt"] = deletedAtCol;
 
   return schema;
 }
