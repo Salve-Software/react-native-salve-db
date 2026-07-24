@@ -2,6 +2,7 @@
 #include "../../database/MigrationEngine.hpp"
 #include "../../database/SQLiteConnection.hpp"
 #include "../../platform/platform.hpp"
+#include "../../sync/SyncApplyGuard.hpp"
 #include "../../sync/SyncQueueReader.hpp"
 #include <memory>
 
@@ -144,4 +145,47 @@ TEST_CASE("readPage on an empty queue returns no maxId", "[sync][SyncQueueReader
 
   REQUIRE(page.operations.empty());
   REQUIRE_FALSE(page.maxId.has_value());
+}
+
+TEST_CASE("readOperations enriches each op with the frozen localId from metadata", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("reader_local_id_enrichment"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+
+  SyncQueueReader reader(conn);
+  auto ops = reader.readOperations(10);
+
+  REQUIRE(ops.size() == 1);
+  REQUIRE(ops[0].asObject().at("localId").asString() == "1");
+}
+
+TEST_CASE("readPage resolves the frozen localId via entityId after a replace", "[sync][SyncQueueReader]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("reader_post_replace"));
+  MigrationEngine engine(conn);
+  registerSyncEnabledCustomers(engine);
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  conn->execute("DELETE FROM sync_queue WHERE entity = 'customers'", {});
+
+  // Simulate a completed replace: PK rewritten to the server id inside the
+  // bypass (as applyAck does), entityId follows while localId stays frozen.
+  SyncApplyGuard(conn).applyWithBypass([&] {
+    conn->execute("UPDATE customers SET id = 2 WHERE id = 1", {});
+    conn->execute(
+      "UPDATE _salve_sync_metadata SET entityId = '2', remoteId = '2', status = 'SYNCED'"
+      " WHERE tableName = 'customers' AND localId = '1'", {});
+  });
+
+  // A later, real edit enqueues entity_id = 2 (the new PK).
+  conn->execute("UPDATE customers SET name = 'b', updatedAt = 200 WHERE id = 2", {});
+
+  SyncQueueReader reader(conn);
+  auto page = reader.readPage("customers", 10);
+
+  REQUIRE(page.operations.size() == 1);
+  const auto& op = page.operations[0].asObject();
+  REQUIRE(op.at("primaryKey").asString() == "2");
+  REQUIRE(op.at("localId").asString() == "1");
 }

@@ -25,6 +25,11 @@ public:
   // to an unrelated (or internal) table.
   ApplyStats apply(const std::string& expectedEntity, const json::Array& operations);
 
+  // Applies Replace Transaction acks: locates each row by localId, rewrites
+  // its PK to the server id, cascades child FKs, and freezes metadata as
+  // SYNCED. Must run inside SyncApplyGuard::applyWithBypass.
+  ApplyStats applyAck(const std::string& expectedEntity, const json::Array& acks);
+
 private:
   std::shared_ptr<SQLiteConnection> _conn;
 };
