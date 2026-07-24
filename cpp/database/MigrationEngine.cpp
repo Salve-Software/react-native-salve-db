@@ -121,6 +121,7 @@ static constexpr auto kSyncMetadataTable = R"sql(
   CREATE TABLE IF NOT EXISTS _salve_sync_metadata (
     tableName  TEXT NOT NULL,
     localId    TEXT NOT NULL,
+    entityId   TEXT NOT NULL,
     remoteId   TEXT,
     operation  TEXT NOT NULL,
     status     TEXT NOT NULL,
@@ -137,6 +138,13 @@ static constexpr auto kSyncMetadataTable = R"sql(
 static constexpr auto kSyncMetadataRemoteIdIndex = R"sql(
   CREATE INDEX IF NOT EXISTS idx_salve_sync_metadata_remote_id
     ON _salve_sync_metadata (tableName, remoteId);
+)sql";
+
+// ON CONFLICT target for the sync triggers below: a trigger only ever knows
+// NEW/OLD's current PK, so upserts must key off entityId, not the frozen localId.
+static constexpr auto kSyncMetadataEntityIdIndex = R"sql(
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_salve_sync_metadata_entity_id
+    ON _salve_sync_metadata (tableName, entityId);
 )sql";
 
 static constexpr auto kRelationsTable = R"sql(
@@ -299,11 +307,11 @@ void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
              << "    json_object(" << rowCols << "),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
              << "  INSERT INTO _salve_sync_metadata\n"
-             << "    (tableName, localId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
-             << "  VALUES ('" << t << "', NEW.\"" << pk << "\", NULL, 'insert', 'PENDING', 0, NULL,\n"
+             << "    (tableName, localId, entityId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', NEW.\"" << pk << "\", NEW.\"" << pk << "\", NULL, 'insert', 'PENDING', 0, NULL,\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
-             << "  ON CONFLICT(tableName, localId) DO UPDATE SET\n"
+             << "  ON CONFLICT(tableName, entityId) DO UPDATE SET\n"
              << "    operation = excluded.operation,\n"
              << "    status    = excluded.status,\n"
              << "    updatedAt = excluded.updatedAt;\n"
@@ -320,14 +328,14 @@ void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
              << "    json_object(" << rowCols << "),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
              << "  INSERT INTO _salve_sync_metadata\n"
-             << "    (tableName, localId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
-             << "  VALUES ('" << t << "', NEW.\"" << pk << "\", NULL,\n"
+             << "    (tableName, localId, entityId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', NEW.\"" << pk << "\", NEW.\"" << pk << "\", NULL,\n"
              << "    CASE WHEN NEW.\"deletedAt\" IS NOT NULL THEN 'delete' ELSE 'update' END,\n"
              << "    CASE WHEN NEW.\"deletedAt\" IS NOT NULL THEN 'DELETED' ELSE 'PENDING' END,\n"
              << "    0, NULL,\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
-             << "  ON CONFLICT(tableName, localId) DO UPDATE SET\n"
+             << "  ON CONFLICT(tableName, entityId) DO UPDATE SET\n"
              << "    operation = excluded.operation,\n"
              << "    status    = excluded.status,\n"
              << "    updatedAt = excluded.updatedAt;\n"
@@ -345,11 +353,11 @@ void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
              << "    json_object('" << pk << "', OLD.\"" << pk << "\"),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
              << "  INSERT INTO _salve_sync_metadata\n"
-             << "    (tableName, localId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
-             << "  VALUES ('" << t << "', OLD.\"" << pk << "\", NULL, 'delete', 'DELETED', 0, NULL,\n"
+             << "    (tableName, localId, entityId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', OLD.\"" << pk << "\", OLD.\"" << pk << "\", NULL, 'delete', 'DELETED', 0, NULL,\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
              << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
-             << "  ON CONFLICT(tableName, localId) DO UPDATE SET\n"
+             << "  ON CONFLICT(tableName, entityId) DO UPDATE SET\n"
              << "    operation = excluded.operation,\n"
              << "    status    = excluded.status,\n"
              << "    updatedAt = excluded.updatedAt;\n"
@@ -387,6 +395,16 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   _db->exec(kSyncDefinitionTable);
   _db->exec(kSyncMetadataTable);
   _db->exec(kSyncMetadataRemoteIdIndex);
+
+  // Retro-migration for installs created before entityId existed (#77):
+  // split the frozen localId from the mutable "current PK" tracking column.
+  auto metadataColumns = existingColumns("_salve_sync_metadata");
+  if (std::find(metadataColumns.begin(), metadataColumns.end(), "entityId") == metadataColumns.end()) {
+    _db->exec("ALTER TABLE _salve_sync_metadata ADD COLUMN entityId TEXT NOT NULL DEFAULT ''");
+    _db->exec("UPDATE _salve_sync_metadata SET entityId = localId WHERE entityId = ''");
+  }
+  _db->exec(kSyncMetadataEntityIdIndex);
+
   _db->exec(kRelationsTable);
   _db->exec(kRelationsParentIndex);
 

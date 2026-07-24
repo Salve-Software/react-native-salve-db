@@ -49,7 +49,7 @@ json::Array SyncQueueReader::readOperations(int limit) {
   auto result = _conn->execute(
     "SELECT sq.operation, sq.entity, sq.entity_id, sq.payload, sq.updated_at, sm.localId, sm.remoteId "
     "FROM sync_queue sq "
-    "LEFT JOIN _salve_sync_metadata sm ON (sq.entity = sm.tableName AND sq.entity_id = sm.localId) "
+    "LEFT JOIN _salve_sync_metadata sm ON (sq.entity = sm.tableName AND sq.entity_id = sm.entityId) "
     "ORDER BY sq.id ASC LIMIT ?",
     { static_cast<double>(limit) }
   );
@@ -71,7 +71,7 @@ SyncQueuePage SyncQueueReader::readPage(const std::string& entity, int limit) {
   auto result = _conn->execute(
     "SELECT sq.id, sq.operation, sq.entity, sq.entity_id, sq.payload, sq.updated_at, sm.localId, sm.remoteId "
     "FROM sync_queue sq "
-    "LEFT JOIN _salve_sync_metadata sm ON (sq.entity = sm.tableName AND sq.entity_id = sm.localId) "
+    "LEFT JOIN _salve_sync_metadata sm ON (sq.entity = sm.tableName AND sq.entity_id = sm.entityId) "
     "WHERE sq.entity = ? ORDER BY sq.id ASC LIMIT ?",
     { entity, static_cast<double>(limit) }
   );
