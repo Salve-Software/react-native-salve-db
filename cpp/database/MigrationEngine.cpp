@@ -139,6 +139,20 @@ static constexpr auto kSyncMetadataRemoteIdIndex = R"sql(
     ON _salve_sync_metadata (tableName, remoteId);
 )sql";
 
+static constexpr auto kRelationsTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_relations (
+    childTable  TEXT NOT NULL,
+    fkColumn    TEXT NOT NULL,
+    parentTable TEXT NOT NULL,
+    PRIMARY KEY (childTable, fkColumn)
+  );
+)sql";
+
+static constexpr auto kRelationsParentIndex = R"sql(
+  CREATE INDEX IF NOT EXISTS idx_salve_relations_parent
+    ON _salve_relations (parentTable);
+)sql";
+
 int MigrationEngine::storedVersion(const std::string& schemaName) {
   auto result = _db->execute(
     "SELECT version FROM _salve_schema_versions WHERE name = ?",
@@ -343,6 +357,15 @@ void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
   _db->exec(deleteTrig.str());
 }
 
+void MigrationEngine::createRelationIndexes(const SchemaDef& schema) {
+  for (auto& rel : schema.relations) {
+    _db->exec(
+      "CREATE INDEX IF NOT EXISTS \"" + schema.name + "_" + rel.column + "_fk_idx\""
+      " ON \"" + schema.name + "\" (\"" + rel.column + "\")"
+    );
+  }
+}
+
 void MigrationEngine::dropSyncTriggers(const SchemaDef& schema) {
   const std::string& t = schema.name;
   _db->exec("DROP TRIGGER IF EXISTS \"" + t + "_sync_after_insert\";");
@@ -364,6 +387,8 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   _db->exec(kSyncDefinitionTable);
   _db->exec(kSyncMetadataTable);
   _db->exec(kSyncMetadataRemoteIdIndex);
+  _db->exec(kRelationsTable);
+  _db->exec(kRelationsParentIndex);
 
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;
@@ -405,6 +430,9 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   } else {
     defStore.remove(schema.name);
   }
+
+  RelationStore(_db).replaceForChild(schema.name, schema.relations);
+  createRelationIndexes(schema);
 
   txn.commit();
 
@@ -463,6 +491,25 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
       if (!idx.name.empty() && !idx.columns.empty()) {
         schema.indexes.push_back(std::move(idx));
       }
+    }
+  }
+
+  auto relationsVal = root.get("relations");
+  if (relationsVal && relationsVal->get().isArray()) {
+    for (auto& relVal : relationsVal->get().asArray()) {
+      if (!relVal.isObject()) continue;
+      RelationDef rel;
+      rel.column     = relVal.getString("column");
+      rel.references = relVal.getString("references");
+      if (rel.references.empty())
+        throw std::runtime_error("registerSchema: relation 'references' is required");
+      if (!schema.columns.count(rel.column))
+        throw std::runtime_error("registerSchema: relation column '" + rel.column + "' is not a declared column");
+      bool duplicate = std::any_of(schema.relations.begin(), schema.relations.end(),
+        [&](const RelationDef& r) { return r.column == rel.column; });
+      if (duplicate)
+        throw std::runtime_error("registerSchema: relation column '" + rel.column + "' is already declared");
+      schema.relations.push_back(std::move(rel));
     }
   }
 

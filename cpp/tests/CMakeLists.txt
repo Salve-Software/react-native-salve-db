@@ -122,6 +122,8 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/sync/SyncDefinitionStore.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncCursorStore.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncOperationApplier.cpp"
+  "${PROJECT_CPP_DIR}/sync/RelationStore.cpp"
+  "${PROJECT_CPP_DIR}/sync/RelationCascadeRewriter.cpp"
   "${PROJECT_CPP_DIR}/expression/RequestExpressionEvaluator.cpp"
   "${PROJECT_CPP_DIR}/expression/JsonPathExtractor.cpp"
   "${PROJECT_CPP_DIR}/credentials/CredentialProvider.cpp"
