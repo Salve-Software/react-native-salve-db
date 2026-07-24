@@ -1,5 +1,8 @@
 #include "SyncOperationApplier.hpp"
+#include "RelationCascadeRewriter.hpp"
+#include "../database/SalveMetadataManager.hpp"
 #include <NitroModules/Null.hpp>
+#include <chrono>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -36,6 +39,19 @@ SqlValue toSqlValue(const json::Value& v) {
   if (v.isNumber()) return v.asNumber();
   if (v.isString()) return v.asString();
   throw std::runtime_error("SyncOperationApplier: unsupported payload value type for a column");
+}
+
+// A server-assigned id may arrive as a JSON number or string; metadata stores it as TEXT.
+// Reuses json::stringify's own number formatting so large integer ids don't
+// round-trip through the default 6-digit stream precision into "1.5e+15".
+std::string jsonScalarToString(const json::Value& v) {
+  if (v.isString()) return v.asString();
+  if (v.isNumber()) {
+    std::ostringstream out;
+    json::detail::stringifyNumber(v.asNumber(), out);
+    return out.str();
+  }
+  throw std::runtime_error("SyncOperationApplier: ack primary key value must be a string or number");
 }
 
 } // namespace
@@ -123,6 +139,82 @@ ApplyStats SyncOperationApplier::apply(const std::string& expectedEntity, const 
       _conn->execute(sql.str(), values);
       stats.updated++;
     }
+  }
+
+  return stats;
+}
+
+ApplyStats SyncOperationApplier::applyAck(const std::string& expectedEntity, const json::Array& acks) {
+  ApplyStats stats;
+  if (acks.empty()) return stats;
+
+  TableColumns cols = describeTable(*_conn, expectedEntity);
+  SalveMetadataManager metadata(_conn);
+  int64_t now = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+    std::chrono::system_clock::now().time_since_epoch()).count());
+
+  for (const auto& ack : acks) {
+    if (!ack.isObject()) {
+      throw std::runtime_error("SyncOperationApplier: each ack must be an object");
+    }
+
+    std::string localId = ack.getString("localId");
+    if (localId.empty()) {
+      throw std::runtime_error("SyncOperationApplier: ack is missing 'localId'");
+    }
+
+    auto meta = metadata.getByLocalId(expectedEntity, localId);
+    if (!meta) {
+      throw std::runtime_error(
+        "SyncOperationApplier: no metadata found for localId '" + localId + "' on entity '" + expectedEntity + "'"
+      );
+    }
+
+    if (meta->status == "DELETED") {
+      metadata.markDeletedSynced(expectedEntity, localId, now);
+      continue;
+    }
+
+    std::string oldEntityId = meta->entityId;
+    std::vector<std::string> columns;
+    std::vector<SqlValue> values;
+    std::optional<std::string> newEntityId;
+
+    for (auto& [key, val] : ack.asObject()) {
+      if (key == "localId") continue;
+      if (cols.all.count(key) == 0) {
+        throw std::runtime_error(
+          "SyncOperationApplier: unknown ack column '" + key + "' for entity '" + expectedEntity + "'"
+        );
+      }
+      columns.push_back(key);
+      if (key == cols.primaryKey) {
+        // Bind the same string form used for entityId/cascade/metadata below,
+        // rather than a raw double — SQLite's REAL->TEXT affinity conversion
+        // would otherwise reformat a large id into scientific notation.
+        newEntityId = jsonScalarToString(val);
+        values.push_back(*newEntityId);
+      } else {
+        values.push_back(toSqlValue(val));
+      }
+    }
+
+    if (!columns.empty()) {
+      std::ostringstream sql;
+      sql << "UPDATE \"" << expectedEntity << "\" SET ";
+      for (size_t i = 0; i < columns.size(); ++i) { if (i) sql << ", "; sql << "\"" << columns[i] << "\" = ?"; }
+      sql << " WHERE \"" << cols.primaryKey << "\" = ?";
+      values.push_back(oldEntityId);
+      _conn->execute(sql.str(), values);
+    }
+
+    std::string resolvedEntityId = newEntityId.value_or(oldEntityId);
+    if (resolvedEntityId != oldEntityId) {
+      RelationCascadeRewriter(_conn).rewrite(expectedEntity, oldEntityId, resolvedEntityId);
+    }
+
+    metadata.markReplaced(expectedEntity, localId, resolvedEntityId, now);
+    stats.updated++;
   }
 
   return stats;

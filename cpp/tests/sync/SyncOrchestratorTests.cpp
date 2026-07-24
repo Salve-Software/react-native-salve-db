@@ -47,7 +47,7 @@ std::shared_ptr<SQLiteConnection> openOrchestratorFixture(
         "operations": { "$ref": "operations" },
         "pageSize": { "$ref": "pageSize" }
       } },
-      "response": { "cursor": "$.cursor", "operations": "$.operations", "hasMore": "$.hasMore" }
+      "response": { "cursor": "$.cursor", "operations": "$.operations", "ack": "$.ack", "hasMore": "$.hasMore" }
     }
   })"));
 
@@ -345,4 +345,131 @@ TEST_CASE("triggerSyncAll discards silently when a sync session is already in pr
   auto results = SyncOrchestrator().triggerSyncAll(/*discardIfBusy*/ true);
 
   REQUIRE(results.empty());
+}
+
+TEST_CASE("triggerSync applies a Replace Transaction ack: id rewritten, metadata SYNCED, no duplication", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_ack_replace");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('temp-1', 'alice', 100)", {});
+
+  platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    return HttpResponse{200, {}, R"({
+      "cursor": "c1", "hasMore": false, "operations": [],
+      "ack": [
+        { "localId": "temp-1", "id": "srv-1", "name": "alice", "updatedAt": 100 }
+      ]
+    })"};
+  });
+
+  SyncOrchestrator orchestrator;
+  auto result = orchestrator.triggerSync("customers");
+
+  REQUIRE(result.updated == 1.0);
+  REQUIRE(syncQueueCount(*conn, "customers") == 0);
+
+  auto row = conn->execute("SELECT name FROM customers WHERE id = 'srv-1'", {});
+  REQUIRE(row.rows.size() == 1);
+  REQUIRE(std::get<std::string>(row.rows[0][0]) == "alice");
+
+  auto meta = conn->execute(
+    "SELECT COUNT(*), entityId, status FROM _salve_sync_metadata WHERE tableName = 'customers'", {});
+  REQUIRE(std::get<double>(meta.rows[0][0]) == 1.0);
+  REQUIRE(std::get<std::string>(meta.rows[0][1]) == "srv-1");
+  REQUIRE(std::get<std::string>(meta.rows[0][2]) == "SYNCED");
+}
+
+TEST_CASE("triggerSync applies acks across multiple pages", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_ack_pagination", /*pageSize*/ 1, /*maxPagesPerSession*/ 20);
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('temp-1', 'a', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('temp-2', 'b', 100)", {});
+
+  int calls = 0;
+  platform::test::setHttpExecuteResult([&](const HttpRequest&) -> HttpOutcome {
+    ++calls;
+    std::string localId = "temp-" + std::to_string(calls);
+    std::string serverId = "srv-" + std::to_string(calls);
+    bool more = calls < 2;
+    return HttpResponse{200, {}, R"({"cursor": "c)" + std::to_string(calls) + R"(", "hasMore": )" + (more ? "true" : "false") +
+      R"(, "operations": [], "ack": [{ "localId": ")" + localId + R"(", "id": ")" + serverId + R"(", "updatedAt": 100 }]})"};
+  });
+
+  SyncOrchestrator().triggerSync("customers");
+
+  REQUIRE(calls == 2);
+  REQUIRE(syncQueueCount(*conn, "customers") == 0);
+
+  auto srv1 = conn->execute("SELECT COUNT(*) FROM customers WHERE id = 'srv-1'", {});
+  REQUIRE(std::get<double>(srv1.rows[0][0]) == 1.0);
+  auto srv2 = conn->execute("SELECT COUNT(*) FROM customers WHERE id = 'srv-2'", {});
+  REQUIRE(std::get<double>(srv2.rows[0][0]) == 1.0);
+}
+
+TEST_CASE("triggerSync applies a soft-delete ack without erroring", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_ack_soft_delete");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 100)", {});
+  conn->execute("DELETE FROM customers WHERE id = '1'", {});
+
+  platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    return HttpResponse{200, {}, R"({
+      "cursor": "c1", "hasMore": false, "operations": [],
+      "ack": [ { "localId": "1" } ]
+    })"};
+  });
+
+  SyncOrchestrator orchestrator;
+  REQUIRE_NOTHROW(orchestrator.triggerSync("customers"));
+
+  auto meta = conn->execute(
+    "SELECT status, syncedAt FROM _salve_sync_metadata WHERE tableName = 'customers' AND localId = '1'", {});
+  REQUIRE(std::get<std::string>(meta.rows[0][0]) == "DELETED");
+  REQUIRE(std::get<double>(meta.rows[0][1]) != 0.0);
+}
+
+TEST_CASE("triggerSync applies an ack before a pulled operation targeting the same resulting row", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_ack_and_operation_same_row");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('temp-1', 'alice', 100)", {});
+
+  platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    return HttpResponse{200, {}, R"({
+      "cursor": "c1", "hasMore": false,
+      "ack": [
+        { "localId": "temp-1", "id": "srv-1", "name": "alice", "updatedAt": 100 }
+      ],
+      "operations": [
+        { "operation": "update", "entity": "customers", "primaryKey": "srv-1",
+          "payload": { "id": "srv-1", "name": "alice-v2", "updatedAt": 200 }, "updatedAt": 200 }
+      ]
+    })"};
+  });
+
+  SyncOrchestrator orchestrator;
+  REQUIRE_NOTHROW(orchestrator.triggerSync("customers"));
+
+  // If the pulled operation ran before the ack, it would INSERT id='srv-1'
+  // ahead of the ack's UPDATE ... SET id='srv-1', colliding on the PK and
+  // rolling back the whole page. Processing the ack first avoids that.
+  auto rows = conn->execute("SELECT COUNT(*) FROM customers WHERE id = 'srv-1'", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 1.0);
+
+  auto row = conn->execute("SELECT name FROM customers WHERE id = 'srv-1'", {});
+  REQUIRE(std::get<std::string>(row.rows[0][0]) == "alice-v2");
+}
+
+TEST_CASE("triggerSync's ack replace does not re-enqueue into sync_queue via the apply lock", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_ack_no_reentry");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('temp-1', 'alice', 100)", {});
+
+  platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
+    return HttpResponse{200, {}, R"({
+      "cursor": "c1", "hasMore": false, "operations": [],
+      "ack": [ { "localId": "temp-1", "id": "srv-1", "name": "alice", "updatedAt": 100 } ]
+    })"};
+  });
+
+  SyncOrchestrator().triggerSync("customers");
+
+  REQUIRE(syncQueueCount(*conn, "customers") == 0);
+
+  auto pending = conn->execute(
+    "SELECT COUNT(*) FROM _salve_sync_metadata WHERE tableName = 'customers' AND status = 'PENDING'", {});
+  REQUIRE(std::get<double>(pending.rows[0][0]) == 0.0);
 }

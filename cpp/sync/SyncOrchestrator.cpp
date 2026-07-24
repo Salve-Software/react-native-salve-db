@@ -158,6 +158,12 @@ NativeSyncResult SyncOrchestrator::runSyncSession(const std::string& schemaName)
       if (extracted && extracted->isArray()) appliedOps = extracted->asArray();
     }
 
+    json::Array acks;
+    if (auto ackPath = extractPathString(responseDef->get(), "ack")) {
+      auto extracted = JsonPathExtractor::extract(response.body, *ackPath);
+      if (extracted && extracted->isArray()) acks = extracted->asArray();
+    }
+
     std::optional<json::Value> newCursor;
     if (auto cursorPath = extractPathString(responseDef->get(), "cursor")) {
       newCursor = JsonPathExtractor::extract(response.body, *cursorPath);
@@ -170,6 +176,13 @@ NativeSyncResult SyncOrchestrator::runSyncSession(const std::string& schemaName)
     }
 
     applyGuard.applyWithBypass([&] {
+      // Acks first: if a pulled operation and an ack ever target the same row
+      // in one response, resolving the ack's id rewrite first makes the pulled
+      // op see the row under its final id and merge via lastWriteWins, instead
+      // of racing to INSERT a row that the ack's UPDATE is about to claim.
+      ApplyStats ackStats = applier.applyAck(schemaName, acks);
+      totalStats.updated += ackStats.updated;
+
       ApplyStats pageStats = applier.apply(schemaName, appliedOps);
       totalStats.inserted += pageStats.inserted;
       totalStats.updated  += pageStats.updated;
