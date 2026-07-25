@@ -196,10 +196,124 @@ Sem tratamento especial. O contrato REST não define semântica de `409`/conflit
 
 # O que fica removido/sem uso
 
-- `RequestExpressionEvaluator`, `JsonPathExtractor` (`cpp/expression/`) — só existiam pra interpretar `$ref`/JSONPath do contrato antigo. Sem consumidor sob o novo contrato.
+- `RequestExpressionEvaluator` (`cpp/expression/`) — único consumidor era `SyncOrchestrator`. Sem uso sob o novo contrato, remove por completo (arquivo + teste).
+- **`JsonPathExtractor` (`cpp/expression/`) NÃO é removível** — `CredentialProvider::refresh()` também o usa pra extrair `accessToken`/`refreshToken` da resposta do refresh OAuth2 (`cpp/credentials/CredentialProvider.cpp:68,75`), que não muda. Só o uso dele dentro de `SyncOrchestrator.cpp` desaparece; a classe e `cpp/tests/expression/JsonPathExtractorTests.cpp` continuam.
 - `SyncHttpCaller`'s construção de corpo de request via `RequestDefinition` — vira montagem direta do JSON da entidade (sem `$ref`).
-- `IRequestDefinition`, `IResponseDefinition`, `RequestExpression` e as variantes (`VariableExpression`, `ObjectExpression`, `ArrayExpression`), `JsonPath` (`src/types/sync/`) — tipos TS correspondentes, sem uso.
+- `IRequestDefinition`, `IResponseDefinition`, `RequestExpression` (+ `IVariableExpression`/`IConstantExpression`/`IObjectExpression`/`IArrayExpression`, todas no mesmo arquivo), `SyncStrategy`, `HttpMethod`, `IAuthenticationDefinition`, `AuthStrategy` (`src/types/sync/`) — tipos TS correspondentes, todos verificados sem uso fora do próprio grafo do contrato antigo. **`JsonPath` (`src/types/JsonPath.ts`) NÃO é removível** — mesma razão do `JsonPathExtractor`, usado por `ICredentialsDefinition.refresh.response`.
 - `ack`/`IResponseDefinition.ack` (introduzido na #77) — o conceito de "lista de ack" desaparece; cada resposta de `POST`/`PATCH` já É o ack de uma linha só.
+
+---
+
+# O que precisa ser alterado, arquivo por arquivo
+
+## Contrato declarativo (TS) — `src/types/sync/`
+
+**Deletar** (confirmado sem uso fora do próprio grafo do contrato antigo):
+`IRequestDefinition.ts`, `IResponseDefinition.ts`, `RequestExpression.ts`, `SyncStrategy.ts`, `HttpMethod.ts`, `IAuthenticationDefinition.ts`, `AuthStrategy.ts` — e remover os 7 `export type *` correspondentes de `src/types/sync/index.ts`.
+
+**Modificar:**
+
+```ts
+// ISyncDefinition.ts — remove strategy, request, response; sem mudança no resto
+export interface ISyncDefinition<TEntity> {
+  enabled: boolean;
+  direction: SyncDirection;
+  conflict: ConflictStrategy;
+  transport: Transport;
+  endpoint: IEndpointDefinition;
+  background?: IBackgroundDefinition;
+  pagination?: IPaginationDefinition;
+}
+```
+
+```ts
+// IEndpointDefinition.ts — method/path/authentication saem, entram basePath/sinceParam/limitParam
+export interface IEndpointDefinition {
+  basePath: string;
+  sinceParam: string;
+  limitParam: string;
+  headers?: Record<string, string>;
+}
+```
+
+`IPaginationDefinition.pageSize` — o comentário atual ("usado tanto no pull quanto pra limitar o lote de push") fica incorreto — passa a valer só pro pull (`<limitParam>`). Atualizar o JSDoc.
+
+**Sem mudança:** `JsonPath.ts`, `ICredentialsDefinition.ts`, `IBackgroundDefinition.ts`, `ConflictStrategy.ts`, `SyncDirection.ts`, `ITransport.ts`, `ISyncOperation.ts`, `NativeSyncResult.ts`, `SyncMetadataStatus.ts`.
+
+## Motor nativo (C++) — `cpp/`
+
+```cpp
+// cpp/http/SyncHttpCaller.hpp — hoje é um send() genérico(endpoint, body) que
+// serializa method/path arbitrários do EndpointDefinition antigo. Precisa virar
+// pelo menos 4 construtores de chamada, um por verbo REST do contrato:
+static SyncHttpOutcome list(const std::string& basePath, const std::string& sinceParam,
+                             const std::string& limitParam, double since, double limit,
+                             const AuthHeader&, const NetworkConfig&);
+static SyncHttpOutcome create(const std::string& basePath, const json::Value& body, ...);
+static SyncHttpOutcome update(const std::string& basePath, const std::string& id, const json::Value& body, ...);
+static SyncHttpOutcome remove(const std::string& basePath, const std::string& id, ...);
+```
+
+```cpp
+// cpp/sync/SyncOperationApplier.hpp
+// apply() é reaproveitado, mas precisa de duas mudanças:
+//  1. reconhecer deletedAt != null numa linha como tombstone (soft-delete
+//     local) em vez de depender de um campo `operation` explícito — a
+//     inferência insert-vs-update por "já existe localmente?" já existe e
+//     não muda.
+//  2. chamar SalveMetadataManager::upsert(status=SYNCED, remoteId=entityId=id)
+//     pra cada linha inserida/atualizada via pull — hoje apply() nunca toca
+//     _salve_sync_metadata, só applyAck() toca. Sem isso, uma linha vinda do
+//     servidor fica sem metadata até a primeira edição local (remoteId nulo,
+//     status incorreto num estado que já está sincronizado).
+//
+// applyAck() é REMOVIDO — array de ack não existe mais. Substituído por algo
+// bem menor, processando UMA resposta de POST/PATCH por vez:
+ApplyStats applyReplace(const std::string& expectedEntity, const std::string& localId, const json::Value& responseBody);
+```
+
+```cpp
+// cpp/sync/SyncOrchestrator.cpp — runSyncSession reescrito nas duas fases
+// descritas em "Sessão de sync" acima. kMaxAttempts/kRetryDelay (3/5000ms,
+// hoje constantes anônimas no topo do arquivo) não mudam de valor, só de
+// onde são aplicadas (por chamada HTTP individual, não por página).
+```
+
+```cpp
+// cpp/sync/SyncQueueReader.hpp — readPage()/readOperations() continuam
+// lendo a fila em ordem; o que muda é o consumidor (SyncOrchestrator não
+// batcha mais N linhas num corpo só). Decisão em aberto pra quem implementar:
+// a fase de push precisa de um teto análogo a maxPagesPerSession (ex:
+// maxPushItemsPerSession), pra não deixar uma fila gigante monopolizar uma
+// sessão inteira? Este doc não fecha essa resposta — avaliar ao implementar.
+```
+
+```cpp
+// cpp/sync/SyncCursorStore.hpp — load()/save() continuam string-based
+// (armazenam o texto do cursor); o que muda é o CONTEÚDO — antes um valor
+// opaco vindo do servidor, agora sempre o texto de um número epoch millis.
+// Ver "Migração de estado persistido" abaixo pra cursores já salvos no
+// formato antigo.
+```
+
+**Deletar:** `cpp/expression/RequestExpressionEvaluator.hpp/.cpp` + `cpp/tests/expression/RequestExpressionEvaluatorTests.cpp`.
+
+**Reescrever (não deletar — os fixtures usam o schema JSON e a resposta HTTP no formato antigo):** `cpp/tests/sync/SyncOrchestratorTests.cpp`, `SyncOperationApplierTests.cpp`, `SyncQueueReaderTests.cpp`.
+
+**`MigrationEngine::parseSchemaJson`** (`cpp/database/MigrationEngine.cpp`) e **`SyncDefinitionStore`** (`cpp/sync/SyncDefinitionStore.cpp`) — precisam parsear o novo formato reduzido de `sync` (sem `request`/`response`/`strategy`).
+
+## Migração de estado persistido
+
+Duas tabelas de sistema guardam estado no formato antigo, que precisa ser tratado na primeira sessão de sync depois que o app atualizar pro motor novo:
+
+- **`_salve_sync_definitions`** — guarda o JSON do contrato de sync por schema. Como `Database.register()` já roda a cada abertura do app (não só uma vez), o registro reescreve essa linha com o schema JS atual — que já vai estar no formato novo assim que o app for atualizado. Não precisa de migração explícita, só confirmar que `SyncDefinitionStore` faz `INSERT OR REPLACE`/upsert (não `INSERT OR IGNORE`) ao registrar.
+- **`_salve_sync_cursors`** — guarda um valor de cursor opaco vindo do servidor antigo (ex: `"\"c12345\""`, string JSON-encoded). Esse valor não tem conversão válida pro novo formato (epoch millis numérico) — são semânticas diferentes, não um simples reparse. Comportamento pretendido: ao registrar um schema pela primeira vez sob o motor novo, **resetar o cursor daquele schema** (tratar como se nunca tivesse sincronizado) — dispara um pull incremental completo desde `since=0` uma única vez. Mais simples e mais seguro que tentar interpretar um cursor de formato desconhecido.
+
+## `example/` app
+
+- `example/src/schemas/{SyncTestItemSchema,SyncTestNoteSchema,SyncTestTagSchema}.ts` — atualizar `sync.endpoint` pro novo formato, remover `request`/`response`.
+- `example/mock-sync-server/` fica incompatível com o motor migrado (ainda fala o protocolo batchado). Decisão a tomar ao implementar: aposentar esse mock e apontar o app de exemplo pro `packages/salve-db-server` (adicionando módulos que espelhem as três entidades de teste, ou renomeando as entidades de teste pra `users`/`products` que já existem lá) — não os dois lados coexistindo.
+- `example/src/components/SyncEntityPanel.tsx` — o botão "Simulate server insert" hoje chama `POST /admin/seed`, rota que não existe no `packages/salve-db-server` (decisão deliberada — ver README de lá). Vira uma chamada direta a `POST /<base>`, que é uma escrita real e válida sob o novo contrato — não precisa mais de rota especial pra simular isso.
 
 ---
 
@@ -262,9 +376,10 @@ Comparado ao exemplo equivalente em `architecture.md`: sem `request.body` com `$
 - Compression, Encryption, Batch Sync, Sync Dependencies, Multi-tenant Sync, WebSocket Sync, Custom Sync Protocol (além de REST) — mesma lista de `architecture.md`, sem mudança.
 - Semântica de `409`/conflito de escrita no push (ver seção "Sessão de sync" acima).
 
-# Próximos passos (fora deste doc)
+# Rastreamento
 
-1. Reescrever `cpp/sync/SyncOrchestrator.cpp`/`SyncQueueReader.cpp`/`SyncOperationApplier.cpp`/`SyncHttpCaller.cpp` contra este contrato.
-2. Corrigir o gap de metadata no pull (`markPulledSynced`) como parte da mesma reescrita, não depois.
-3. Atualizar `docs/architecture.md`/`docs/mvp-scope.md` pra refletir o novo contrato como o estado real, e então este doc pode ser arquivado/mesclado.
-4. Retomar a issue #78 (leitura-dispara-sync) sobre o motor já reescrito.
+Todo o trabalho descrito neste doc (contrato TS, motor nativo, migração de estado persistido, `example/`) é rastreado numa única issue: **#84**.
+
+A epic #74 e a issue #77 foram fechadas — o modelo de Replace Transaction via array `ack` que elas construíram é substituído pelo mecanismo por-item deste doc. #75 e #76 continuam válidas e mergeadas (fundação de metadata e cascade de FK são reaproveitadas sem mudança, ver "O que já reaproveita sem mudança" acima).
+
+Depois que a issue acima for concluída, `docs/architecture.md`/`docs/mvp-scope.md` devem ser atualizados pra refletir o contrato novo como o estado real, e este doc pode ser arquivado/mesclado neles.
