@@ -79,6 +79,7 @@ struct Value {
   }
 };
 
+/** Recursive-descent parser: raw JSON text -> json::Value tree. */
 class Parser {
   const std::string& _src;
   size_t _pos = 0;

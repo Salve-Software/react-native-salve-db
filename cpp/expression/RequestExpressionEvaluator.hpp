@@ -6,8 +6,10 @@
 
 namespace margelo::nitro::salvedb {
 
-// Plain C++ collaborator (not a HybridObject) — evaluates a parsed
-// RequestExpression tree (json::Value) into a request body json::Value.
+/**
+ * Plain C++ collaborator (not a HybridObject) — evaluates a parsed
+ * RequestExpression tree (json::Value) into a request body json::Value.
+ */
 class RequestExpressionEvaluator {
 public:
   using VariableResolver = std::function<json::Value(const std::string& refName)>;

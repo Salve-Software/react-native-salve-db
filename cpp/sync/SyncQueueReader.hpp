@@ -13,7 +13,11 @@ struct SyncQueuePage {
   std::optional<int64_t> maxId; // highest sync_queue.id in this page, for the delete-after-apply cutoff
 };
 
-// Plain C++ collaborator (not a HybridObject) — read-only access to sync_queue.
+/**
+ * Plain C++ collaborator (not a HybridObject) — read-only access to
+ * sync_queue. Hands the Sync Orchestrator the next page of pending
+ * operations (FIFO) to ship to the server.
+ */
 class SyncQueueReader {
 public:
   explicit SyncQueueReader(std::shared_ptr<SQLiteConnection> conn);

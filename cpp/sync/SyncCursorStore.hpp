@@ -7,8 +7,12 @@
 
 namespace margelo::nitro::salvedb {
 
-// Plain C++ collaborator (not a HybridObject) — reads/writes the per-entity
-// sync cursor persisted in `_salve_sync_cursors`, so it survives a restart.
+/**
+ * Plain C++ collaborator (not a HybridObject) — reads/writes the per-entity
+ * sync cursor persisted in `_salve_sync_cursors`, so it survives a restart.
+ * SyncOrchestrator loads it before a session and saves it after each
+ * successfully applied page.
+ */
 class SyncCursorStore {
 public:
   explicit SyncCursorStore(std::shared_ptr<SQLiteConnection> conn);

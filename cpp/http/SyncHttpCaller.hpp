@@ -15,9 +15,11 @@ struct SyncHttpResponse {
 
 using SyncHttpOutcome = std::variant<SyncHttpResponse, HttpNetworkError>;
 
-// Sends one sync-page request (arbitrary method/path/headers, from a schema's
-// `endpoint` definition) over platform::httpExecute. No retry, no 401 handling —
-// that's SyncOrchestrator's job; this is a single send.
+/**
+ * Sends one sync-page request (arbitrary method/path/headers, from a schema's
+ * `endpoint` definition) over platform::httpExecute. No retry, no 401 handling —
+ * that's SyncOrchestrator's job; this is a single send.
+ */
 class SyncHttpCaller {
 public:
   static SyncHttpOutcome send(

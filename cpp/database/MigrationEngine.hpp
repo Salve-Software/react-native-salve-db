@@ -41,6 +41,12 @@ struct SchemaDef {
   SyncSettings sync;
 };
 
+/**
+ * Owns schema lifecycle for one SQLite connection: creates tables on first
+ * registration, adds missing columns on version bumps (ADD COLUMN only, no
+ * DROP/RENAME), and keeps sync triggers/relation indexes in sync with the
+ * declared schema. Called once per schema via `registerSchema`.
+ */
 class MigrationEngine {
 public:
   explicit MigrationEngine(std::shared_ptr<SQLiteConnection> conn);

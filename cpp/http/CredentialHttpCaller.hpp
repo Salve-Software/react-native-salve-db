@@ -5,6 +5,11 @@
 
 namespace margelo::nitro::salvedb {
 
+/**
+ * Adapts the platform HTTP client to the `CredentialProvider::HttpCaller`
+ * signature, so token refresh can issue real requests without CredentialProvider
+ * depending on the HTTP layer directly.
+ */
 class CredentialHttpCaller {
 public:
   // Builds a CredentialProvider::HttpCaller backed by the real HTTP client.

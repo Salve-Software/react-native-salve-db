@@ -12,10 +12,14 @@ struct ApplyStats {
   int deleted = 0;
 };
 
-// Plain C++ collaborator (not a HybridObject) — applies server-sent
-// ISyncOperation[] to SQLite, resolving conflicts via lastWriteWins on the
-// schema's required `updatedAt` column. Must run inside SyncApplyGuard's
-// bypass transaction so it never re-enqueues into sync_queue.
+/**
+ * Plain C++ collaborator (not a HybridObject) — applies server-sent
+ * ISyncOperation[] to SQLite, resolving conflicts via lastWriteWins on the
+ * schema's required `updatedAt` column. Must run inside SyncApplyGuard's
+ * bypass transaction so it never re-enqueues into sync_queue. Also owns the
+ * Replace Transaction path (`applyAck`) that swaps a row's temporary localId
+ * PK for the server-assigned id.
+ */
 class SyncOperationApplier {
 public:
   explicit SyncOperationApplier(std::shared_ptr<SQLiteConnection> conn);
