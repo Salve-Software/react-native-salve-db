@@ -46,7 +46,8 @@
     "README.md"
   ],
   "workspaces": [
-    "example"
+    "example",
+    "packages/salve-db-server"
   ],
   "repository": "https://github.com/Salve-Software/react-native-salve-db.git",
   "author": "Salve-Software",
