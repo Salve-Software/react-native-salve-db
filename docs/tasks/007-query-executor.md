@@ -1,6 +1,6 @@
 # TASK-007 — Query Executor (C++)
 
-**Status:** ✅ Finalizado — `cpp/query/QueryExecutor.{hpp,cpp}` + `cpp/database/HybridSalveDatabase::execute`, coberto end-to-end por `cpp/tests/database/HybridSalveDatabaseTests.cpp` (não tem teste dedicado próprio — ver `cpp/tests/query/README.md`).
+**Status:** ✅ Finalizado — `cpp/query/QueryExecutor.{hpp,cpp}` + `cpp/HybridSalveDatabase::execute`, coberto end-to-end por `cpp/tests/HybridSalveDatabaseTests.cpp` (não tem teste dedicado próprio — ver `cpp/tests/query/README.md`).
 **Prioridade:** P1 (núcleo do MVP)
 **Área:** C++ (core)
 **Depende de:** TASK-004

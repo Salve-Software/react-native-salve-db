@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
-#include "../../database/DatabaseManager.hpp"
-#include "../../platform/platform.hpp"
-#include "../support/HybridDatabaseHarness.hpp"
+#include "../database/DatabaseManager.hpp"
+#include "../platform/platform.hpp"
+#include "support/HybridDatabaseHarness.hpp"
 
 using margelo::nitro::salvedb::DatabaseManager;
 using margelo::nitro::salvedb::tests::HybridDatabaseHarness;

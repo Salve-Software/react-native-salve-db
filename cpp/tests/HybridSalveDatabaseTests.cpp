@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include "../support/HybridDatabaseHarness.hpp"
+#include "support/HybridDatabaseHarness.hpp"
 
 using margelo::nitro::salvedb::tests::HybridDatabaseHarness;
 

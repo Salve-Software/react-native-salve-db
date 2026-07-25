@@ -1,11 +1,17 @@
 #pragma once
 
 #include "HybridSalveDatabaseSpec.hpp"
-#include "../query/QueryExecutor.hpp"
-#include "../sync/SyncOrchestrator.hpp"
+#include "query/QueryExecutor.hpp"
+#include "sync/SyncOrchestrator.hpp"
 
 namespace margelo::nitro::salvedb {
 
+/**
+ * The single Nitro-facing HybridObject exposed to JS — every JSI call from
+ * `Database.*` lands here first. Owns configuration, schema registration,
+ * raw SQL execution/transactions, sync triggers, and change notifications,
+ * delegating the actual work to QueryExecutor and SyncOrchestrator.
+ */
 class HybridSalveDatabase: public HybridSalveDatabaseSpec {
 public:
   HybridSalveDatabase(): HybridObject(TAG) {}

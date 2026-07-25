@@ -1,8 +1,8 @@
 #include "HybridSalveDatabase.hpp"
-#include "DatabaseManager.hpp"
-#include "MigrationEngine.hpp"
-#include "NativeConfigStore.hpp"
-#include "../platform/platform.hpp"
+#include "database/DatabaseManager.hpp"
+#include "database/MigrationEngine.hpp"
+#include "database/NativeConfigStore.hpp"
+#include "platform/platform.hpp"
 #include <cmath>
 #include <stdexcept>
 
