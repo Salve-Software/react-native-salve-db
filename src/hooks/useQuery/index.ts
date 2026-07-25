@@ -1,9 +1,10 @@
 import type { AnySchema } from '../../types';
 import type { IUseQueryProps, IUseQueryResult } from './types';
 import type { InferSelectModel } from '../../database/classes/QueryDb/classes/SelectQueryBuilder/types';
-import { useCallback, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Database } from '../../database';
 import { queryCache } from '../../cache';
+import { requestReadSync } from '../../sync';
 import { useDatabaseReady } from '../useDatabaseReady';
 import { stableStringify } from './library/stableStringify';
 
@@ -46,6 +47,13 @@ export const useQuery = <TSchema extends AnySchema>(props: IUseQueryProps<TSchem
   }, [key]);
 
   const entry = useSyncExternalStore(subscribe, getSnapshot);
+
+  const isSyncEnabled = schema.sync?.enabled === true;
+
+  useEffect(() => {
+    if (!isReady || !isSyncEnabled) return;
+    requestReadSync(schema.name);
+  }, [isReady, isSyncEnabled, schema.name, key]);
 
   return {
     data: (entry?.data as InferSelectModel<TSchema>[] | null) ?? null,
