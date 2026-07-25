@@ -1,23 +1,7 @@
 import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
-import type { IConfigureProps, ICredentialsDefinition, IRegisterProps } from './types';
-import type { ConfigureParams } from '../../../specs/types/ConfigureParams';
+import type { IConfigureProps, IRegisterProps } from './types';
 import { registerAppOpenSync } from './library/registerAppOpenSync';
-
-function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credentials'] {
-  switch (creds.provider) {
-    case 'oauth2':
-      return {
-        provider: creds.provider,
-        accessTokenHeaderName: creds.accessToken?.headerName ?? 'Authorization',
-        tokens: creds.tokens,
-        refresh: {
-          endpoint: creds.refresh.endpoint,
-          responseAccessTokenPath: creds.refresh.response.accessToken,
-          responseRefreshTokenPath: creds.refresh.response.refreshToken,
-        },
-      };
-  }
-}
+import { mapCredentials } from './library/mapCredentials';
 
 export class ConfigureDb {
   private static _configured = false;
