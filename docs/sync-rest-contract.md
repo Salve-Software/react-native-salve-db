@@ -1,8 +1,8 @@
-# Sync REST Contract (alvo — ainda não implementado no motor nativo)
+# Sync REST Contract (implementado no motor nativo e no example/)
 
-> **Status:** este doc descreve o contrato de sync **alvo**, decidido nesta rodada de discussão, que vai **substituir** o contrato batchado hoje documentado em [`architecture.md`](./architecture.md) e nos trechos de sync de [`mvp-scope.md`](./mvp-scope.md). O motor nativo (`cpp/sync/`) ainda fala o protocolo antigo — a migração é um trabalho futuro separado, ainda não iniciado. Até lá, `architecture.md` continua sendo a fonte de verdade do que **está implementado hoje**; este doc é a fonte de verdade do que **vai substituir isso**.
+> **Status:** o motor nativo (`cpp/sync/`), o contrato declarativo TS (`src/types/sync/`) e a migração de estado persistido descritos neste doc estão **implementados** (issue #84). `example/` já sincroniza contra o `packages/salve-db-server` real (`UserSchema`/`ProductSchema`, `SyncTestScreen`) — `mock-sync-server/` e os schemas de teste antigos foram removidos. A cobertura `react-native-harness` ainda fica para uma rodada separada. Ver "Decisões fechadas na implementação" no fim deste doc para os pontos que a rodada de discussão original deixou em aberto.
 >
-> **Referência viva:** [`packages/salve-db-server`](../packages/salve-db-server) implementa exatamente este contrato — um backend REST de referência que qualquer adotante da lib pode ler como "essa é a forma que minha API precisa ter". O README de lá cobre o contrato do ponto de vista do backend; este doc cobre o mesmo contrato do ponto de vista do motor de sync nativo que vai consumi-lo.
+> **Referência viva:** [`packages/salve-db-server`](../packages/salve-db-server) implementa exatamente este contrato — um backend REST de referência que qualquer adotante da lib pode ler como "essa é a forma que minha API precisa ter". O README de lá cobre o contrato do ponto de vista do backend; este doc cobre o mesmo contrato do ponto de vista do motor de sync nativo que o consome.
 
 ---
 
@@ -311,9 +311,7 @@ Duas tabelas de sistema guardam estado no formato antigo, que precisa ser tratad
 
 ## `example/` app
 
-- `example/src/schemas/{SyncTestItemSchema,SyncTestNoteSchema,SyncTestTagSchema}.ts` — atualizar `sync.endpoint` pro novo formato, remover `request`/`response`.
-- `example/mock-sync-server/` fica incompatível com o motor migrado (ainda fala o protocolo batchado). Decisão a tomar ao implementar: aposentar esse mock e apontar o app de exemplo pro `packages/salve-db-server` (adicionando módulos que espelhem as três entidades de teste, ou renomeando as entidades de teste pra `users`/`products` que já existem lá) — não os dois lados coexistindo.
-- `example/src/components/SyncEntityPanel.tsx` — o botão "Simulate server insert" hoje chama `POST /admin/seed`, rota que não existe no `packages/salve-db-server` (decisão deliberada — ver README de lá). Vira uma chamada direta a `POST /<base>`, que é uma escrita real e válida sob o novo contrato — não precisa mais de rota especial pra simular isso.
+Migrado: `example/mock-sync-server/` (protocolo batchado antigo) e os 3 schemas de teste antigos (`SyncTestItemSchema`/`NoteSchema`/`TagSchema`, formato `endpoint.method/path` + `request`/`response`) foram removidos — não coexistem com o motor novo. `example/src/schemas/{UserSchema,ProductSchema}.ts` espelham `IUser`/`IProduct` de `packages/salve-db-server` e sincronizam contra os módulos `/users`/`/products` reais de lá (nomes de `sinceParam`/`limitParam` diferentes por schema, provando que a config é por-módulo). `SyncTestScreen.tsx` foi reescrita: composer local (insert/edit/delete → POST/PATCH/DELETE), botão "Write directly on server" (POST direto no REST, sem passar pelo SQLite — substitui o antigo `POST /admin/seed`, rota que nunca existiu no `salve-db-server`), e um painel de debug com a contagem por `status` em `sync_queue`/`_salve_sync_metadata` por entidade.
 
 ---
 
@@ -376,10 +374,22 @@ Comparado ao exemplo equivalente em `architecture.md`: sem `request.body` com `$
 - Compression, Encryption, Batch Sync, Sync Dependencies, Multi-tenant Sync, WebSocket Sync, Custom Sync Protocol (além de REST) — mesma lista de `architecture.md`, sem mudança.
 - Semântica de `409`/conflito de escrita no push (ver seção "Sessão de sync" acima).
 
+# Decisões fechadas na implementação
+
+A rodada de discussão original deixou algumas questões em aberto "avaliar ao implementar" — foram fechadas assim:
+
+- **Falha de rede no push**: `runSyncSession` continua lançando exceção (não retorna resultado parcial) — preserva a rejeição de Promise em JS e mantém `NativeSyncResult` sem mudança de shape (sem ciclo de codegen Nitro nesta migração).
+- **Coluna desconhecida na resposta do servidor** (pull ou replace): ignorada silenciosamente, com log por sessão — REST real carrega campos extras (`createdAt`, `__v`, etc.) que o schema local não declara.
+- **Status de delete confirmado**: fica `DELETED` + `syncedAt` preenchido — é o que o motor usa pra escolher o verbo HTTP (`DELETE` vs. `PATCH`) e o que a marcação de falha precisa preservar.
+- **Corpo de `POST`/`PATCH`**: colunas declaradas do schema, menos `{primaryKey, deletedAt}` — o id vai na rota, o delete é expresso pelo verbo.
+- **`maxPushItemsPerSession`**: existe, como constante fixa do motor (`kMaxPushItemsPerSession = 200`), não como campo do contrato declarativo — a migração está encolhendo o contrato, não expandindo.
+- **Precisão do cursor de pull**: persiste `últimoTs - 1` (não o timestamp exato) — evita perder linhas que caem no mesmo milissegundo na fronteira de uma página; custo é reentrega idempotente de ~1ms via lastWriteWins.
+- **Migração do cursor pré-#84**: detectada por um carimbo de versão de motor global em `_salve_schema_versions` (não por tentar interpretar o valor antigo) — na primeira `registerSchema()` pós-upgrade, todo cursor persistido é descartado de uma vez, disparando um pull completo desde `since=0`.
+
 # Rastreamento
 
-Todo o trabalho descrito neste doc (contrato TS, motor nativo, migração de estado persistido, `example/`) é rastreado numa única issue: **#84**.
+Todo o trabalho descrito neste doc é rastreado na issue **#84** (motor nativo + contrato TS + migração de estado — concluído) e na issue **#85** (read-flow cache-first / gatilho de sync por leitura — concluído antes da #84, na mesma branch, e ortogonal ao protocolo de wire). `example/` completo + testes `react-native-harness` ficam para uma issue de follow-up.
 
-A epic #74 e a issue #77 foram fechadas — o modelo de Replace Transaction via array `ack` que elas construíram é substituído pelo mecanismo por-item deste doc. #75 e #76 continuam válidas e mergeadas (fundação de metadata e cascade de FK são reaproveitadas sem mudança, ver "O que já reaproveita sem mudança" acima).
+A epic #74 e a issue #77 foram fechadas — o modelo de Replace Transaction via array `ack` que elas construíram foi substituído pelo mecanismo por-item deste doc. #75 e #76 continuam válidas e mergeadas (fundação de metadata e cascade de FK foram reaproveitadas sem mudança, ver "O que já reaproveita sem mudança" acima).
 
-Depois que a issue acima for concluída, `docs/architecture.md`/`docs/mvp-scope.md` devem ser atualizados pra refletir o contrato novo como o estado real, e este doc pode ser arquivado/mesclado neles.
+`docs/architecture.md`/`docs/mvp-scope.md` ainda precisam ser atualizados pra refletir o contrato novo como o estado real do motor (pendente); depois disso este doc pode ser arquivado/mesclado neles.
