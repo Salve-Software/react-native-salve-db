@@ -133,4 +133,34 @@ void SalveMetadataManager::markDeletedSynced(const std::string& tableName, const
   );
 }
 
+void SalveMetadataManager::markPulledSynced(const std::string& tableName, const std::string& entityId,
+                                             const std::string& status, int64_t syncedAtMs) {
+  std::string operation = (status == "DELETED") ? "delete" : "insert";
+  _conn->execute(
+    "INSERT INTO _salve_sync_metadata"
+    " (tableName, localId, entityId, remoteId, operation, status, retryCount, lastError, version, createdAt, updatedAt, syncedAt)"
+    " VALUES (?, ?, ?, ?, ?, ?, 0, NULL, NULL, ?, ?, ?)"
+    " ON CONFLICT(tableName, entityId) DO UPDATE SET"
+    " remoteId = excluded.remoteId, status = excluded.status, syncedAt = excluded.syncedAt, updatedAt = excluded.updatedAt"
+    " ON CONFLICT(tableName, localId) DO UPDATE SET"
+    " entityId = excluded.entityId, remoteId = excluded.remoteId, status = excluded.status,"
+    " syncedAt = excluded.syncedAt, updatedAt = excluded.updatedAt",
+    {
+      tableName, entityId, entityId, entityId, operation, status,
+      static_cast<double>(syncedAtMs), static_cast<double>(syncedAtMs), static_cast<double>(syncedAtMs)
+    }
+  );
+}
+
+void SalveMetadataManager::markFailed(const std::string& tableName, const std::string& localId,
+                                       const std::string& error, int64_t updatedAtMs) {
+  _conn->execute(
+    "UPDATE _salve_sync_metadata SET"
+    " status = CASE WHEN status = 'DELETED' THEN 'DELETED' ELSE 'FAILED' END,"
+    " retryCount = retryCount + 1, lastError = ?, updatedAt = ?"
+    " WHERE tableName = ? AND localId = ?",
+    { error, static_cast<double>(updatedAtMs), tableName, localId }
+  );
+}
+
 } // namespace margelo::nitro::salvedb
