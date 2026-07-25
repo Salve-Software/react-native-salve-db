@@ -1,19 +1,30 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ResourceStore } from '../store';
+import { PGlite } from '@electric-sql/pglite';
+import { PostgresResourceStore } from '../store';
 import type { IResourceBase } from '../types';
 
 interface IWidget extends IResourceBase {
   label: string;
 }
 
-describe('ResourceStore', () => {
-  describe('create', () => {
-    it('assigns an incrementing id and stamps updatedAt/deletedAt', () => {
-      const store = new ResourceStore<IWidget>();
+// A synthetic entity/table, isolated from docker/init.sql's real schema — this
+// file tests PostgresResourceStore's genericity, not any specific real entity.
+async function freshStore(): Promise<PostgresResourceStore<IWidget>> {
+  const db = new PGlite();
+  await db.exec(
+    'CREATE TABLE widgets (id SERIAL PRIMARY KEY, label TEXT NOT NULL, "updatedAt" BIGINT NOT NULL, "deletedAt" BIGINT)'
+  );
+  return new PostgresResourceStore<IWidget>(db, { table: 'widgets', columns: ['label'] });
+}
 
-      const a = store.create({ label: 'a' });
-      const b = store.create({ label: 'b' });
+describe('PostgresResourceStore', () => {
+  describe('create', () => {
+    it('assigns an incrementing id and stamps updatedAt/deletedAt', async () => {
+      const store = await freshStore();
+
+      const a = await store.create({ label: 'a' });
+      const b = await store.create({ label: 'b' });
 
       assert.equal(a.id, 1);
       assert.equal(b.id, 2);
@@ -23,33 +34,33 @@ describe('ResourceStore', () => {
   });
 
   describe('get', () => {
-    it('returns the live row', () => {
-      const store = new ResourceStore<IWidget>();
-      const created = store.create({ label: 'a' });
+    it('returns the live row', async () => {
+      const store = await freshStore();
+      const created = await store.create({ label: 'a' });
 
-      assert.deepEqual(store.get(created.id), created);
+      assert.deepEqual(await store.get(created.id), created);
     });
 
-    it('returns null for a missing id', () => {
-      const store = new ResourceStore<IWidget>();
-      assert.equal(store.get(999), null);
+    it('returns null for a missing id', async () => {
+      const store = await freshStore();
+      assert.equal(await store.get(999), null);
     });
 
-    it('returns null for a tombstoned id', () => {
-      const store = new ResourceStore<IWidget>();
-      const created = store.create({ label: 'a' });
-      store.remove(created.id);
+    it('returns null for a tombstoned id', async () => {
+      const store = await freshStore();
+      const created = await store.create({ label: 'a' });
+      await store.remove(created.id);
 
-      assert.equal(store.get(created.id), null);
+      assert.equal(await store.get(created.id), null);
     });
   });
 
   describe('update', () => {
-    it('merges the patch and bumps updatedAt', () => {
-      const store = new ResourceStore<IWidget>();
-      const created = store.create({ label: 'a' });
+    it('merges the patch and bumps updatedAt', async () => {
+      const store = await freshStore();
+      const created = await store.create({ label: 'a' });
 
-      const updated = store.update(created.id, { label: 'b' });
+      const updated = await store.update(created.id, { label: 'b' });
 
       assert.ok(updated);
       assert.equal(updated?.label, 'b');
@@ -57,40 +68,40 @@ describe('ResourceStore', () => {
       assert.ok((updated?.updatedAt ?? 0) > created.updatedAt);
     });
 
-    it('returns null for a missing id', () => {
-      const store = new ResourceStore<IWidget>();
-      assert.equal(store.update(999, { label: 'x' }), null);
+    it('returns null for a missing id', async () => {
+      const store = await freshStore();
+      assert.equal(await store.update(999, { label: 'x' }), null);
     });
 
-    it('returns null for a tombstoned id', () => {
-      const store = new ResourceStore<IWidget>();
-      const created = store.create({ label: 'a' });
-      store.remove(created.id);
+    it('returns null for a tombstoned id', async () => {
+      const store = await freshStore();
+      const created = await store.create({ label: 'a' });
+      await store.remove(created.id);
 
-      assert.equal(store.update(created.id, { label: 'x' }), null);
+      assert.equal(await store.update(created.id, { label: 'x' }), null);
     });
   });
 
   describe('remove', () => {
-    it('returns true the first time and false on a second delete of the same id', () => {
-      const store = new ResourceStore<IWidget>();
-      const created = store.create({ label: 'a' });
+    it('returns true the first time and false on a second delete of the same id', async () => {
+      const store = await freshStore();
+      const created = await store.create({ label: 'a' });
 
-      assert.equal(store.remove(created.id), true);
-      assert.equal(store.remove(created.id), false);
+      assert.equal(await store.remove(created.id), true);
+      assert.equal(await store.remove(created.id), false);
     });
 
-    it('returns false for a missing id', () => {
-      const store = new ResourceStore<IWidget>();
-      assert.equal(store.remove(999), false);
+    it('returns false for a missing id', async () => {
+      const store = await freshStore();
+      assert.equal(await store.remove(999), false);
     });
 
-    it('collapses the row to exactly { id, deletedAt } in list() — no leaked fields', () => {
-      const store = new ResourceStore<IWidget>();
-      const created = store.create({ label: 'a' });
-      store.remove(created.id);
+    it('collapses the row to exactly { id, deletedAt } in list() — no leaked fields', async () => {
+      const store = await freshStore();
+      const created = await store.create({ label: 'a' });
+      await store.remove(created.id);
 
-      const [tombstone] = store.list({ since: 0, limit: 10 });
+      const [tombstone] = await store.list({ since: 0, limit: 10 });
 
       assert.deepEqual(Object.keys(tombstone!).sort(), ['deletedAt', 'id']);
       assert.equal(tombstone!.id, created.id);
@@ -98,59 +109,59 @@ describe('ResourceStore', () => {
   });
 
   describe('list', () => {
-    it('is empty for a fresh store', () => {
-      const store = new ResourceStore<IWidget>();
-      assert.deepEqual(store.list({ since: 0, limit: 10 }), []);
+    it('is empty for a fresh store', async () => {
+      const store = await freshStore();
+      assert.deepEqual(await store.list({ since: 0, limit: 10 }), []);
     });
 
-    it('orders by (updatedAt, id) ascending', () => {
-      const store = new ResourceStore<IWidget>();
-      const a = store.create({ label: 'a' });
-      const b = store.create({ label: 'b' });
-      const c = store.create({ label: 'c' });
+    it('orders by (updatedAt, id) ascending', async () => {
+      const store = await freshStore();
+      const a = await store.create({ label: 'a' });
+      const b = await store.create({ label: 'b' });
+      const c = await store.create({ label: 'c' });
 
-      const rows = store.list({ since: 0, limit: 10 });
+      const rows = await store.list({ since: 0, limit: 10 });
 
       assert.deepEqual(rows.map((r) => r.id), [a.id, b.id, c.id]);
     });
 
-    it('applies an exclusive cursor — since equal to the last row is fully caught up', () => {
-      const store = new ResourceStore<IWidget>();
-      store.create({ label: 'a' });
-      const b = store.create({ label: 'b' });
+    it('applies an exclusive cursor — since equal to the last row is fully caught up', async () => {
+      const store = await freshStore();
+      await store.create({ label: 'a' });
+      const b = await store.create({ label: 'b' });
 
-      assert.deepEqual(store.list({ since: b.updatedAt, limit: 10 }), []);
+      assert.deepEqual(await store.list({ since: b.updatedAt, limit: 10 }), []);
     });
 
-    it('caps results at limit, in cursor order', () => {
-      const store = new ResourceStore<IWidget>();
-      const a = store.create({ label: 'a' });
-      const b = store.create({ label: 'b' });
-      store.create({ label: 'c' });
+    it('caps results at limit, in cursor order', async () => {
+      const store = await freshStore();
+      const a = await store.create({ label: 'a' });
+      const b = await store.create({ label: 'b' });
+      await store.create({ label: 'c' });
 
-      const rows = store.list({ since: 0, limit: 2 });
+      const rows = await store.list({ since: 0, limit: 2 });
 
       assert.deepEqual(rows.map((r) => r.id), [a.id, b.id]);
     });
 
-    it('resuming from the last id of a page yields exactly the remainder', () => {
-      const store = new ResourceStore<IWidget>();
-      store.create({ label: 'a' });
-      const b = store.create({ label: 'b' });
-      const c = store.create({ label: 'c' });
+    it('resuming from the last id of a page yields exactly the remainder', async () => {
+      const store = await freshStore();
+      await store.create({ label: 'a' });
+      const b = await store.create({ label: 'b' });
+      const c = await store.create({ label: 'c' });
 
-      const resumed = store.list({ since: b.updatedAt, limit: 10 });
+      const resumed = await store.list({ since: b.updatedAt, limit: 10 });
 
       assert.deepEqual(resumed.map((r) => r.id), [c.id]);
     });
 
-    it('mixes live rows and tombstones in the same cursor order', () => {
-      const store = new ResourceStore<IWidget>();
-      const a = store.create({ label: 'a' });
-      const b = store.create({ label: 'b' });
-      store.remove(a.id);
+    it('mixes live rows and tombstones in the same cursor order', async () => {
+      const store = await freshStore();
+      const a = await store.create({ label: 'a' });
+      const b = await store.create({ label: 'b' });
+      await store.remove(a.id);
 
-      const rows = store.list({ since: 0, limit: 10 });
+      const rows = await store.list({ since: 0, limit: 10 });
 
       // a's cursor key became its deletedAt (later than its original
       // updatedAt), so it now sorts after b, not before it.

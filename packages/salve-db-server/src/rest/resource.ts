@@ -1,12 +1,12 @@
 import { Router, type Request, type Response } from 'express';
-import type { IResourceBase, IResourceModule, WritableFields } from './types';
-import type { ResourceStore } from './store';
+import type { IResourceBase, IResourceModule, IResourceStore, WritableFields } from './types';
 import type { ParseResult } from './validation';
+import { logger } from './logger';
 
 export interface IResourceModuleConfig<TEntity extends IResourceBase> {
   /** Mount point, e.g. `"/users"`. */
   basePath: string;
-  store: ResourceStore<TEntity>;
+  store: IResourceStore<TEntity>;
   /** Query param carrying the epoch-millis cursor, e.g. `"updatedAfter"`. */
   sinceParam: string;
   /** Query param carrying the page size, e.g. `"limit"`. */
@@ -48,77 +48,87 @@ function parseId(raw: string): number | null {
   return Number.isInteger(value) && value > 0 ? value : null;
 }
 
-function notFound(res: Response): void {
+function notFound(req: Request, res: Response, basePath: string): void {
+  logger.warn('resource.not_found', { basePath, method: req.method, path: req.path });
   res.status(404).json({ error: 'Not Found' });
 }
 
-function badRequest(res: Response, error: string): void {
+function badRequest(req: Request, res: Response, basePath: string, error: string): void {
+  logger.warn('resource.bad_request', { basePath, method: req.method, path: req.path, error });
   res.status(400).json({ error });
 }
 
 /**
  * Builds the 5 standard endpoints (list/get/create/update/delete) for one
- * entity, against a {@link ResourceStore}. This is the only file in the
+ * entity, against an {@link IResourceStore}. This is the only file in the
  * package that knows about Express — every per-entity module configures this
- * factory instead of hand-rolling routes.
+ * factory instead of hand-rolling routes. Handlers are async — Express 5
+ * forwards a rejected handler promise into the error middleware automatically.
  */
 export function createResourceModule<TEntity extends IResourceBase>(
   config: IResourceModuleConfig<TEntity>
 ): IResourceModule {
   const router = Router();
 
-  router.get('/', (req, res) => {
+  router.get('/', async (req, res) => {
     const since = parseCursor(queryValue(req, config.sinceParam));
-    if (since === null) return badRequest(res, `${config.sinceParam} must be a non-negative integer`);
+    if (since === null) return badRequest(req, res, config.basePath, `${config.sinceParam} must be a non-negative integer`);
 
     const limit = parseLimit(queryValue(req, config.limitParam), config.defaultLimit, config.maxLimit);
-    if (limit === null) return badRequest(res, `${config.limitParam} must be a positive integer`);
+    if (limit === null) return badRequest(req, res, config.basePath, `${config.limitParam} must be a positive integer`);
 
-    res.json(config.store.list({ since, limit }));
+    const rows = await config.store.list({ since, limit });
+    logger.info('resource.list', { basePath: config.basePath, since, limit, returned: rows.length });
+    res.json(rows);
   });
 
-  router.get('/:id', (req, res) => {
+  router.get('/:id', async (req, res) => {
     const id = parseId(req.params.id);
-    if (id === null) return notFound(res);
+    if (id === null) return notFound(req, res, config.basePath);
 
     // store.get() already returns null for a tombstoned row — this is where
     // a delete becomes invisible to a single-resource fetch.
-    const row = config.store.get(id);
-    if (row === null) return notFound(res);
+    const row = await config.store.get(id);
+    if (row === null) return notFound(req, res, config.basePath);
 
+    logger.info('resource.get', { basePath: config.basePath, id });
     res.json(row);
   });
 
-  router.post('/', (req, res) => {
+  router.post('/', async (req, res) => {
     const result = config.parseCreate(req.body);
-    if (!result.ok) return badRequest(res, result.error);
+    if (!result.ok) return badRequest(req, res, config.basePath, result.error);
 
-    res.status(201).json(config.store.create(result.value));
+    const created = await config.store.create(result.value);
+    logger.info('resource.create', { basePath: config.basePath, id: created.id });
+    res.status(201).json(created);
   });
 
-  router.patch('/:id', (req, res) => {
+  router.patch('/:id', async (req, res) => {
     const id = parseId(req.params.id);
-    if (id === null) return notFound(res);
+    if (id === null) return notFound(req, res, config.basePath);
 
     const result = config.parsePatch(req.body);
-    if (!result.ok) return badRequest(res, result.error);
+    if (!result.ok) return badRequest(req, res, config.basePath, result.error);
     if (Object.keys(result.value).length === 0) {
-      return badRequest(res, 'No writable fields provided');
+      return badRequest(req, res, config.basePath, 'No writable fields provided');
     }
 
-    const row = config.store.update(id, result.value);
-    if (row === null) return notFound(res);
+    const row = await config.store.update(id, result.value);
+    if (row === null) return notFound(req, res, config.basePath);
 
+    logger.info('resource.update', { basePath: config.basePath, id, fields: Object.keys(result.value) });
     res.json(row);
   });
 
-  router.delete('/:id', (req, res) => {
+  router.delete('/:id', async (req, res) => {
     const id = parseId(req.params.id);
-    if (id === null) return notFound(res);
+    if (id === null) return notFound(req, res, config.basePath);
 
-    const removed = config.store.remove(id);
-    if (!removed) return notFound(res);
+    const removed = await config.store.remove(id);
+    if (!removed) return notFound(req, res, config.basePath);
 
+    logger.info('resource.delete', { basePath: config.basePath, id });
     res.status(204).end();
   });
 

@@ -1,6 +1,5 @@
 import { createResourceModule } from '../rest/resource';
-import type { IResourceModule } from '../rest/types';
-import type { ResourceStore } from '../rest/store';
+import type { IResourceModule, IResourceStore } from '../rest/types';
 import type { IUser } from './user';
 import { parseCreateUser, parsePatchUser } from './user';
 import { userStore } from './store';
@@ -8,11 +7,11 @@ import { userStore } from './store';
 /**
  * Builds a `/users` module against any store instance — the production
  * server uses the shared {@link userStore} singleton; tests pass a fresh
- * `ResourceStore` per case so runs never share state with each other.
+ * PGlite-backed store per case so runs never share state with each other.
  *
  * Users use the default-flavoured param names (`updatedAfter` / `limit`).
  */
-export function createUsersModule(store: ResourceStore<IUser>): IResourceModule {
+export function createUsersModule(store: IResourceStore<IUser>): IResourceModule {
   return createResourceModule<IUser>({
     basePath: '/users',
     store,
