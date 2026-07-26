@@ -182,7 +182,7 @@ describe('update/delete without where() touches the whole table', () => {
     expect(all.every((row) => row.status === 'done')).toBe(true);
   });
 
-  it('delete() without where() empties the table', async () => {
+  it('delete() without where() soft-deletes every row', async () => {
     Database.configure({ name: uniqueName('e2e_bulk_delete') });
 
     const schema: AnySchema = {
@@ -198,10 +198,15 @@ describe('update/delete without where() touches the whole table', () => {
 
     Database.delete(schema).execute();
 
-    const remaining = Database.execute('SELECT COUNT(*) as count FROM "items"') as {
-      count: number;
-    }[];
-    expect(remaining[0].count).toBe(0);
+    // Gone as far as the query layer is concerned...
+    expect(Database.select(schema).limit(50).execute()).toEqual([]);
+    expect(Database.count(schema).execute()).toBe(0);
+
+    // ...but still on disk, stamped, so sync can push the tombstone.
+    const raw = Database.execute(
+      'SELECT COUNT(*) as count FROM "items" WHERE "deletedAt" IS NOT NULL'
+    ) as { count: number }[];
+    expect(raw[0].count).toBe(2);
   });
 });
 
@@ -305,8 +310,17 @@ describe('sync_queue side effects from real writes', () => {
     ) as { operation: string; entity: string }[];
 
     expect(queue).toHaveLength(3);
-    expect(queue.map((row) => row.operation)).toEqual(['insert', 'update', 'delete']);
+    // The queue records the physical write, and a soft delete is an UPDATE.
+    // What makes it a delete downstream is the tombstone asserted below —
+    // SyncPushPhase re-reads the row and pushes a DELETE when deletedAt is set.
+    expect(queue.map((row) => row.operation)).toEqual(['insert', 'update', 'update']);
     expect(queue.every((row) => row.entity === 'customers')).toBe(true);
+
+    const metadata = Database.execute(
+      'SELECT operation, status FROM _salve_sync_metadata WHERE tableName = ?',
+      ['customers']
+    ) as { operation: string; status: string }[];
+    expect(metadata).toEqual([{ operation: 'delete', status: 'DELETED' }]);
   });
 });
 
