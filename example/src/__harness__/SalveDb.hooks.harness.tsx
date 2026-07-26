@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { describe, it, expect, render, waitFor } from 'react-native-harness';
-import { Database, SalveDbProvider, eq, gte, useDatabaseReady, useQuery } from '@salve-software/react-native-salve-db';
+import { Database, SalveDbProvider, eq, gte, useDatabaseReady, useInfiniteQuery, useQuery } from '@salve-software/react-native-salve-db';
 import type { AnySchema, IDatabaseReadyState } from '@salve-software/react-native-salve-db';
 
 function uniqueName(prefix: string): string {
@@ -9,6 +9,12 @@ function uniqueName(prefix: string): string {
 
 /** `useQuery`'s row type is inferred from the schema's literal `columns` shape — keep schema objects `satisfies AnySchema`, never `: AnySchema`, or that literal shape is lost. */
 type UseQueryResultOf<TSchema extends AnySchema> = ReturnType<typeof useQuery<TSchema>>;
+type UseInfiniteQueryResultOf<TSchema extends AnySchema> = ReturnType<typeof useInfiniteQuery<TSchema>>;
+
+/** MigrationEngine injects `deletedAt` into every schema, sync-enabled or not — a live row always carries it as `null`. */
+function row(id: number): { id: number; deletedAt: null } {
+  return { id, deletedAt: null };
+}
 
 /**
  * `react-native-harness`'s `render()` exposes no DOM/tree query API — only
@@ -108,13 +114,13 @@ describe('useQuery — real reactivity through the full native bridge', () => {
     await waitFor(() => expect(latest?.data).toEqual([]));
 
     Database.insert(schema).values({ id: 1 }).execute();
-    await waitFor(() => expect(latest?.data).toEqual([{ id: 1 }]));
+    await waitFor(() => expect(latest?.data).toEqual([row(1)]));
 
     Database.insert(schema).values({ id: 2 }).execute();
-    await waitFor(() => expect(latest?.data).toEqual([{ id: 1 }, { id: 2 }]));
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2)]));
 
     Database.delete(schema).where(eq('id', 1)).execute();
-    await waitFor(() => expect(latest?.data).toEqual([{ id: 2 }]));
+    await waitFor(() => expect(latest?.data).toEqual([row(2)]));
   });
 
   it('two components querying the same schema+deps both react to one write', async () => {
@@ -144,8 +150,8 @@ describe('useQuery — real reactivity through the full native bridge', () => {
     Database.insert(schema).values({ id: 1 }).execute();
 
     await waitFor(() => {
-      expect(latestA?.data).toEqual([{ id: 1 }]);
-      expect(latestB?.data).toEqual([{ id: 1 }]);
+      expect(latestA?.data).toEqual([row(1)]);
+      expect(latestB?.data).toEqual([row(1)]);
     });
   });
 });
@@ -189,7 +195,7 @@ describe('useQuery — deps drive re-query, not just table writes', () => {
     Database.insert(schema).values({ id: 3 }).execute();
     Database.insert(schema).values({ id: 4 }).execute();
 
-    await waitFor(() => expect(latest?.data).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }]));
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2), row(3), row(4)]));
 
     await rerender(
       <SalveDbProvider config={config} schemas={[schema]}>
@@ -197,7 +203,7 @@ describe('useQuery — deps drive re-query, not just table writes', () => {
       </SalveDbProvider>
     );
 
-    await waitFor(() => expect(latest?.data).toEqual([{ id: 3 }, { id: 4 }]));
+    await waitFor(() => expect(latest?.data).toEqual([row(3), row(4)]));
   });
 });
 
@@ -236,5 +242,87 @@ describe('useQuery — a throwing queryFn surfaces via `error`, not a crash', ()
     expect(String(latest?.error)).toContain(
       'Synchronous execute() requires an index covering column "title" as its leading column'
     );
+  });
+});
+
+function InfiniteQueryProbe<TSchema extends AnySchema>({ schema, pageSize, onResult }: {
+  schema: TSchema;
+  pageSize: number;
+  onResult: (result: UseInfiniteQueryResultOf<TSchema>) => void;
+}) {
+  const result = useInfiniteQuery({ schema, queryFn: (q) => q.orderBy('id', 'asc'), pageSize });
+  useEffect(() => onResult(result));
+  return null;
+}
+
+describe('useInfiniteQuery — paginated loading through the full native bridge', () => {
+  it('loads the first page only, then accumulates further pages via fetchNextPage()', async () => {
+    const schema = {
+      name: uniqueName('infinite_pages'),
+      version: 1,
+      primaryKey: 'id',
+      columns: { id: { type: 'integer' } },
+    } satisfies AnySchema;
+    const config = { name: uniqueName('e2e_infinite_pages') };
+
+    let latest: UseInfiniteQueryResultOf<typeof schema> | undefined;
+
+    await render(
+      <SalveDbProvider config={config} schemas={[schema]}>
+        <InfiniteQueryProbe schema={schema} pageSize={2} onResult={(result) => { latest = result; }} />
+      </SalveDbProvider>
+    );
+
+    await waitFor(() => expect(latest?.data).toEqual([]));
+
+    for (let i = 1; i <= 5; i++) {
+      Database.insert(schema).values({ id: i }).execute();
+    }
+
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2)]));
+    expect(latest?.hasNextPage).toBe(true);
+
+    latest?.fetchNextPage();
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2), row(3), row(4)]));
+    expect(latest?.hasNextPage).toBe(true);
+
+    latest?.fetchNextPage();
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2), row(3), row(4), row(5)]));
+    expect(latest?.hasNextPage).toBe(false);
+  });
+
+  it('a write to the table resets pagination back to page 0', async () => {
+    const schema = {
+      name: uniqueName('infinite_reset'),
+      version: 1,
+      primaryKey: 'id',
+      columns: { id: { type: 'integer' } },
+    } satisfies AnySchema;
+    const config = { name: uniqueName('e2e_infinite_reset') };
+
+    let latest: UseInfiniteQueryResultOf<typeof schema> | undefined;
+
+    await render(
+      <SalveDbProvider config={config} schemas={[schema]}>
+        <InfiniteQueryProbe schema={schema} pageSize={2} onResult={(result) => { latest = result; }} />
+      </SalveDbProvider>
+    );
+
+    await waitFor(() => expect(latest?.data).toEqual([]));
+
+    Database.insert(schema).values({ id: 1 }).execute();
+    Database.insert(schema).values({ id: 2 }).execute();
+    Database.insert(schema).values({ id: 3 }).execute();
+
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2)]));
+    latest?.fetchNextPage();
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2), row(3)]));
+
+    Database.insert(schema).values({ id: 4 }).execute();
+
+    // A write resets pagination to page 0 — row 4 exists now, but only the
+    // first page is visible again until fetchNextPage() runs.
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2)]));
+    expect(latest?.hasNextPage).toBe(true);
   });
 });

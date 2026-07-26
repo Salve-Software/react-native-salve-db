@@ -182,7 +182,7 @@ describe('update/delete without where() touches the whole table', () => {
     expect(all.every((row) => row.status === 'done')).toBe(true);
   });
 
-  it('delete() without where() empties the table', async () => {
+  it('delete() without where() soft-deletes every row — gone from select(), still present as a tombstone', async () => {
     Database.configure({ name: uniqueName('e2e_bulk_delete') });
 
     const schema: AnySchema = {
@@ -198,10 +198,13 @@ describe('update/delete without where() touches the whole table', () => {
 
     Database.delete(schema).execute();
 
-    const remaining = Database.execute('SELECT COUNT(*) as count FROM "items"') as {
+    // Delete is always soft in this system — the query builder's select() filters
+    // deletedAt rows out, but a raw, unfiltered COUNT(*) still sees both physical rows.
+    expect(Database.select(schema).limit(10).execute()).toHaveLength(0);
+    const stillPhysicallyPresent = Database.execute('SELECT COUNT(*) as count FROM "items" WHERE "deletedAt" IS NOT NULL') as {
       count: number;
     }[];
-    expect(remaining[0].count).toBe(0);
+    expect(stillPhysicallyPresent[0].count).toBe(2);
   });
 });
 
@@ -275,22 +278,10 @@ describe('sync_queue side effects from real writes', () => {
       sync: {
         enabled: true,
         direction: 'bidirectional',
-        strategy: 'operations',
         conflict: 'lastWriteWins',
         transport: 'rest',
-        endpoint: { method: 'POST', path: '/sync/customers' },
-        request: {
-          body: {
-            cursor: { $ref: 'cursor' },
-            operations: { $ref: 'operations' },
-            pageSize: { $ref: 'pageSize' },
-          },
-        },
-        response: {
-          cursor: '$.cursor',
-          operations: '$.operations',
-          hasMore: '$.hasMore',
-        },
+        endpoint: { basePath: '/customers', sinceParam: 'updatedAfter', limitParam: 'limit' },
+        pagination: { pageSize: 20, maxPagesPerSession: 20 },
       },
     };
     await Database.register({ schema });
@@ -304,8 +295,11 @@ describe('sync_queue side effects from real writes', () => {
       ['customers']
     ) as { operation: string; entity: string }[];
 
+    // A soft delete is physically an UPDATE (it sets deletedAt) — sync_queue
+    // logs the SQL statement kind, not the semantic delete; SyncPushPhase
+    // tells the two apart later by checking deletedAt directly, not this column.
     expect(queue).toHaveLength(3);
-    expect(queue.map((row) => row.operation)).toEqual(['insert', 'update', 'delete']);
+    expect(queue.map((row) => row.operation)).toEqual(['insert', 'update', 'update']);
     expect(queue.every((row) => row.entity === 'customers')).toBe(true);
   });
 });
