@@ -23,4 +23,35 @@ describe('TableList', () => {
 
     expect(onSelect).toHaveBeenCalledWith('orders');
   });
+
+  it('groups tables prefixed with an underscore under a collapsed System section', () => {
+    render(
+      <TableList
+        tables={['users', '_salve_relations', '_sync_apply_lock']}
+        currentTable={null}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('users')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'System (2)' })).toBeInTheDocument();
+    expect(screen.queryByText('_salve_relations')).not.toBeInTheDocument();
+    expect(screen.queryByText('_sync_apply_lock')).not.toBeInTheDocument();
+  });
+
+  it('reveals system tables when the System section is toggled', () => {
+    render(<TableList tables={['users', '_salve_relations']} currentTable={null} onSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'System (1)' }));
+
+    expect(screen.getByText('_salve_relations')).toBeInTheDocument();
+  });
+
+  it('auto-expands the System section when a system table is selected', () => {
+    render(
+      <TableList tables={['users', '_salve_relations']} currentTable="_salve_relations" onSelect={vi.fn()} />
+    );
+
+    expect(screen.getByText('_salve_relations')).toBeInTheDocument();
+  });
 });
