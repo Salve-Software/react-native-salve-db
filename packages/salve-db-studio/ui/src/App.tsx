@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useStudioConnection } from './hooks';
-import { StatusBadge, TableList, RowGrid, InsertForm, SqlRunner, Toast } from './components';
+import { StatusBadge, DeviceSelector, TableList, RowGrid, InsertForm, SqlRunner, Toast } from './components';
 
 function ConnectingState() {
   return (
@@ -23,6 +23,9 @@ function ConnectingState() {
 export function App() {
   const {
     appConnected,
+    devices,
+    selectedDeviceId,
+    selectDevice,
     tables,
     currentTable,
     columns,
@@ -59,7 +62,10 @@ export function App() {
       <div className="brand-stripe h-[3px] shrink-0" />
       <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-2.5">
         <span className="text-sm font-semibold tracking-tight">Salve DB Studio</span>
-        <StatusBadge connected={appConnected} />
+        <div className="flex items-center gap-2">
+          <DeviceSelector devices={devices} selectedDeviceId={selectedDeviceId} onSelect={selectDevice} />
+          <StatusBadge connected={appConnected} />
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1">

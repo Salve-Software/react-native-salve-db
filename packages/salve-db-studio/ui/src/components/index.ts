@@ -1,4 +1,5 @@
 export * from './StatusBadge';
+export * from './DeviceSelector';
 export * from './TableList';
 export * from './RowGrid';
 export * from './InsertForm';

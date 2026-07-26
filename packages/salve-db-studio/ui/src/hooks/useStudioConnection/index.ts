@@ -1,16 +1,17 @@
-import type { IColumnInfo, Row } from '../../types';
+import type { IColumnInfo, IDevice, Row } from '../../types';
 import type { IPendingHandlers, IStudioConnection } from './types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { primaryKeyColumn } from './library';
 
-/** Owns the WebSocket connection to the local Studio server and exposes table browsing/editing as plain state + actions. */
+/** Owns the WebSocket connection to the local Studio server and exposes device/table browsing/editing as plain state + actions. */
 export function useStudioConnection(): IStudioConnection {
   const wsRef = useRef<WebSocket | null>(null);
   const pendingRef = useRef(new Map<string, IPendingHandlers>());
   const nextIdRef = useRef(1);
-  const appConnectedRef = useRef(false);
+  const selectedDeviceIdRef = useRef<string | null>(null);
 
-  const [appConnected, setAppConnected] = useState(false);
+  const [devices, setDevices] = useState<IDevice[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [tables, setTables] = useState<string[]>([]);
   const [currentTable, setCurrentTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<IColumnInfo[]>([]);
@@ -19,13 +20,14 @@ export function useStudioConnection(): IStudioConnection {
 
   const send = useCallback((type: string, payload: Record<string, unknown> = {}): Promise<unknown> => {
     return new Promise((resolve, reject) => {
-      if (!wsRef.current || !appConnectedRef.current) {
-        reject(new Error('No app connected'));
+      const deviceId = selectedDeviceIdRef.current;
+      if (!wsRef.current || !deviceId) {
+        reject(new Error('No device selected'));
         return;
       }
       const id = String(nextIdRef.current++);
       pendingRef.current.set(id, { resolve, reject });
-      wsRef.current.send(JSON.stringify({ id, type, ...payload }));
+      wsRef.current.send(JSON.stringify({ id, type, deviceId, ...payload }));
     });
   }, []);
 
@@ -40,6 +42,20 @@ export function useStudioConnection(): IStudioConnection {
       .then((result) => setRows(result as Row[]))
       .catch((err: Error) => setError(err.message));
   }, [send]);
+
+  const resetTableState = useCallback(() => {
+    setCurrentTable(null);
+    setColumns([]);
+    setRows([]);
+    setTables([]);
+  }, []);
+
+  const selectDevice = useCallback((id: string) => {
+    selectedDeviceIdRef.current = id;
+    setSelectedDeviceId(id);
+    resetTableState();
+    loadTables();
+  }, [loadTables, resetTableState]);
 
   const selectTable = useCallback((name: string) => {
     setCurrentTable(name);
@@ -110,14 +126,23 @@ export function useStudioConnection(): IStudioConnection {
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data as string);
 
-        if (message.type === 'appStatus') {
-          appConnectedRef.current = message.connected;
-          setAppConnected(message.connected);
-          if (message.connected) loadTables();
+        if (message.type === 'devices') {
+          const list = message.devices as IDevice[];
+          setDevices(list);
+
+          const stillPresent = list.some((device) => device.id === selectedDeviceIdRef.current);
+          if (!stillPresent) {
+            const next = list[0]?.id ?? null;
+            selectedDeviceIdRef.current = next;
+            setSelectedDeviceId(next);
+            resetTableState();
+            if (next) loadTables();
+          }
           return;
         }
 
         if (message.type === 'change') {
+          if (message.deviceId !== selectedDeviceIdRef.current) return;
           setCurrentTable((current) => {
             if (current && message.tables.includes(current)) loadRows(current);
             return current;
@@ -134,8 +159,10 @@ export function useStudioConnection(): IStudioConnection {
       };
 
       ws.onclose = () => {
-        appConnectedRef.current = false;
-        setAppConnected(false);
+        selectedDeviceIdRef.current = null;
+        setSelectedDeviceId(null);
+        setDevices([]);
+        resetTableState();
         if (!cancelled) reconnectTimer = setTimeout(connect, 1500);
       };
 
@@ -149,10 +176,13 @@ export function useStudioConnection(): IStudioConnection {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       wsRef.current?.close();
     };
-  }, [loadTables, loadRows]);
+  }, [loadTables, loadRows, resetTableState]);
 
   return {
-    appConnected,
+    appConnected: devices.length > 0,
+    devices,
+    selectedDeviceId,
+    selectDevice,
     tables,
     currentTable,
     columns,

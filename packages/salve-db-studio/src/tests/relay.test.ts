@@ -34,22 +34,24 @@ function wait(ms: number): Promise<void> {
 }
 
 describe('StudioRelay', () => {
-  it('routes a browser command to the app and the app response back to that browser', async () => {
+  it('routes a browser command to the app device and the app response back to that browser', async () => {
     const { server, url } = await startRelayServer();
     const app = await connect(url);
     const browser = await connect(url);
 
-    app.send(JSON.stringify({ role: 'app' }));
+    app.send(JSON.stringify({ role: 'app', deviceId: 'ios-1', platform: 'ios', dbName: 'main' }));
     await wait(15);
-    const appStatusPromise = nextMessage(browser);
+    const devicesPromise = nextMessage(browser);
     browser.send(JSON.stringify({ role: 'browser' }));
-    const appStatus = await appStatusPromise;
-    assert.deepEqual(appStatus, { type: 'appStatus', connected: true });
+    assert.deepEqual(await devicesPromise, {
+      type: 'devices',
+      devices: [{ id: 'ios-1', platform: 'ios', dbName: 'main' }],
+    });
 
     const appReceived = nextMessage(app);
-    browser.send(JSON.stringify({ id: '1', type: 'listTables' }));
+    browser.send(JSON.stringify({ id: '1', type: 'listTables', deviceId: 'ios-1' }));
     const forwarded = await appReceived;
-    assert.deepEqual(forwarded, { id: '1', type: 'listTables' });
+    assert.deepEqual(forwarded, { id: '1', type: 'listTables', deviceId: 'ios-1' });
 
     const browserReceived = nextMessage(browser);
     app.send(JSON.stringify({ id: '1', ok: true, result: [{ name: 'users' }] }));
@@ -61,24 +63,24 @@ describe('StudioRelay', () => {
     server.close();
   });
 
-  it('replies immediately with an error when no app is connected', async () => {
+  it('replies immediately with an error when the target device is not connected', async () => {
     const { server, url } = await startRelayServer();
     const browser = await connect(url);
     browser.send(JSON.stringify({ role: 'browser' }));
-    await nextMessage(browser); // appStatus: connected false
+    await nextMessage(browser); // devices: []
 
     const response = nextMessage(browser);
-    browser.send(JSON.stringify({ id: '2', type: 'listTables' }));
-    assert.deepEqual(await response, { id: '2', ok: false, error: 'No app connected' });
+    browser.send(JSON.stringify({ id: '2', type: 'listTables', deviceId: 'unknown' }));
+    assert.deepEqual(await response, { id: '2', ok: false, error: 'Device not connected' });
 
     browser.close();
     server.close();
   });
 
-  it('broadcasts unsolicited app pushes (change events) to every browser', async () => {
+  it('broadcasts unsolicited app pushes (change events) to every browser, tagged with the device id', async () => {
     const { server, url } = await startRelayServer();
     const app = await connect(url);
-    app.send(JSON.stringify({ role: 'app' }));
+    app.send(JSON.stringify({ role: 'app', deviceId: 'ios-1', platform: 'ios', dbName: 'main' }));
     await wait(15);
 
     const browserA = await connect(url);
@@ -92,12 +94,57 @@ describe('StudioRelay', () => {
     const receivedB = nextMessage(browserB);
     app.send(JSON.stringify({ type: 'change', tables: ['users'] }));
 
-    assert.deepEqual(await receivedA, { type: 'change', tables: ['users'] });
-    assert.deepEqual(await receivedB, { type: 'change', tables: ['users'] });
+    assert.deepEqual(await receivedA, { type: 'change', tables: ['users'], deviceId: 'ios-1' });
+    assert.deepEqual(await receivedB, { type: 'change', tables: ['users'], deviceId: 'ios-1' });
 
     app.close();
     browserA.close();
     browserB.close();
+    server.close();
+  });
+
+  it('tracks multiple devices independently and lets a browser talk to either one', async () => {
+    const { server, url } = await startRelayServer();
+    const appIos = await connect(url);
+    const appAndroid = await connect(url);
+    appIos.send(JSON.stringify({ role: 'app', deviceId: 'ios-1', platform: 'ios', dbName: 'main' }));
+    appAndroid.send(JSON.stringify({ role: 'app', deviceId: 'android-1', platform: 'android', dbName: 'main' }));
+    await wait(15);
+
+    const browser = await connect(url);
+    const devicesPromise = nextMessage(browser);
+    browser.send(JSON.stringify({ role: 'browser' }));
+    const { devices } = (await devicesPromise) as { devices: { id: string }[] };
+    assert.deepEqual(
+      devices.map((d) => d.id).sort(),
+      ['android-1', 'ios-1']
+    );
+
+    const androidReceived = nextMessage(appAndroid);
+    browser.send(JSON.stringify({ id: '9', type: 'listTables', deviceId: 'android-1' }));
+    assert.deepEqual(await androidReceived, { id: '9', type: 'listTables', deviceId: 'android-1' });
+
+    appIos.close();
+    appAndroid.close();
+    browser.close();
+    server.close();
+  });
+
+  it('drops the device from the list when it disconnects', async () => {
+    const { server, url } = await startRelayServer();
+    const app = await connect(url);
+    app.send(JSON.stringify({ role: 'app', deviceId: 'ios-1', platform: 'ios', dbName: 'main' }));
+    await wait(15);
+
+    const browser = await connect(url);
+    browser.send(JSON.stringify({ role: 'browser' }));
+    await nextMessage(browser); // devices: [ios-1]
+
+    const devicesAfterClose = nextMessage(browser);
+    app.close();
+    assert.deepEqual(await devicesAfterClose, { type: 'devices', devices: [] });
+
+    browser.close();
     server.close();
   });
 });

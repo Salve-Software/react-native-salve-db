@@ -1,3 +1,5 @@
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+
 import type { IStudioSocket } from '../types';
 import type { SalveDatabase } from '../../specs/SalveDatabase.nitro';
 import { StudioAgent } from '../StudioAgent.class';
@@ -52,14 +54,38 @@ describe('StudioAgent', () => {
     };
 
     const agent = new StudioAgent(bridge);
-    agent.start(factory);
+    agent.start(factory, 'my-app-db');
     expect(sockets).toHaveLength(1);
     expect(sockets[0]!.url).toBe('ws://localhost:7377');
 
     sockets[0]!.socket.onopen?.();
-    expect(sockets[0]!.socket.lastSent()).toEqual({ role: 'app' });
+    const sent = sockets[0]!.socket.lastSent() as Record<string, unknown>;
+    expect(sent).toMatchObject({ role: 'app', platform: 'ios', dbName: 'my-app-db' });
+    expect(typeof sent.deviceId).toBe('string');
     expect(bridge.subscribeToChanges).toHaveBeenCalledTimes(1);
 
+    agent.stop();
+  });
+
+  test('keeps the same deviceId across reconnects', () => {
+    const { bridge } = makeBridge();
+    const sockets: FakeSocket[] = [];
+    const factory = () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    };
+
+    const agent = new StudioAgent(bridge);
+    agent.start(factory, 'my-app-db');
+    sockets[0]!.onopen?.();
+    const firstDeviceId = (sockets[0]!.lastSent() as { deviceId: string }).deviceId;
+
+    agent.start(factory, 'my-app-db');
+    sockets[1]!.onopen?.();
+    const secondDeviceId = (sockets[1]!.lastSent() as { deviceId: string }).deviceId;
+
+    expect(secondDeviceId).toBe(firstDeviceId);
     agent.stop();
   });
 

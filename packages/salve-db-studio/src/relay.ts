@@ -1,15 +1,22 @@
 import type { WebSocket, WebSocketServer } from 'ws';
-import type { ICommandEnvelope, StudioRole } from './types';
+import type { ICommandEnvelope, IStudioDevice, StudioRole } from './types';
+
+interface IAppEntry {
+  socket: WebSocket;
+  platform: string;
+  dbName: string;
+}
 
 /**
- * Brokers messages between exactly one connected app (the running RN app's
- * StudioAgent) and any number of connected browser tabs. Browsers send
- * commands with an `id`; the matching app response is routed back to the
- * browser that asked for it. Unsolicited app pushes (`{ type: 'change', ... }`)
- * are broadcast to every browser.
+ * Brokers messages between any number of connected apps (each a running RN app's
+ * StudioAgent, identified by its `deviceId`) and any number of connected browser
+ * tabs. Browsers send commands with an `id` and a `deviceId` naming which app to
+ * talk to; the matching app response is routed back to the browser that asked
+ * for it. Unsolicited app pushes (`{ type: 'change', ... }`) are broadcast to
+ * every browser, tagged with the source `deviceId`.
  */
 export class StudioRelay {
-  private appSocket: WebSocket | null = null;
+  private readonly apps = new Map<string, IAppEntry>();
   private readonly browserSockets = new Set<WebSocket>();
   private readonly pendingRequests = new Map<string, WebSocket>();
 
@@ -19,13 +26,16 @@ export class StudioRelay {
 
   private handleConnection(socket: WebSocket): void {
     let role: StudioRole | null = null;
+    let deviceId: string | null = null;
 
     socket.on('message', (raw) => {
       const message = StudioRelay.parseJson(raw.toString());
       if (!message) return;
 
       if (!role) {
-        role = this.handleHandshake(socket, message);
+        const handshake = this.handleHandshake(socket, message);
+        role = handshake?.role ?? null;
+        deviceId = handshake?.deviceId ?? null;
         return;
       }
 
@@ -34,67 +44,72 @@ export class StudioRelay {
         return;
       }
 
-      this.handleAppMessage(message);
+      if (deviceId) this.handleAppMessage(deviceId, message);
     });
 
     socket.on('close', () => {
-      if (role === 'app') this.clearAppSocket(socket);
+      if (role === 'app' && deviceId) this.clearAppSocket(deviceId, socket);
       if (role === 'browser') this.removeBrowserSocket(socket);
     });
   }
 
-  private handleHandshake(socket: WebSocket, message: Record<string, unknown>): StudioRole | null {
+  private handleHandshake(
+    socket: WebSocket,
+    message: Record<string, unknown>
+  ): { role: StudioRole; deviceId: string | null } | null {
     if (message.role !== 'app' && message.role !== 'browser') return null;
 
     if (message.role === 'app') {
-      this.setAppSocket(socket);
-    } else {
-      this.browserSockets.add(socket);
-      socket.send(JSON.stringify({ type: 'appStatus', connected: this.appSocket !== null }));
+      const deviceId = String(message.deviceId ?? '');
+      if (!deviceId) return null;
+      this.setAppSocket(deviceId, socket, String(message.platform ?? ''), String(message.dbName ?? ''));
+      return { role: 'app', deviceId };
     }
-    return message.role;
+
+    this.browserSockets.add(socket);
+    socket.send(JSON.stringify({ type: 'devices', devices: this.listDevices() }));
+    return { role: 'browser', deviceId: null };
   }
 
   private handleBrowserMessage(socket: WebSocket, message: Record<string, unknown>): void {
     const command = message as ICommandEnvelope;
     if (typeof command.id !== 'string' || typeof command.type !== 'string') return;
 
-    if (!this.appSocket) {
-      socket.send(JSON.stringify({ id: command.id, ok: false, error: 'No app connected' }));
+    const app = typeof command.deviceId === 'string' ? this.apps.get(command.deviceId) : undefined;
+    if (!app) {
+      socket.send(JSON.stringify({ id: command.id, ok: false, error: 'Device not connected' }));
       return;
     }
 
     this.pendingRequests.set(command.id, socket);
-    this.appSocket.send(JSON.stringify(message));
+    app.socket.send(JSON.stringify(message));
   }
 
-  private handleAppMessage(message: Record<string, unknown>): void {
+  private handleAppMessage(deviceId: string, message: Record<string, unknown>): void {
     if (typeof message.id === 'string') {
       const browser = this.pendingRequests.get(message.id);
       this.pendingRequests.delete(message.id);
       browser?.send(JSON.stringify(message));
       return;
     }
-    // unsolicited push (e.g. { type: 'change', tables }) — fan out to every browser
-    this.broadcastToBrowsers(message);
+    // unsolicited push (e.g. { type: 'change', tables }) — fan out to every browser, tagged with its source device
+    this.broadcastToBrowsers({ ...message, deviceId });
   }
 
-  private setAppSocket(socket: WebSocket): void {
-    if (this.appSocket && this.appSocket !== socket) {
-      this.appSocket.close();
-    }
-    this.appSocket = socket;
-    this.broadcastToBrowsers({ type: 'appStatus', connected: true });
+  private setAppSocket(deviceId: string, socket: WebSocket, platform: string, dbName: string): void {
+    this.apps.get(deviceId)?.socket.close();
+    this.apps.set(deviceId, { socket, platform, dbName });
+    this.broadcastDevices();
   }
 
-  private clearAppSocket(socket: WebSocket): void {
-    if (this.appSocket !== socket) return;
-    this.appSocket = null;
+  private clearAppSocket(deviceId: string, socket: WebSocket): void {
+    if (this.apps.get(deviceId)?.socket !== socket) return;
+    this.apps.delete(deviceId);
     for (const [id, browser] of this.pendingRequests) {
-      browser.send(JSON.stringify({ id, ok: false, error: 'App disconnected' }));
+      browser.send(JSON.stringify({ id, ok: false, error: 'Device disconnected' }));
     }
     this.pendingRequests.clear();
-    this.broadcastToBrowsers({ type: 'appStatus', connected: false });
+    this.broadcastDevices();
   }
 
   private removeBrowserSocket(socket: WebSocket): void {
@@ -102,6 +117,18 @@ export class StudioRelay {
     for (const [id, browser] of this.pendingRequests) {
       if (browser === socket) this.pendingRequests.delete(id);
     }
+  }
+
+  private listDevices(): IStudioDevice[] {
+    return [...this.apps.entries()].map(([id, entry]) => ({
+      id,
+      platform: entry.platform,
+      dbName: entry.dbName,
+    }));
+  }
+
+  private broadcastDevices(): void {
+    this.broadcastToBrowsers({ type: 'devices', devices: this.listDevices() });
   }
 
   private broadcastToBrowsers(payload: unknown): void {

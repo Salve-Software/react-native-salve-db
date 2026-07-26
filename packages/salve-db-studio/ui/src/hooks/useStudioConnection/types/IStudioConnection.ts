@@ -1,7 +1,10 @@
-import type { IColumnInfo, Row } from "../../../types";
+import type { IColumnInfo, IDevice, Row } from "../../../types";
 
 export interface IStudioConnection {
   appConnected: boolean;
+  devices: IDevice[];
+  selectedDeviceId: string | null;
+  selectDevice: (id: string) => void;
   tables: string[];
   currentTable: string | null;
   columns: IColumnInfo[];

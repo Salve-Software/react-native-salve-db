@@ -1,24 +1,32 @@
+import { Platform } from 'react-native';
 import type { SalveDatabase } from '../specs/SalveDatabase.nitro';
 import type { IStudioSocket, StudioSocketFactory } from './types';
 import { STUDIO_DEFAULT_HOST, STUDIO_DEFAULT_PORT, STUDIO_RECONNECT_DELAY_MS } from './constants';
-import { handleCommand, parseStudioCommand, createDefaultStudioSocket } from './library';
+import { handleCommand, parseStudioCommand, createDefaultStudioSocket, generateDeviceId } from './library';
 
 /**
  * Dials out to the local `npm run db:studio` dev server (always
  * `ws://localhost:{@link STUDIO_DEFAULT_PORT}`) and serves its commands
  * against `bridge` — table browsing/editing from the browser, live change
  * pushes. `ConfigureDb` starts one automatically whenever `__DEV__` is true.
+ *
+ * `_deviceId` is generated once per agent instance (survives reconnects, so the
+ * Studio server keeps treating this app instance as the same device across drops)
+ * — it's how the browser tells apart multiple devices/simulators connected at once.
  */
 export class StudioAgent {
+  private readonly _deviceId = generateDeviceId();
+  private _dbName = '';
   private _socket: IStudioSocket | null = null;
   private _changeSubscriptionId: number | null = null;
   private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly _bridge: SalveDatabase) {}
 
-  /** Starts (or restarts) the agent. */
-  start(socketFactory: StudioSocketFactory = createDefaultStudioSocket): void {
+  /** Starts (or restarts) the agent. `dbName` identifies this device's database file in the Studio UI. */
+  start(socketFactory: StudioSocketFactory = createDefaultStudioSocket, dbName = ''): void {
     this.stop();
+    this._dbName = dbName;
     this._connect(socketFactory);
   }
 
@@ -41,7 +49,12 @@ export class StudioAgent {
     this._socket = socket;
 
     socket.onopen = () => {
-      socket.send(JSON.stringify({ role: 'app' }));
+      socket.send(JSON.stringify({
+        role: 'app',
+        deviceId: this._deviceId,
+        platform: Platform.OS,
+        dbName: this._dbName,
+      }));
       this._changeSubscriptionId = this._bridge.subscribeToChanges((tables) => {
         socket.send(JSON.stringify({ type: 'change', tables }));
       });

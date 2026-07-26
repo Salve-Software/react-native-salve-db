@@ -40,7 +40,7 @@ export class ConfigureDb {
     registerReadSyncBridge(this._bridge);
 
     if (__DEV__) {
-      this._studioAgent.start();
+      this._studioAgent.start(undefined, props.name);
     }
   }
 

@@ -9,3 +9,10 @@ export interface IColumnInfo {
 }
 
 export type Row = Record<string, unknown>;
+
+/** One connected app instance the Studio can browse — a device + its database file. */
+export interface IDevice {
+  id: string;
+  platform: string;
+  dbName: string;
+}

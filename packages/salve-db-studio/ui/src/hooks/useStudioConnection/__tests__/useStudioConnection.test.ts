@@ -4,6 +4,7 @@ import { useStudioConnection } from '../index';
 interface ISentCommand {
   id?: string;
   type?: string;
+  deviceId?: string;
   [key: string]: unknown;
 }
 
@@ -42,6 +43,8 @@ function latestSocket(): FakeWebSocket {
   return FakeWebSocket.instances[FakeWebSocket.instances.length - 1]!;
 }
 
+const oneDevice = [{ id: 'ios-1', platform: 'ios', dbName: 'main' }];
+
 beforeEach(() => {
   FakeWebSocket.instances = [];
   vi.stubGlobal('WebSocket', FakeWebSocket);
@@ -62,25 +65,67 @@ describe('useStudioConnection', () => {
     expect(socket.sent[0]).toEqual({ role: 'browser' });
   });
 
-  it('flips appConnected and loads tables when appStatus arrives', async () => {
+  it('auto-selects the first device and loads tables when devices arrive', async () => {
     const { result } = renderHook(() => useStudioConnection());
     const socket = latestSocket();
     act(() => socket.onopen?.());
 
-    act(() => socket.emit({ type: 'appStatus', connected: true }));
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
     expect(result.current.appConnected).toBe(true);
+    expect(result.current.selectedDeviceId).toBe('ios-1');
 
     const listTables = socket.findSent('listTables');
+    expect(listTables.deviceId).toBe('ios-1');
     act(() => socket.emit({ id: listTables.id, ok: true, result: [{ name: 'users' }] }));
 
     await waitFor(() => expect(result.current.tables).toEqual(['users']));
+  });
+
+  it('selectDevice switches the active device and reloads its tables', async () => {
+    const twoDevices = [...oneDevice, { id: 'android-1', platform: 'android', dbName: 'main' }];
+    const { result } = renderHook(() => useStudioConnection());
+    const socket = latestSocket();
+    act(() => socket.onopen?.());
+    act(() => socket.emit({ type: 'devices', devices: twoDevices }));
+    act(() => socket.emit({ id: socket.findSent('listTables').id, ok: true, result: [] }));
+
+    act(() => result.current.selectDevice('android-1'));
+
+    expect(result.current.selectedDeviceId).toBe('android-1');
+    const listTables = socket.sent.filter((m) => m.type === 'listTables');
+    expect(listTables[listTables.length - 1]!.deviceId).toBe('android-1');
+  });
+
+  it('ignores a change push targeting a device that is not currently selected', async () => {
+    const twoDevices = [...oneDevice, { id: 'android-1', platform: 'android', dbName: 'main' }];
+    const { result } = renderHook(() => useStudioConnection());
+    const socket = latestSocket();
+    act(() => socket.onopen?.());
+    act(() => socket.emit({ type: 'devices', devices: twoDevices }));
+    act(() => socket.emit({ id: socket.findSent('listTables').id, ok: true, result: [] }));
+    act(() => result.current.selectTable('users'));
+    act(() =>
+      socket.emit({
+        id: socket.findSent('tableInfo').id,
+        ok: true,
+        result: [{ cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 }],
+      })
+    );
+    await waitFor(() => expect(result.current.columns).toHaveLength(1));
+    act(() => socket.emit({ id: socket.findSent('queryRows').id, ok: true, result: [{ id: 1 }] }));
+    await waitFor(() => expect(result.current.rows).toEqual([{ id: 1 }]));
+
+    const sentBefore = socket.sent.length;
+    act(() => socket.emit({ type: 'change', deviceId: 'android-1', tables: ['users'] }));
+
+    expect(socket.sent.length).toBe(sentBefore);
   });
 
   it('selectTable fetches tableInfo then queryRows and populates state', async () => {
     const { result } = renderHook(() => useStudioConnection());
     const socket = latestSocket();
     act(() => socket.onopen?.());
-    act(() => socket.emit({ type: 'appStatus', connected: true }));
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
     act(() => socket.emit({ id: socket.findSent('listTables').id, ok: true, result: [] }));
 
     act(() => result.current.selectTable('users'));
@@ -106,7 +151,7 @@ describe('useStudioConnection', () => {
     const { result } = renderHook(() => useStudioConnection());
     const socket = latestSocket();
     act(() => socket.onopen?.());
-    act(() => socket.emit({ type: 'appStatus', connected: true }));
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
 
     const listTables = socket.findSent('listTables');
     act(() => socket.emit({ id: listTables.id, ok: false, error: 'boom' }));
@@ -118,7 +163,7 @@ describe('useStudioConnection', () => {
     const { result } = renderHook(() => useStudioConnection());
     const socket = latestSocket();
     act(() => socket.onopen?.());
-    act(() => socket.emit({ type: 'appStatus', connected: true }));
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
     act(() => socket.emit({ id: socket.findSent('listTables').id, ok: false, error: 'boom' }));
     await waitFor(() => expect(result.current.error).toBe('boom'));
 

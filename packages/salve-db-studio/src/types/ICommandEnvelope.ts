@@ -2,4 +2,5 @@
 export interface ICommandEnvelope {
   id?: unknown;
   type?: unknown;
+  deviceId?: unknown;
 }
