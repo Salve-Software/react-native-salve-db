@@ -28,5 +28,5 @@ export interface ISchemaDefinition<TEntity> {
   relations?: IRelationDefinition<TEntity>[];
 
   /** Sync contract. */
-  sync?: ISyncDefinition<TEntity>;
+  sync?: ISyncDefinition;
 }

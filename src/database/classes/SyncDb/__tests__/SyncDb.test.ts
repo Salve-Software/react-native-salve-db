@@ -15,13 +15,24 @@ function makeBridge() {
 }
 
 describe('SyncDb', () => {
+  // Must run before any test below calls ConfigureDb#configure() — Configured
+  // is a static flag shared by the whole ConfigureDb class, so once any test
+  // configures it, later tests can no longer observe the unconfigured state.
+  test('sync() without configure() throws synchronously, not a rejected promise', () => {
+    const bridge = makeBridge();
+
+    expect(() => new SyncDb(bridge).sync('customers')).toThrow(
+      "Database.sync: call Database.configure() first"
+    );
+  });
+
   test('sync(name) calls triggerSync with that name, not triggerSyncAll', async () => {
     const bridge = makeBridge();
     new ConfigureDb(bridge).configure({ name: 'db' });
 
     await new SyncDb(bridge).sync('customers');
 
-    expect(bridge.triggerSync).toHaveBeenCalledWith('customers');
+    expect(bridge.triggerSync).toHaveBeenCalledWith('customers', false);
     expect(bridge.triggerSyncAll).not.toHaveBeenCalled();
   });
 

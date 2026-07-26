@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: salve_db_server
+      POSTGRES_USER: salve
+      POSTGRES_PASSWORD: salve
+    ports:
+      - "5432:5432"
+    volumes:
+      - salve_db_server_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U salve"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  salve_db_server_data:

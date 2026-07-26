@@ -26,11 +26,11 @@ std::shared_ptr<SQLiteConnection> openWithDefinitionTable(const std::string& tes
   return conn;
 }
 
-json::Value contract(const std::string& path, bool includePagination) {
-  std::string json = R"({"enabled": true, "endpoint": {"method": "POST", "path": ")" + path + R"("}})";
+json::Value contract(const std::string& basePath, bool includePagination) {
+  std::string json = R"({"enabled": true, "endpoint": {"basePath": ")" + basePath + R"(", "sinceParam": "updatedAfter", "limitParam": "limit"}})";
   if (includePagination) {
-    json = R"({"enabled": true, "endpoint": {"method": "POST", "path": ")" + path +
-           R"("}, "pagination": {"pageSize": 10}})";
+    json = R"({"enabled": true, "endpoint": {"basePath": ")" + basePath +
+           R"(", "sinceParam": "updatedAfter", "limitParam": "limit"}, "pagination": {"pageSize": 10}})";
   }
   return json::parse(json);
 }
@@ -52,7 +52,7 @@ TEST_CASE("save/definitionFor round-trips a full contract", "[sync][SyncDefiniti
   auto def = store.definitionFor("customers");
   REQUIRE(def.has_value());
   REQUIRE(def->getBool("enabled") == true);
-  REQUIRE(def->get("endpoint")->get().getString("path") == "/sync/customers");
+  REQUIRE(def->get("endpoint")->get().getString("basePath") == "/sync/customers");
   REQUIRE(def->get("pagination")->get().getNumber("pageSize") == 10.0);
 }
 
@@ -64,7 +64,7 @@ TEST_CASE("save fully replaces a prior definition — never merges fields", "[sy
   store.save("customers", contract("/sync/B", false)); // no pagination this time
 
   auto def = store.definitionFor("customers");
-  REQUIRE(def->get("endpoint")->get().getString("path") == "/sync/B");
+  REQUIRE(def->get("endpoint")->get().getString("basePath") == "/sync/B");
   REQUIRE_FALSE(def->get("pagination").has_value()); // old field did not survive
 }
 
@@ -75,8 +75,8 @@ TEST_CASE("definitions are isolated per schema name", "[sync][SyncDefinitionStor
   store.save("customers", contract("/sync/customers", false));
   store.save("orders", contract("/sync/orders", false));
 
-  REQUIRE(store.definitionFor("customers")->get("endpoint")->get().getString("path") == "/sync/customers");
-  REQUIRE(store.definitionFor("orders")->get("endpoint")->get().getString("path") == "/sync/orders");
+  REQUIRE(store.definitionFor("customers")->get("endpoint")->get().getString("basePath") == "/sync/customers");
+  REQUIRE(store.definitionFor("orders")->get("endpoint")->get().getString("basePath") == "/sync/orders");
 }
 
 TEST_CASE("a saved definition survives constructing a new SyncDefinitionStore over the same connection", "[sync][SyncDefinitionStore]") {
@@ -84,7 +84,7 @@ TEST_CASE("a saved definition survives constructing a new SyncDefinitionStore ov
   { SyncDefinitionStore(conn).save("customers", contract("/sync/customers", false)); }
 
   SyncDefinitionStore reopened(conn);
-  REQUIRE(reopened.definitionFor("customers")->get("endpoint")->get().getString("path") == "/sync/customers");
+  REQUIRE(reopened.definitionFor("customers")->get("endpoint")->get().getString("basePath") == "/sync/customers");
 }
 
 TEST_CASE("enabledSchemas returns exactly the saved schemas, never a disabled one", "[sync][SyncDefinitionStore]") {
@@ -111,7 +111,7 @@ TEST_CASE("MigrationEngine::registerSchema captures the full sync contract", "[s
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "method": "POST", "path": "/sync/customers" },
+      "endpoint": { "basePath": "/sync/customers", "sinceParam": "updatedAfter", "limitParam": "limit" },
       "pagination": { "pageSize": 50 }
     }
   })"));
@@ -120,7 +120,7 @@ TEST_CASE("MigrationEngine::registerSchema captures the full sync contract", "[s
   auto def = store.definitionFor("customers");
   REQUIRE(def.has_value());
   REQUIRE(def->getBool("enabled") == true);
-  REQUIRE(def->get("endpoint")->get().getString("path") == "/sync/customers");
+  REQUIRE(def->get("endpoint")->get().getString("basePath") == "/sync/customers");
   REQUIRE(def->get("pagination")->get().getNumber("pageSize") == 50.0);
 }
 

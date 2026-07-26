@@ -1,6 +1,5 @@
 import { createResourceModule } from '../rest/resource';
-import type { IResourceModule } from '../rest/types';
-import type { ResourceStore } from '../rest/store';
+import type { IResourceModule, IResourceStore } from '../rest/types';
 import type { IProduct } from './product';
 import { parseCreateProduct, parsePatchProduct } from './product';
 import { productStore } from './store';
@@ -14,7 +13,7 @@ import { productStore } from './store';
  * `rest/` knows these strings, which is the proof that per-module param
  * naming is real, exercised configuration, not an unused option.
  */
-export function createProductsModule(store: ResourceStore<IProduct>): IResourceModule {
+export function createProductsModule(store: IResourceStore<IProduct>): IResourceModule {
   return createResourceModule<IProduct>({
     basePath: '/products',
     store,

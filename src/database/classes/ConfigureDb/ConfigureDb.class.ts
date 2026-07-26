@@ -2,6 +2,7 @@ import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { IConfigureProps, ICredentialsDefinition, IRegisterProps } from './types';
 import type { ConfigureParams } from '../../../specs/types/ConfigureParams';
 import { registerAppOpenSync } from './library/registerAppOpenSync';
+import { registerReadSyncBridge } from '../../../sync';
 
 function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credentials'] {
   switch (creds.provider) {
@@ -47,6 +48,7 @@ export class ConfigureDb {
     ConfigureDb._configured = true;
     ConfigureDb._syncOnAppOpen = syncOnAppOpen;
     registerAppOpenSync(this._bridge, () => ConfigureDb._syncOnAppOpen);
+    registerReadSyncBridge(this._bridge);
   }
 
   register(props: IRegisterProps): Promise<void> {

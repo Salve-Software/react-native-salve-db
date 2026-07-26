@@ -1,6 +1,6 @@
 import express, { type Express } from 'express';
 import type { IResourceModule } from './rest/types';
-import { notFoundHandler, jsonErrorHandler } from './rest/middleware';
+import { notFoundHandler, jsonErrorHandler, requestLogger } from './rest/middleware';
 import { usersModule } from './users/handler';
 import { productsModule } from './products/handler';
 
@@ -14,6 +14,7 @@ const defaultModules: IResourceModule[] = [usersModule, productsModule];
  */
 export function createServer(modules: IResourceModule[] = defaultModules): Express {
   const app = express();
+  app.use(requestLogger);
   app.use(express.json());
 
   for (const resourceModule of modules) {

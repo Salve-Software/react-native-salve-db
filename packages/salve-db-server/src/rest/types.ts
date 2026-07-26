@@ -24,22 +24,31 @@ export type ResourceRow<TEntity extends IResourceBase> = TEntity | ITombstone;
 /** The client-supplied half of an entity (everything except the base columns). */
 export type WritableFields<TEntity extends IResourceBase> = Omit<TEntity, keyof IResourceBase>;
 
-/**
- * Internal store record. `cursorKey` is the single sort/filter axis for the
- * list endpoint: `updatedAt` for live rows, `deletedAt` for tombstones. It is
- * held on the envelope rather than read off `row` so a tombstone can be
- * ordered without carrying an `updatedAt` field on the wire.
- *
- * A consumer walking the list endpoint advances its own cursor the same way:
- * `row.deletedAt ?? row.updatedAt`, uniform across both row shapes.
- */
-export interface IStoredRow<TEntity extends IResourceBase> {
-  cursorKey: number;
-  row: ResourceRow<TEntity>;
-}
-
 /** A mountable domain module: its base path plus its router. */
 export interface IResourceModule {
   readonly basePath: string;
   readonly router: Router;
+}
+
+export interface IListQuery {
+  /** Exclusive lower bound on the cursor key. `0` means "everything". */
+  since: number;
+  /** Max rows to return. */
+  limit: number;
+}
+
+/**
+ * Data-layer port for one entity — the seam an adopter's own database sits
+ * behind. `list`'s filter/sort maps directly to
+ * `WHERE cursor_key > ? ORDER BY updated_at, id LIMIT ?`, where `cursor_key`
+ * is `updated_at` for a live row and `deleted_at` for a tombstone.
+ */
+export interface IResourceStore<TEntity extends IResourceBase> {
+  list(query: IListQuery): Promise<ResourceRow<TEntity>[]>;
+  /** A live row, or `null` when it is missing *or* tombstoned. */
+  get(id: number): Promise<TEntity | null>;
+  create(fields: WritableFields<TEntity>): Promise<TEntity>;
+  update(id: number, patch: Partial<WritableFields<TEntity>>): Promise<TEntity | null>;
+  /** `false` when the row is missing or was already tombstoned — delete is not idempotent-silent. */
+  remove(id: number): Promise<boolean>;
 }

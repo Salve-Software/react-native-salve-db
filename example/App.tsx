@@ -7,14 +7,13 @@ import { ExpenseSchema } from './src/schemas/ExpenseSchema';
 import { BudgetSchema } from './src/schemas/BudgetSchema';
 import { BenchmarkSchema } from './src/schemas/BenchmarkSchema';
 import { FeedItemSchema } from './src/schemas/FeedItemSchema';
-import { SyncTestItemSchema } from './src/schemas/SyncTestItemSchema';
-import { SyncTestNoteSchema } from './src/schemas/SyncTestNoteSchema';
-import { SyncTestTagSchema } from './src/schemas/SyncTestTagSchema';
+import { UserSchema } from './src/schemas/UserSchema';
+import { ProductSchema } from './src/schemas/ProductSchema';
 import { ExpensesScreen } from './src/screens/ExpensesScreen';
 import { InfiniteQueryScreen } from './src/screens/InfiniteQueryScreen';
 import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
 import { SyncTestScreen } from './src/screens/SyncTestScreen';
-import { MOCK_SYNC_SERVER_BASE_URL } from './src/library/mockSyncServer';
+import { SYNC_SERVER_BASE_URL } from './src/library/syncServer';
 
 if (__DEV__) {
   Salvetron.connect({ host: 'localhost', port: 8765 });
@@ -61,7 +60,7 @@ function App(): React.JSX.Element {
       <SalveDbProvider
         config={{
           name: 'salve-db-example',
-          baseUrl: MOCK_SYNC_SERVER_BASE_URL,
+          baseUrl: SYNC_SERVER_BASE_URL,
           network: { timeout: 5000 },
           credentials: {
             provider: 'oauth2',
@@ -78,9 +77,8 @@ function App(): React.JSX.Element {
           BudgetSchema,
           BenchmarkSchema,
           FeedItemSchema,
-          SyncTestItemSchema,
-          SyncTestNoteSchema,
-          SyncTestTagSchema,
+          UserSchema,
+          ProductSchema,
         ]}
       >
         <AppTabs />

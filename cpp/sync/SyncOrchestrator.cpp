@@ -1,222 +1,87 @@
 #include "SyncOrchestrator.hpp"
 #include "SyncApplyGuard.hpp"
+#include "SyncContract.hpp"
 #include "SyncCursorStore.hpp"
 #include "SyncDefinitionStore.hpp"
+#include "SyncNetworkFailure.hpp"
 #include "SyncOperationApplier.hpp"
-#include "SyncQueueReader.hpp"
+#include "SyncPullPhase.hpp"
+#include "SyncPushPhase.hpp"
+#include "SyncQueueStore.hpp"
 #include "../database/DatabaseManager.hpp"
-#include "../expression/JsonPathExtractor.hpp"
-#include "../expression/RequestExpressionEvaluator.hpp"
-#include "../http/CredentialHttpCaller.hpp"
-#include "../http/SyncHttpCaller.hpp"
+#include "../http/SyncHttpRequester.hpp"
 #include "../platform/platform.hpp"
 #include <stdexcept>
-#include <thread>
-#include <variant>
 
 namespace margelo::nitro::salvedb {
 
 namespace {
-
-constexpr int kMaxAttempts = 3;
-constexpr std::chrono::milliseconds kRetryDelay{5000};
 
 double nowMillis() {
   using namespace std::chrono;
   return static_cast<double>(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
 }
 
-json::Value buildRequestBody(
-  const json::Value& requestDef,
-  const std::optional<json::Value>& cursor,
-  const json::Array& operations,
-  double pageSize
-) {
-  auto bodyDef = requestDef.get("body");
-  if (!bodyDef || !bodyDef->get().isObject()) {
-    throw std::runtime_error("SyncOrchestrator: sync.request.body must be an object");
-  }
-
-  RequestExpressionEvaluator::VariableResolver resolver = [&](const std::string& refName) -> json::Value {
-    if (refName == "cursor")     return cursor.value_or(json::Value(nullptr));
-    if (refName == "operations") return json::Value(operations);
-    if (refName == "pageSize")   return json::Value(pageSize);
-    throw std::runtime_error("SyncOrchestrator: unsupported $ref \"" + refName + "\"");
-  };
-
-  json::Object body;
-  for (auto& [key, exprNode] : bodyDef->get().asObject()) {
-    body[key] = RequestExpressionEvaluator::evaluate(exprNode, resolver);
-  }
-  return json::Value(std::move(body));
-}
-
-// Retries network failures up to kMaxAttempts, and transparently refreshes
-// the access token once on a 401 before reexecuting the same page.
-SyncHttpResponse sendPageWithRetryAnd401(
-  const json::Value& endpoint,
-  const json::Value& body,
-  CredentialProvider& credentials,
-  const NetworkConfig& network
-) {
-  bool refreshed = false;
-  int failedAttempts = 0; // counts only genuine network failures — a 401 refresh never touches this
-  while (true) {
-    auto authHeader = credentials.getAuthHeader();
-    SyncHttpOutcome outcome = SyncHttpCaller::send(endpoint, body, authHeader, network);
-
-    if (auto* error = std::get_if<HttpNetworkError>(&outcome)) {
-      ++failedAttempts;
-      if (failedAttempts < kMaxAttempts) {
-        std::this_thread::sleep_for(kRetryDelay);
-        continue;
-      }
-      throw std::runtime_error(
-        "SyncOrchestrator: sync request failed after " + std::to_string(kMaxAttempts) +
-        " attempts — " + error->message
-      );
-    }
-
-    auto& response = std::get<SyncHttpResponse>(outcome);
-    if (response.statusCode == 401 && !refreshed) {
-      refreshed = true;
-      credentials.refresh(CredentialHttpCaller::create(network));
-      continue; // reexecute the same page — does not consume a retry attempt
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw std::runtime_error(
-        "SyncOrchestrator: sync request failed with status " + std::to_string(response.statusCode)
-      );
-    }
-    return response;
-  }
-}
-
-std::optional<std::string> extractPathString(const json::Value& responseDef, const std::string& field) {
-  auto path = responseDef.get(field);
-  if (!path || !path->get().isString()) return std::nullopt;
-  return path->get().asString();
-}
-
 } // namespace
 
-NativeSyncResult SyncOrchestrator::triggerSync(const std::string& schemaName) {
-  auto lock = DatabaseManager::shared().lockSync();
+// Lock acquired here, not inside runSyncSession() — keep it lock-agnostic.
+std::optional<NativeSyncResult> SyncOrchestrator::triggerSync(const std::string& schemaName, bool discardIfBusy) {
+  auto lock = discardIfBusy
+    ? DatabaseManager::shared().tryLockSync()
+    : DatabaseManager::shared().lockSync();
+
+  if (discardIfBusy && !lock.owns_lock()) {
+    platform::logError("SalveDb", "SyncOrchestrator: sync already in progress, discarding triggerSync for schema '" + schemaName + "'");
+    return std::nullopt;
+  }
+
   return runSyncSession(schemaName);
 }
 
+// No lock here — see SyncOrchestrator.hpp; lockSync()/tryLockSync() belong to
+// triggerSync/triggerSyncAll only.
 NativeSyncResult SyncOrchestrator::runSyncSession(const std::string& schemaName) {
   auto conn = DatabaseManager::shared().connection();
 
-  SyncDefinitionStore defStore(conn);
-  auto definition = defStore.definitionFor(schemaName);
+  auto definition = SyncDefinitionStore(conn).definitionFor(schemaName);
   if (!definition || !definition->getBool("enabled", false)) {
     throw std::runtime_error("SyncOrchestrator: schema '" + schemaName + "' has no sync.enabled contract registered");
   }
-  const json::Value& def = *definition;
+  SyncContract contract = SyncContract::fromDefinition(*definition);
 
-  auto& credentials   = DatabaseManager::shared().credentials();
-  const auto& network = DatabaseManager::shared().network();
-
-  SyncQueueReader reader(conn);
-  SyncApplyGuard applyGuard(conn);
-  SyncCursorStore cursorStore(conn);
+  SyncHttpRequester requester(DatabaseManager::shared().credentials(), DatabaseManager::shared().network());
+  SyncQueueStore queue(conn);
+  SyncApplyGuard guard(conn);
+  SyncCursorStore cursors(conn);
   SyncOperationApplier applier(conn);
 
-  double pageSize = 20;
-  int maxPagesPerSession = 20;
-  auto pagination = def.get("pagination");
-  if (pagination && pagination->get().isObject()) {
-    pageSize = pagination->get().getNumber("pageSize", 20);
-    maxPagesPerSession = static_cast<int>(pagination->get().getNumber("maxPagesPerSession", 20));
-  }
-
-  auto requestDef  = def.get("request");
-  auto responseDef = def.get("response");
-  auto endpointDef = def.get("endpoint");
-  if (!requestDef || !responseDef || !endpointDef) {
-    throw std::runtime_error("SyncOrchestrator: schema '" + schemaName + "' sync.{endpoint,request,response} are required");
-  }
-
-  auto storedCursor = cursorStore.load(schemaName);
-  std::optional<json::Value> cursor;
-  if (storedCursor) cursor = json::parse(*storedCursor);
-
   double start = nowMillis();
-  ApplyStats totalStats;
-  bool hasMore = true;
 
-  for (int page = 0; page < maxPagesPerSession && hasMore; ++page) {
-    SyncQueuePage queuePage = reader.readPage(schemaName, static_cast<int>(pageSize));
-
-    json::Value body = buildRequestBody(requestDef->get(), cursor, queuePage.operations, pageSize);
-    SyncHttpResponse response = sendPageWithRetryAnd401(endpointDef->get(), body, credentials, network);
-
-    json::Array appliedOps;
-    if (auto opsPath = extractPathString(responseDef->get(), "operations")) {
-      auto extracted = JsonPathExtractor::extract(response.body, *opsPath);
-      if (extracted && extracted->isArray()) appliedOps = extracted->asArray();
-    }
-
-    json::Array acks;
-    if (auto ackPath = extractPathString(responseDef->get(), "ack")) {
-      auto extracted = JsonPathExtractor::extract(response.body, *ackPath);
-      if (extracted && extracted->isArray()) acks = extracted->asArray();
-    }
-
-    std::optional<json::Value> newCursor;
-    if (auto cursorPath = extractPathString(responseDef->get(), "cursor")) {
-      newCursor = JsonPathExtractor::extract(response.body, *cursorPath);
-    }
-
-    hasMore = false;
-    if (auto hasMorePath = extractPathString(responseDef->get(), "hasMore")) {
-      auto extracted = JsonPathExtractor::extract(response.body, *hasMorePath);
-      if (extracted && extracted->isBool()) hasMore = extracted->asBool();
-    }
-
-    applyGuard.applyWithBypass([&] {
-      // Acks first: if a pulled operation and an ack ever target the same row
-      // in one response, resolving the ack's id rewrite first makes the pulled
-      // op see the row under its final id and merge via lastWriteWins, instead
-      // of racing to INSERT a row that the ack's UPDATE is about to claim.
-      ApplyStats ackStats = applier.applyAck(schemaName, acks);
-      totalStats.updated += ackStats.updated;
-
-      ApplyStats pageStats = applier.apply(schemaName, appliedOps);
-      totalStats.inserted += pageStats.inserted;
-      totalStats.updated  += pageStats.updated;
-      totalStats.deleted  += pageStats.deleted;
-
-      if (newCursor) {
-        cursor = newCursor;
-        cursorStore.save(schemaName, json::stringify(*newCursor));
-      }
-      if (queuePage.maxId) {
-        conn->execute(
-          "DELETE FROM sync_queue WHERE entity = ? AND id <= ?",
-          { schemaName, static_cast<double>(*queuePage.maxId) }
-        );
-      }
-    });
+  PushPhaseResult push = runPushPhase(schemaName, contract, conn, queue, applier, guard, requester);
+  if (push.abortedByNetwork) {
+    throw SyncNetworkFailure("SyncOrchestrator: push phase aborted by a network failure — " + push.networkError);
   }
 
-  // Exposed as the plain string when the cursor is a JSON string (the common
-  // case) rather than double-encoding it — json::stringify is only needed
-  // for the round-trip through _salve_sync_cursors and the $ref resolver.
+  PullPhaseResult pull = runPullPhase(schemaName, contract, applier, guard, cursors, requester);
+
   std::optional<std::string> exposedCursor;
-  if (cursor) exposedCursor = cursor->isString() ? cursor->asString() : json::stringify(*cursor);
+  if (pull.cursorMs.has_value()) exposedCursor = std::to_string(*pull.cursorMs);
+
+  double inserted = static_cast<double>(pull.stats.inserted);
+  double updated = static_cast<double>(pull.stats.updated + push.replaced);
+  double deleted = static_cast<double>(pull.stats.deleted + push.deleted);
 
   return NativeSyncResult(
     exposedCursor,
-    static_cast<double>(totalStats.inserted + totalStats.updated + totalStats.deleted),
-    static_cast<double>(totalStats.inserted),
-    static_cast<double>(totalStats.updated),
-    static_cast<double>(totalStats.deleted),
+    inserted + updated + deleted,
+    inserted,
+    updated,
+    deleted,
     nowMillis() - start
   );
 }
 
+// Lock acquired here, not inside runSyncSession() — keep it lock-agnostic.
 std::vector<NativeSyncResult> SyncOrchestrator::triggerSyncAll(bool discardIfBusy) {
   auto lock = discardIfBusy
     ? DatabaseManager::shared().tryLockSync()
@@ -233,6 +98,11 @@ std::vector<NativeSyncResult> SyncOrchestrator::triggerSyncAll(bool discardIfBus
   for (const auto& schemaName : defStore.enabledSchemas()) {
     try {
       results.push_back(runSyncSession(schemaName));
+    } catch (const SyncNetworkFailure& e) {
+      // The network itself is down — trying the remaining schemas would just
+      // pay the same retry cost again for a connection already proven dead.
+      platform::logError("SalveDb", "SyncOrchestrator: triggerSyncAll — schema '" + schemaName + "' failed: " + e.what() + " — stopping the remaining schemas");
+      break;
     } catch (const std::exception& e) {
       platform::logError("SalveDb", "SyncOrchestrator: triggerSyncAll — schema '" + schemaName + "' failed: " + e.what());
     }
