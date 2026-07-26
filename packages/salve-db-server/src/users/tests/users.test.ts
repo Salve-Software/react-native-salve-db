@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import type { Express } from 'express';
 import { mountModule } from '../../testing/mountModule';
-import { ResourceStore } from '../../rest/store';
+import { createTestExecutor } from '../../testing/testDb';
+import { PostgresResourceStore } from '../../rest/store';
 import { createUsersModule } from '../handler';
 import type { IUser } from '../user';
 
@@ -14,8 +15,9 @@ import type { IUser } from '../user';
  */
 let app: Express;
 
-beforeEach(() => {
-  app = mountModule(createUsersModule(new ResourceStore<IUser>()));
+beforeEach(async () => {
+  const executor = await createTestExecutor();
+  app = mountModule(createUsersModule(new PostgresResourceStore<IUser>(executor, { table: 'users', columns: ['name', 'email'] })));
 });
 
 describe('POST /users', () => {

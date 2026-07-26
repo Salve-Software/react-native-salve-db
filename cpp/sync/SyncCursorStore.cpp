@@ -14,11 +14,19 @@ std::optional<std::string> SyncCursorStore::load(const std::string& entity) {
   return std::get<std::string>(result.rows[0][0]);
 }
 
-void SyncCursorStore::save(const std::string& entity, const std::string& cursorJson) {
+void SyncCursorStore::save(const std::string& entity, const std::string& cursor) {
   _conn->execute(
     "INSERT OR REPLACE INTO _salve_sync_cursors (entity, cursor) VALUES (?, ?)",
-    { entity, cursorJson }
+    { entity, cursor }
   );
+}
+
+void SyncCursorStore::remove(const std::string& entity) {
+  _conn->execute("DELETE FROM _salve_sync_cursors WHERE entity = ?", { entity });
+}
+
+void SyncCursorStore::removeAll() {
+  _conn->execute("DELETE FROM _salve_sync_cursors", {});
 }
 
 } // namespace margelo::nitro::salvedb

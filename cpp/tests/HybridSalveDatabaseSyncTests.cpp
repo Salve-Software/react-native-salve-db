@@ -32,10 +32,8 @@ std::string customersSchemaJson() {
     columns: { id: { type: "text" }, name: { type: "text" }, updatedAt: { type: "datetime", nullable: false } },
     sync: {
       enabled: true,
-      endpoint: { method: "POST", path: "/sync/customers" },
-      pagination: { pageSize: 20, maxPagesPerSession: 20 },
-      request: { body: { cursor: { $ref: "cursor" }, operations: { $ref: "operations" }, pageSize: { $ref: "pageSize" } } },
-      response: { cursor: "$.cursor", operations: "$.operations", hasMore: "$.hasMore" }
+      endpoint: { basePath: "/customers", sinceParam: "updatedAfter", limitParam: "limit" },
+      pagination: { pageSize: 20, maxPagesPerSession: 20 }
     }
   })";
 }
@@ -46,8 +44,9 @@ TEST_CASE("db.triggerSync() runs a full sync cycle through the real JSI bridge",
   deleteSecureValue("salvedb.credentials.accessToken");
   deleteSecureValue("salvedb.credentials.refreshToken");
 
-  setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
-    return HttpResponse{200, {}, R"({"cursor": "c1", "hasMore": false, "operations": []})"};
+  setHttpExecuteResult([](const HttpRequest& request) -> HttpOutcome {
+    if (request.method == margelo::nitro::salvedb::HttpMethod::Get) return HttpResponse{200, {}, "[]"};
+    return HttpResponse{201, {}, *request.body}; // POST: echo the pushed entity back
   });
 
   HybridDatabaseHarness harness;
@@ -67,8 +66,8 @@ TEST_CASE("db.triggerSync() runs a full sync cycle through the real JSI bridge",
   harness.run("db.registerSchema(JSON.stringify(" + customersSchemaJson() + "))");
   harness.run(R"JS(db.execute("INSERT INTO customers (id, name, updatedAt) VALUES (?, ?, ?)", ['1', 'a', 100]))JS");
 
-  auto resultJson = harness.run("db.triggerSync('customers')");
-  REQUIRE(resultJson.find(R"("cursor":"c1")") != std::string::npos);
+  auto resultJson = harness.run("db.triggerSync('customers', false)");
+  REQUIRE(resultJson.find(R"("operationsApplied":1)") != std::string::npos);
 
   auto rows = DatabaseManager::shared().connection()->execute("SELECT COUNT(*) FROM sync_queue WHERE entity = 'customers'", {});
   REQUIRE(std::get<double>(rows.rows[0][0]) == 0.0);
@@ -111,7 +110,7 @@ TEST_CASE("db.triggerSync() refreshes the token on 401 through the real JSI brid
       if (name == "Authorization") authHeader = value;
     }
     if (authHeader == "access-1") return HttpResponse{401, {}, "{}"};
-    return HttpResponse{200, {}, R"({"cursor": "c1", "hasMore": false, "operations": []})"};
+    return HttpResponse{200, {}, "[]"};
   });
 
   HybridDatabaseHarness harness;
@@ -129,17 +128,39 @@ TEST_CASE("db.triggerSync() refreshes the token on 401 through the real JSI brid
   }))");
 
   harness.run("db.registerSchema(JSON.stringify(" + customersSchemaJson() + "))");
-  harness.run("db.triggerSync('customers')");
+  harness.run("db.triggerSync('customers', false)");
 
   REQUIRE(DatabaseManager::shared().credentials().getAccessToken().value() == "access-2");
+}
+
+TEST_CASE("db.triggerSync(name, true) resolves undefined when a sync session is in progress", "[database][sync][concurrency]") {
+  deleteSecureValue("salvedb.credentials.accessToken");
+  deleteSecureValue("salvedb.credentials.refreshToken");
+
+  HybridDatabaseHarness harness;
+  createDb(harness);
+  harness.run("db.configure({ name: '" + uniqueDbName("e2e_trigger_sync_discard") + "' })");
+  harness.run("db.registerSchema(JSON.stringify(" + customersSchemaJson() + "))");
+
+  // Promise<T>::async runs the actual tryLockSync() on Nitro's ThreadPool,
+  // not the runtime-owning thread that's holding the lock here — safe,
+  // unlike a same-thread try_lock (see the SyncOrchestrator-level test).
+  auto held = DatabaseManager::shared().lockSync();
+
+  auto resultJson = harness.run("db.triggerSync('customers', true)");
+
+  held.unlock();
+
+  REQUIRE(resultJson == "null"); // JSON.stringify(undefined ?? null)
 }
 
 TEST_CASE("db.triggerSyncAll() runs every enabled schema through the real JSI bridge", "[database][sync]") {
   deleteSecureValue("salvedb.credentials.accessToken");
   deleteSecureValue("salvedb.credentials.refreshToken");
 
-  setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
-    return HttpResponse{200, {}, R"({"cursor": "c1", "hasMore": false, "operations": []})"};
+  setHttpExecuteResult([](const HttpRequest& request) -> HttpOutcome {
+    if (request.method == margelo::nitro::salvedb::HttpMethod::Get) return HttpResponse{200, {}, "[]"};
+    return HttpResponse{201, {}, *request.body};
   });
 
   HybridDatabaseHarness harness;
@@ -164,7 +185,7 @@ TEST_CASE("db.triggerSyncAll() runs every enabled schema through the real JSI br
   // Assert on the actual array shape — one result, for "customers" — not
   // just that the promise resolved.
   REQUIRE(resultJson.front() == '[');
-  REQUIRE(resultJson.find(R"("cursor":"c1")") != std::string::npos);
+  REQUIRE(resultJson.find(R"("operationsApplied":1)") != std::string::npos);
   REQUIRE(resultJson.find("},{") == std::string::npos); // exactly one element
 
   auto rows = DatabaseManager::shared().connection()->execute("SELECT COUNT(*) FROM sync_queue WHERE entity = 'customers'", {});

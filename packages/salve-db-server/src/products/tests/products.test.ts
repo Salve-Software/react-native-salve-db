@@ -3,14 +3,16 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import type { Express } from 'express';
 import { mountModule } from '../../testing/mountModule';
-import { ResourceStore } from '../../rest/store';
+import { createTestExecutor } from '../../testing/testDb';
+import { PostgresResourceStore } from '../../rest/store';
 import { createProductsModule } from '../handler';
 import type { IProduct } from '../product';
 
 let app: Express;
 
-beforeEach(() => {
-  app = mountModule(createProductsModule(new ResourceStore<IProduct>()));
+beforeEach(async () => {
+  const executor = await createTestExecutor();
+  app = mountModule(createProductsModule(new PostgresResourceStore<IProduct>(executor, { table: 'products', columns: ['name', 'price'] })));
 });
 
 describe('POST /products', () => {

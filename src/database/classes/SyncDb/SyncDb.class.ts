@@ -7,7 +7,10 @@ export class SyncDb {
 
   sync(schemaName: string): Promise<NativeSyncResult> {
     this._assertConfigured('sync');
-    return this._bridge.triggerSync(schemaName);
+    // discardIfBusy: false never discards, so the optional native return is
+    // always present on this path — the manual API keeps its non-optional
+    // contract.
+    return this._bridge.triggerSync(schemaName, false) as Promise<NativeSyncResult>;
   }
 
   syncAll(): Promise<NativeSyncResult[]> {

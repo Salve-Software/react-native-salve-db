@@ -106,9 +106,9 @@ void HybridSalveDatabase::rollback() {
   _queryExecutor.rollback();
 }
 
-std::shared_ptr<Promise<NativeSyncResult>> HybridSalveDatabase::triggerSync(const std::string& schemaName) {
-  return Promise<NativeSyncResult>::async([this, schemaName]() {
-    return _syncOrchestrator.triggerSync(schemaName);
+std::shared_ptr<Promise<std::optional<NativeSyncResult>>> HybridSalveDatabase::triggerSync(const std::string& schemaName, bool discardIfBusy) {
+  return Promise<std::optional<NativeSyncResult>>::async([this, schemaName, discardIfBusy]() {
+    return _syncOrchestrator.triggerSync(schemaName, discardIfBusy);
   });
 }
 

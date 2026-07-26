@@ -5,22 +5,25 @@ import type { Express } from 'express';
 import { createServer } from '../server';
 import { createUsersModule } from '../users/handler';
 import { createProductsModule } from '../products/handler';
-import { ResourceStore } from '../rest/store';
+import { createTestExecutor } from '../testing/testDb';
+import { PostgresResourceStore } from '../rest/store';
 import type { IUser } from '../users/user';
 import type { IProduct } from '../products/product';
 
 /**
  * Builds the real, assembled app (`createServer`'s actual production code
- * path), but wired to fresh, isolated stores per test instead of the
- * singleton `userStore`/`productStore` — this is what `createServer`'s
- * optional `modules` param exists for.
+ * path), but wired to a fresh, isolated PGlite instance per test instead of
+ * the singleton `userStore`/`productStore` — this is what `createServer`'s
+ * optional `modules` param exists for. Both modules share the one instance,
+ * same as they'd share one real Postgres pool in production.
  */
 let app: Express;
 
-beforeEach(() => {
+beforeEach(async () => {
+  const executor = await createTestExecutor();
   app = createServer([
-    createUsersModule(new ResourceStore<IUser>()),
-    createProductsModule(new ResourceStore<IProduct>()),
+    createUsersModule(new PostgresResourceStore<IUser>(executor, { table: 'users', columns: ['name', 'email'] })),
+    createProductsModule(new PostgresResourceStore<IProduct>(executor, { table: 'products', columns: ['name', 'price'] })),
   ]);
 });
 

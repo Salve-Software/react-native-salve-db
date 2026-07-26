@@ -1,8 +1,8 @@
 # salve-db-server
 
-Reference REST backend showing the exact API shape `react-native-salve-db`'s sync engine is meant to consume. Small, conventional, in-memory — read it end to end as "this is the shape your own API needs to have." A reference/example only (`private: true`), never published to npm.
+Reference REST backend showing the exact API shape `react-native-salve-db`'s sync engine is meant to consume. Small, conventional, Postgres-backed — read it end to end as "this is the shape your own API needs to have." A reference/example only (`private: true`), never published to npm.
 
-> The native sync engine in this repo has not been migrated to speak this contract yet (`cpp/sync/`) — that's a separate, later step. This package exists first, as the concrete target for that rewrite.
+> The native sync engine in this repo (`cpp/sync/`) speaks exactly this contract — see `docs/sync-rest-contract.md`.
 
 ## Running it
 
@@ -10,12 +10,13 @@ From the repo root:
 
 ```bash
 npm install
-npm run dev -w salve-db-server      # tsx watch, restarts on save
+npm run docker:up -w salve-db-server   # starts Postgres in the background (docker compose)
+npm run dev -w salve-db-server         # tsx watch, restarts on save
 # or
 npm run build -w salve-db-server && npm run start -w salve-db-server
 ```
 
-Listens on `PORT` (default `4000`). State is entirely in-memory — restarting the process wipes everything.
+Listens on `PORT` (default `4000`), reads `DATABASE_URL` from `.env` (copy `.env.example`) or falls back to the default matching `docker-compose.yml`'s credentials. State lives in Postgres — restarting the server process (or `tsx watch` reloading on save) no longer wipes anything; `npm run docker:down -w salve-db-server` stops the container but keeps the `salve_db_server_data` volume, so data survives that too. Only `docker compose down -v` (dropping the volume explicitly) wipes it.
 
 ## Testing
 
@@ -25,10 +26,12 @@ npm run test -w salve-db-server
 
 Uses Node's built-in test runner (`node:test` + `node:assert/strict`) and [supertest](https://github.com/forwardemail/supertest) — no Jest, consistent with the rest of this package's minimal-dependency philosophy. Supertest sends real HTTP requests against an in-process Express app (no port binding needed) and asserts on the actual status code/body, exercising the real routing + middleware, not a re-implementation of it.
 
-Every integration test builds its own isolated app via `mountModule(createUsersModule(new ResourceStore()))` (or `createProductsModule`) in a `beforeEach` — a fresh store per test, never the shared production singleton, so tests can't leak state into each other or depend on run order.
+Tests don't need Docker or a running Postgres. Every test gets a fresh, isolated instance of [`@electric-sql/pglite`](https://pglite.dev) — a real Postgres compiled to WASM, running in-process — via `createTestExecutor()` (`src/testing/testDb.ts`), which runs the same `docker/init.sql` schema the real container uses. Real SQL, real constraints, no server to start — just slower than the old in-memory store (WASM startup per test), a deliberate trade for testing against the real engine instead of a hand-rolled mock.
+
+Every integration test builds its own isolated app via `mountModule(createUsersModule(new PostgresResourceStore(await createTestExecutor(), {...})))` (or `createProductsModule`) in a `beforeEach` — a fresh database per test, never the shared production singleton, so tests can't leak state into each other or depend on run order.
 
 ```
-src/rest/tests/       # unit tests: ResourceStore + validation helpers, no HTTP
+src/rest/tests/       # unit tests: PostgresResourceStore (against a synthetic table) + validation helpers, no HTTP
 src/users/tests/      # supertest integration tests against an isolated /users app
 src/products/tests/   # same, for /products — plus the per-module param-name proof
 src/tests/            # integration tests against the fully assembled app (createServer),
@@ -82,34 +85,45 @@ Nothing in `src/rest/` knows either set of names — they're the only two places
 - **A malformed `:id` (e.g. `/users/abc`) is `404`, not `400`.** Ids are opaque to the client — "not a valid id" and "no such id" are indistinguishable from outside, and treating both as `404` keeps consumer code simpler.
 - **No admin/seed/debug routes.** This isn't a test harness — it's meant to read like a real API. Simulating "someone else wrote to the server" is just calling `POST`/`PATCH` directly.
 
-## Swapping the in-memory store for a real database
+## The data layer: Postgres, via a small port interface
 
-`src/<entity>/store.ts` is the entire seam. `ResourceStore`'s five methods (`list`, `get`, `create`, `update`, `remove`) are the whole port surface — `list`'s filter+sort maps directly to:
+`src/<entity>/store.ts` is the entire seam — `IResourceStore<TEntity>`'s five methods (`list`, `get`, `create`, `update`, `remove`, all `Promise`-returning) are the whole port surface (`src/rest/types.ts`). `PostgresResourceStore` (`src/rest/store.ts`) is the one implementation, parameterized by `{ table, columns }` per entity and a minimal `QueryExecutor` (`{ query(sql, params?): Promise<{ rows }> }`) — satisfied structurally by both `pg.Pool` (production, `src/db.ts`) and `@electric-sql/pglite`'s `PGlite` (tests), with neither type imported into the store itself.
+
+`list`'s filter+sort maps directly to:
 
 ```sql
-SELECT * FROM <table> WHERE cursor_key > ? ORDER BY updated_at, id LIMIT ?
+SELECT * FROM <table> WHERE COALESCE("deletedAt", "updatedAt") > $1 ORDER BY COALESCE("deletedAt", "updatedAt") ASC, "id" ASC LIMIT $2
 ```
 
-where `cursor_key` is `updated_at` for a live row and `deleted_at` for a tombstone (a generated/computed column, or just `COALESCE(deleted_at, updated_at)` at query time).
+Column names are quoted camelCase (`"updatedAt"`, `"deletedAt"`) — matches the JSON contract 1:1, no snake_case translation layer. `updatedAt`/`deletedAt` are `BIGINT` (epoch millis; `INTEGER` overflows around 2038) written from a monotonic clock kept in the app (`src/rest/tick.ts`), not the database's own clock — two writes landing in the same real millisecond must still get distinct, ordered cursor values, or an exclusive (`>`) cursor could skip one at a page boundary. Two known Postgres driver gotchas are handled explicitly rather than routed around: `BIGINT` returns as a `string` from `pg`/PGlite by default (coerced back to `number` in the store), and `products.price` deliberately uses `DOUBLE PRECISION` instead of `NUMERIC` to avoid the same string-coercion issue for a field where exact decimal precision doesn't matter for a reference server.
+
+Table schema lives in `docker/init.sql` — the single source both the real Postgres container (via `docker-entrypoint-initdb.d`) and every test's fresh PGlite instance (via `createTestExecutor()`) run against.
 
 ## Layout
 
 ```
+docker/
+└── init.sql               # table schema — single source for the real container and every test
+docker-compose.yml          # Postgres only (official image); the Node server runs local, not containerized
+.env.example                # DATABASE_URL, copy to .env
 src/
 ├── index.ts          # entrypoint: creates the server, listens, logs
 ├── server.ts          # Express app assembly: json parser, mounts modules, 404 + error handling
+├── db.ts              # shared pg.Pool, reads DATABASE_URL
 ├── rest/               # generic REST-resource behavior, shared by every module
-│   ├── types.ts
-│   ├── store.ts         # ResourceStore<TEntity> — the in-memory data layer
-│   ├── resource.ts       # createResourceModule<TEntity>(config) — the router factory
-│   ├── validation.ts     # manual field validation helpers (no external library)
-│   ├── middleware.ts     # notFoundHandler / jsonErrorHandler, shared by server.ts and tests
-│   └── tests/            # unit tests for store.ts + validation.ts
+│   ├── types.ts          # IResourceStore<TEntity> — the port interface
+│   ├── store.ts           # PostgresResourceStore<TEntity> — the one implementation
+│   ├── tick.ts             # monotonic write clock, shared by every store instance
+│   ├── resource.ts          # createResourceModule<TEntity>(config) — the async router factory
+│   ├── validation.ts        # manual field validation helpers (no external library)
+│   ├── middleware.ts        # notFoundHandler / jsonErrorHandler / requestLogger
+│   └── tests/                # unit tests for store.ts + validation.ts (PGlite-backed)
 ├── testing/
-│   └── mountModule.ts     # test-only helper: one module + real middleware, no full server
+│   ├── mountModule.ts     # test-only helper: one module + real middleware, no full server
+│   └── testDb.ts          # createTestExecutor() — fresh PGlite instance + docker/init.sql per test
 ├── users/
 │   ├── user.ts            # IUser + input validation
-│   ├── store.ts            # ResourceStore<IUser> instance
+│   ├── store.ts            # PostgresResourceStore<IUser> instance, against the shared pool
 │   ├── handler.ts           # createUsersModule(store) factory + the production usersModule
 │   └── tests/                # supertest integration tests for /users
 ├── products/
@@ -121,4 +135,4 @@ src/
     └── server.test.ts        # integration tests for the fully assembled app
 ```
 
-Adding a third entity is one new folder plus one line in `server.ts` — nothing in `rest/` changes.
+Adding a third entity is one new folder plus one line in `server.ts` plus its table in `docker/init.sql` — nothing in `rest/` changes.

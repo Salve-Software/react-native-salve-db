@@ -32,3 +32,27 @@ TEST_CASE("collapses multiple trailing slashes on baseUrl", "[http][HttpUrlBuild
   REQUIRE(HttpUrlBuilder::build("https://api.company.com//", "/customers") == "https://api.company.com/customers");
   REQUIRE(HttpUrlBuilder::build("https://api.company.com///", "customers") == "https://api.company.com/customers");
 }
+
+TEST_CASE("appends query params in order", "[http][HttpUrlBuilder]") {
+  HttpUrlBuilder::QueryParams query{{"updatedAfter", "1700"}, {"limit", "50"}};
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", query)
+    == "https://api.company.com/customers?updatedAfter=1700&limit=50");
+}
+
+TEST_CASE("no query params leaves the URL without a trailing '?'", "[http][HttpUrlBuilder]") {
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", {}) == "https://api.company.com/customers");
+}
+
+TEST_CASE("encodeSegment preserves unreserved characters", "[http][HttpUrlBuilder]") {
+  REQUIRE(HttpUrlBuilder::encodeSegment("abc-1_A.Z~9") == "abc-1_A.Z~9");
+}
+
+TEST_CASE("encodeSegment percent-encodes reserved and unsafe characters", "[http][HttpUrlBuilder]") {
+  REQUIRE(HttpUrlBuilder::encodeSegment("a/b c") == "a%2Fb%20c");
+}
+
+TEST_CASE("query param names and values are both percent-encoded", "[http][HttpUrlBuilder]") {
+  HttpUrlBuilder::QueryParams query{{"since after", "a/b"}};
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", query)
+    == "https://api.company.com/customers?since%20after=a%2Fb");
+}

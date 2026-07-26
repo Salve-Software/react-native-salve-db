@@ -1,2 +1,2 @@
-/** JSONPath string (e.g. `$.cursor`) used to extract values from a declarative HTTP response — see {@link IResponseDefinition} and {@link ICredentialsDefinition}. */
+/** JSONPath string (e.g. `$.accessToken`) used to extract tokens from an OAuth2 refresh response — see {@linkcode ICredentialsDefinition}. */
 export type JsonPath = string;

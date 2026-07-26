@@ -46,6 +46,14 @@ public:
   // Soft-delete ack: confirms the delete without touching status (stays DELETED).
   void markDeletedSynced(const std::string& tableName, const std::string& localId, int64_t syncedAtMs);
 
+  // Pull ack: localId/entityId/remoteId all become the server id; conflicts on entityId, not localId.
+  void markPulledSynced(const std::string& tableName, const std::string& entityId,
+                         const std::string& status, int64_t syncedAtMs);
+
+  // Push item failed (non-2xx): bumps retryCount, preserves DELETED status.
+  void markFailed(const std::string& tableName, const std::string& localId,
+                   const std::string& error, int64_t updatedAtMs);
+
 private:
   std::shared_ptr<SQLiteConnection> _conn;
 };

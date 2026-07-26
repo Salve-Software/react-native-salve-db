@@ -3,6 +3,7 @@
 #include "SchemaRegistry.hpp"
 #include "SalveMetadataManager.hpp"
 #include "../sync/SyncDefinitionStore.hpp"
+#include "../sync/SyncCursorStore.hpp"
 
 #include <sstream>
 #include <algorithm>
@@ -89,7 +90,10 @@ static constexpr auto kSyncQueueTable = R"sql(
     entity     TEXT    NOT NULL,
     entity_id  TEXT    NOT NULL,
     payload    TEXT    NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    status     TEXT    NOT NULL DEFAULT 'PENDING',
+    retryCount INTEGER NOT NULL DEFAULT 0,
+    lastError  TEXT
   );
 )sql";
 
@@ -405,6 +409,22 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   }
   _db->exec(kSyncMetadataEntityIdIndex);
 
+  // Retro-migration: sync_queue gains status/retryCount/lastError (#84).
+  auto queueColumns = existingColumns("sync_queue");
+  if (std::find(queueColumns.begin(), queueColumns.end(), "status") == queueColumns.end()) {
+    _db->exec("ALTER TABLE sync_queue ADD COLUMN status     TEXT    NOT NULL DEFAULT 'PENDING'");
+    _db->exec("ALTER TABLE sync_queue ADD COLUMN retryCount INTEGER NOT NULL DEFAULT 0");
+    _db->exec("ALTER TABLE sync_queue ADD COLUMN lastError  TEXT");
+  }
+
+  // Engine migration (#84): cursor format changed, reset once so pull restarts from since=0.
+  constexpr int kSyncEngineVersion = 2;
+  constexpr auto kSyncEngineVersionKey = "_salve_sync_engine";
+  if (storedVersion(kSyncEngineVersionKey) < kSyncEngineVersion) {
+    SyncCursorStore(_db).removeAll();
+    setStoredVersion(kSyncEngineVersionKey, kSyncEngineVersion);
+  }
+
   _db->exec(kRelationsTable);
   _db->exec(kRelationsParentIndex);
 
@@ -475,6 +495,8 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
 
   if (schema.name.empty())
     throw std::runtime_error("registerSchema: 'name' is required");
+  if (schema.name.rfind("_salve", 0) == 0)
+    throw std::runtime_error("registerSchema: schema names starting with '_salve' are reserved for system tables");
   if (schema.primaryKey.empty())
     throw std::runtime_error("registerSchema: 'primaryKey' is required");
 

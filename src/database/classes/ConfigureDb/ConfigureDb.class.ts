@@ -2,6 +2,7 @@ import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { IConfigureProps, IRegisterProps } from './types';
 import { registerAppOpenSync } from './library/registerAppOpenSync';
 import { mapCredentials } from './library/mapCredentials';
+import { registerReadSyncBridge } from '../../../sync';
 
 export class ConfigureDb {
   private static _configured = false;
@@ -31,6 +32,7 @@ export class ConfigureDb {
     ConfigureDb._configured = true;
     ConfigureDb._syncOnAppOpen = syncOnAppOpen;
     registerAppOpenSync(this._bridge, () => ConfigureDb._syncOnAppOpen);
+    registerReadSyncBridge(this._bridge);
   }
 
   register(props: IRegisterProps): Promise<void> {

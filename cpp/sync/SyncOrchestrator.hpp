@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NativeSyncResult.hpp"
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,7 +17,8 @@ namespace margelo::nitro::salvedb {
  */
 class SyncOrchestrator {
 public:
-  NativeSyncResult triggerSync(const std::string& schemaName);
+  // Lock is acquired here, not inside runSyncSession() — keep it lock-agnostic.
+  std::optional<NativeSyncResult> triggerSync(const std::string& schemaName, bool discardIfBusy);
   std::vector<NativeSyncResult> triggerSyncAll(bool discardIfBusy);
 
 private:

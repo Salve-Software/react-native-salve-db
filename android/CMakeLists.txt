@@ -30,16 +30,19 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/sync/SyncOrchestrator.cpp
 	../cpp/sync/SyncNativeEntryPoint.cpp
 	../cpp/sync/SyncApplyGuard.cpp
-	../cpp/sync/SyncQueueReader.cpp
+	../cpp/sync/SyncQueueStore.cpp
 	../cpp/sync/SyncDefinitionStore.cpp
 	../cpp/sync/SyncCursorStore.cpp
+	../cpp/sync/SyncContract.cpp
+	../cpp/sync/SyncPushPhase.cpp
+	../cpp/sync/SyncPullPhase.cpp
 	../cpp/sync/SyncOperationApplier.cpp
 	../cpp/sync/RelationStore.cpp
 	../cpp/sync/RelationCascadeRewriter.cpp
-	../cpp/expression/RequestExpressionEvaluator.cpp
 	../cpp/expression/JsonPathExtractor.cpp
 	../cpp/credentials/CredentialProvider.cpp
 	../cpp/http/SyncHttpCaller.cpp
+	../cpp/http/SyncHttpRequester.cpp
 )
 
 # Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.

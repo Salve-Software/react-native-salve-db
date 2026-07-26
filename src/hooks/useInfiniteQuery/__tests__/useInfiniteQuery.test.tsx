@@ -101,7 +101,7 @@ describe('useInfiniteQuery — once ready', () => {
     expect(result.current.data).toEqual([{ id: 1, label: 'a' }, { id: 2, label: 'b' }]);
     expect(result.current.hasNextPage).toBe(true);
     const [sql] = mockBridgeExecute.mock.calls[0] as [string, unknown[]];
-    expect(sql).toBe('SELECT * FROM "items" LIMIT 2 OFFSET 0');
+    expect(sql).toBe('SELECT * FROM "items" WHERE "deletedAt" IS NULL LIMIT 2 OFFSET 0');
   });
 
   test('subscribes to the shared queryCache table subscription, not a new native one', async () => {
@@ -143,7 +143,7 @@ describe('useInfiniteQuery — once ready', () => {
     expect(result.current.data).toEqual([{ id: 1, label: 'a' }, { id: 2, label: 'b' }, { id: 3, label: 'c' }]);
     expect(result.current.hasNextPage).toBe(false);
     const [sql] = mockBridgeExecute.mock.calls[1] as [string, unknown[]];
-    expect(sql).toBe('SELECT * FROM "items" LIMIT 2 OFFSET 2');
+    expect(sql).toBe('SELECT * FROM "items" WHERE "deletedAt" IS NULL LIMIT 2 OFFSET 2');
   });
 
   test('fetchNextPage() is a no-op once hasNextPage is false', async () => {
@@ -180,8 +180,8 @@ describe('useInfiniteQuery — once ready', () => {
 
     const sqls = mockBridgeExecute.mock.calls.slice(1).map(([sql]) => sql);
     expect(sqls).toEqual([
-      'SELECT * FROM "items" LIMIT 2 OFFSET 2',
-      'SELECT * FROM "items" LIMIT 2 OFFSET 4',
+      'SELECT * FROM "items" WHERE "deletedAt" IS NULL LIMIT 2 OFFSET 2',
+      'SELECT * FROM "items" WHERE "deletedAt" IS NULL LIMIT 2 OFFSET 4',
     ]);
     expect(result.current.data).toEqual([
       { id: 1, label: 'a' }, { id: 2, label: 'b' },
