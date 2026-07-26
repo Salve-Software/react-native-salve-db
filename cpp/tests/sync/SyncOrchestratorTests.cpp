@@ -334,11 +334,38 @@ TEST_CASE("a page tied on the same millisecond as the cursor stops the session i
 
   auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
 
-  REQUIRE(calls == 1); // stops after the stalled page instead of re-fetching it forever
+  REQUIRE(calls == 2); // initial page + one escalation attempt confirming nothing more exists
   REQUIRE(result->inserted == 2.0);
 
   SyncCursorStore cursorStore(conn);
   REQUIRE_FALSE(cursorStore.load("customers").has_value());
+}
+
+TEST_CASE("a full page tied on one timestamp escalates the limit and captures the rest of the group instead of losing rows (L1)", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_pull_boundary_escalation", /*pageSize*/ 2, /*maxPagesPerSession*/ 20);
+
+  int calls = 0;
+  respondByRoute(
+    [&](const HttpRequest& request) -> HttpOutcome {
+      ++calls;
+      // 3 rows tied on one timestamp, but the server only honors limit=2 on
+      // the first request — escalating to a bigger limit should recover the
+      // 3rd row instead of stalling with only 2 applied.
+      if (request.url.ends_with("limit=2")) {
+        return HttpResponse{200, {}, R"([{"id":"srv1","name":"a","updatedAt":1},{"id":"srv2","name":"b","updatedAt":1}])"};
+      }
+      return HttpResponse{200, {}, R"([{"id":"srv1","name":"a","updatedAt":1},{"id":"srv2","name":"b","updatedAt":1},{"id":"srv3","name":"c","updatedAt":1}])"};
+    },
+    nullptr, nullptr, nullptr
+  );
+
+  auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
+
+  REQUIRE(calls == 2); // initial pageSize=2 request, then one escalated retry
+  REQUIRE(result->inserted == 3.0); // all 3 tied rows applied, not just the first 2
+
+  auto rows = conn->execute("SELECT COUNT(*) FROM customers", {});
+  REQUIRE(static_cast<int>(std::get<double>(rows.rows[0][0])) == 3);
 }
 
 TEST_CASE("pull stops at maxPagesPerSession and a later call resumes from the persisted cursor", "[sync][SyncOrchestrator]") {

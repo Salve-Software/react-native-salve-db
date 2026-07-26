@@ -1,6 +1,7 @@
 #include "SyncPullPhase.hpp"
 #include "SyncNetworkFailure.hpp"
 #include "../platform/platform.hpp"
+#include <algorithm>
 #include <stdexcept>
 #include <variant>
 
@@ -17,6 +18,24 @@ int64_t parseCursor(const std::optional<std::string>& stored) {
   }
 }
 
+// (last row's deletedAt ?? updatedAt) - 1ms — since is exclusive server-side, so the 1ms overlap gets re-delivered (a no-op via lastWriteWins) instead of skipped.
+int64_t candidateCursorFor(const json::Value& lastRow) {
+  auto deletedAt = lastRow.get("deletedAt");
+  bool hasDeletedAt = deletedAt && deletedAt->get().isNumber();
+  auto updatedAt = lastRow.get("updatedAt");
+  bool hasUpdatedAt = updatedAt && updatedAt->get().isNumber();
+  if (!hasDeletedAt && !hasUpdatedAt) {
+    throw std::runtime_error(
+      "SyncPullPhase: last row of a pulled page has no numeric updatedAt or deletedAt — cannot advance the cursor"
+    );
+  }
+  double lastTimestamp = hasDeletedAt ? deletedAt->get().asNumber() : updatedAt->get().asNumber();
+  return static_cast<int64_t>(lastTimestamp) - 1;
+}
+
+constexpr int kMaxEscalationAttempts = 4;
+constexpr int kMaxEscalatedLimit = 2000;
+
 } // namespace
 
 PullPhaseResult runPullPhase(const std::string& entity, const SyncContract& contract,
@@ -27,23 +46,38 @@ PullPhaseResult runPullPhase(const std::string& entity, const SyncContract& cont
   result.cursorMs = sinceMs;
 
   for (int page = 0; page < contract.maxPagesPerSession; ++page) {
-    SyncHttpOutcome outcome = requester.list(contract.endpoint, sinceMs, contract.pageSize);
+    // A stalled full page re-asks the same `since` with a bigger limit to capture the whole tied group.
+    int limit = contract.pageSize;
+    json::Array rows;
+    int64_t candidateCursor = sinceMs;
 
-    if (auto* error = std::get_if<HttpNetworkError>(&outcome)) {
-      throw SyncNetworkFailure("SyncPullPhase: pull request failed — " + error->message);
+    for (int attempt = 0; attempt < kMaxEscalationAttempts; ++attempt) {
+      SyncHttpOutcome outcome = requester.list(contract.endpoint, sinceMs, limit);
+
+      if (auto* error = std::get_if<HttpNetworkError>(&outcome)) {
+        throw SyncNetworkFailure("SyncPullPhase: pull request failed — " + error->message);
+      }
+
+      auto& response = std::get<SyncHttpResponse>(outcome);
+      bool isSuccess = response.statusCode >= 200 && response.statusCode < 300;
+      if (!isSuccess) {
+        throw std::runtime_error("SyncPullPhase: pull request failed with status " + std::to_string(response.statusCode));
+      }
+      if (!response.body.isArray()) {
+        throw std::runtime_error("SyncPullPhase: expected a bare JSON array from GET " + contract.endpoint.basePath);
+      }
+
+      rows = response.body.asArray();
+      result.pagesFetched++;
+      if (rows.empty()) break;
+
+      candidateCursor = candidateCursorFor(rows.back());
+      bool wasFull = static_cast<int>(rows.size()) == limit;
+      if (candidateCursor > sinceMs || !wasFull) break;
+
+      limit = std::min(limit * 8, kMaxEscalatedLimit);
     }
 
-    auto& response = std::get<SyncHttpResponse>(outcome);
-    bool isSuccess = response.statusCode >= 200 && response.statusCode < 300;
-    if (!isSuccess) {
-      throw std::runtime_error("SyncPullPhase: pull request failed with status " + std::to_string(response.statusCode));
-    }
-    if (!response.body.isArray()) {
-      throw std::runtime_error("SyncPullPhase: expected a bare JSON array from GET " + contract.endpoint.basePath);
-    }
-
-    const json::Array& rows = response.body.asArray();
-    result.pagesFetched++;
     if (rows.empty()) break;
 
     guard.applyWithBypass([&] {
@@ -53,26 +87,7 @@ PullPhaseResult runPullPhase(const std::string& entity, const SyncContract& cont
       result.stats.deleted += pageStats.deleted;
     });
 
-    // Cursor = (last row's deletedAt ?? updatedAt) - 1ms: `since` is
-    // exclusive server-side, so persisting the exact timestamp can skip rows
-    // that share a millisecond with the page boundary. The 1ms overlap is
-    // re-delivered next session and is a no-op via lastWriteWins.
-    const json::Value& lastRow = rows.back();
-    auto deletedAt = lastRow.get("deletedAt");
-    bool hasDeletedAt = deletedAt && deletedAt->get().isNumber();
-    auto updatedAt = lastRow.get("updatedAt");
-    bool hasUpdatedAt = updatedAt && updatedAt->get().isNumber();
-    if (!hasDeletedAt && !hasUpdatedAt) {
-      throw std::runtime_error(
-        "SyncPullPhase: last row of a pulled page has no numeric updatedAt or deletedAt — cannot advance the cursor"
-      );
-    }
-    double lastTimestamp = hasDeletedAt ? deletedAt->get().asNumber() : updatedAt->get().asNumber();
-    int64_t candidateCursor = static_cast<int64_t>(lastTimestamp) - 1;
-
-    // The cursor must strictly advance. A candidate that doesn't (malformed
-    // data, or a whole page tied on the same millisecond) would otherwise
-    // either persist a regression or spin forever re-fetching the same page.
+    // The cursor must strictly advance, or persist a regression / spin forever.
     if (candidateCursor <= sinceMs) {
       platform::logError("SalveDb",
         "SyncPullPhase: pull page for '" + entity + "' did not advance the cursor past " +
