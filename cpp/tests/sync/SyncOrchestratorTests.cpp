@@ -80,6 +80,30 @@ void respondByRoute(RouteHandler onList, RouteHandler onCreate, RouteHandler onU
 
 HttpResponse emptyList() { return HttpResponse{200, {}, "[]"}; }
 
+// Holds the sync mutex from a background thread — same-thread lock+tryLock is UB.
+class LockHolder {
+public:
+  LockHolder() {
+    _thread = std::thread([this]() {
+      auto held = DatabaseManager::shared().lockSync();
+      _ready.store(true);
+      while (!_release.load()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    });
+    while (!_ready.load()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ~LockHolder() {
+    _release.store(true);
+    _thread.join();
+  }
+  LockHolder(const LockHolder&) = delete;
+  LockHolder& operator=(const LockHolder&) = delete;
+
+private:
+  std::thread _thread;
+  std::atomic<bool> _ready{false};
+  std::atomic<bool> _release{false};
+};
+
 } // namespace
 
 // ── Locking (unchanged by the #84 rewrite) ────────────────────────────────
@@ -87,8 +111,7 @@ HttpResponse emptyList() { return HttpResponse{200, {}, "[]"}; }
 TEST_CASE("DatabaseManager::tryLockSync fails while another thread holds lockSync", "[sync][SyncOrchestrator][concurrency]") {
   openOrchestratorFixture("orchestrator_lock_contention");
 
-  auto held = DatabaseManager::shared().lockSync();
-  REQUIRE(held.owns_lock());
+  LockHolder holder;
 
   auto contended = DatabaseManager::shared().tryLockSync();
   REQUIRE_FALSE(contended.owns_lock());
@@ -125,7 +148,7 @@ TEST_CASE("concurrent triggerSync calls are serialized instead of racing into a 
 TEST_CASE("triggerSyncAll discards silently when a sync session is already in progress", "[sync][SyncOrchestrator][concurrency]") {
   openOrchestratorFixture("orchestrator_all_discard");
 
-  auto held = DatabaseManager::shared().lockSync();
+  LockHolder holder;
 
   auto results = SyncOrchestrator().triggerSyncAll(/*discardIfBusy*/ true);
 
@@ -142,10 +165,7 @@ TEST_CASE("triggerSync discards silently when a sync session is already in progr
     return emptyList();
   });
 
-  // Same-thread try_lock on a mutex this thread already owns is technically
-  // UB per the standard — accepted here for consistency with the
-  // triggerSyncAll discard test above, which uses the same pattern.
-  auto held = DatabaseManager::shared().lockSync();
+  LockHolder holder;
 
   auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ true);
 
