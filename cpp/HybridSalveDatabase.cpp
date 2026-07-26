@@ -52,6 +52,7 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
     }
 
     DatabaseManager::shared().configureBackground(background);
+    DatabaseManager::shared().markAppConfigured();
   }
 
   PersistedConfig persisted;

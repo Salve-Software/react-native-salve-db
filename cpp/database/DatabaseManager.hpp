@@ -44,6 +44,11 @@ public:
 
   bool isOpen() const { return _db != nullptr; }
 
+  // Distinct from isOpen(): a background wake reopens from persisted config
+  // without the app ever configuring.
+  bool appConfigured() const { return _appConfigured; }
+  void markAppConfigured() { _appConfigured = true; }
+
   // Builds (or replaces) the single global CredentialProvider. Seeds the
   // initial token pair, if provided, into secure storage.
   void configureCredentials(
@@ -96,6 +101,7 @@ public:
     _network.reset();
     _background.reset();
     _syncOnAppOpen = true;
+    _appConfigured = false;
   }
 
 private:
@@ -106,6 +112,7 @@ private:
   std::optional<BackgroundConfig> _background;
   std::mutex _syncMutex;
   bool _syncOnAppOpen = true;
+  bool _appConfigured = false;
 };
 
 } // namespace margelo::nitro::salvedb
