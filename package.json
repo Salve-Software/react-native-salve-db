@@ -17,7 +17,8 @@
     "release": "semantic-release",
     "build": "npm run typecheck && bob build",
     "codegen": "nitrogen --logLevel=\"debug\" && npm run build",
-    "postcodegen": "npm --prefix example run pod"
+    "postcodegen": "npm --prefix example run pod",
+    "db:studio": "npm run dev:server -w packages/salve-db-studio"
   },
   "keywords": [
     "react-native",
@@ -47,7 +48,8 @@
   ],
   "workspaces": [
     "example",
-    "packages/salve-db-server"
+    "packages/salve-db-server",
+    "packages/salve-db-studio"
   ],
   "repository": "https://github.com/Salve-Software/react-native-salve-db.git",
   "author": "Salve-Software",
