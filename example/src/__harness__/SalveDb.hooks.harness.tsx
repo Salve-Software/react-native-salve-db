@@ -7,6 +7,12 @@ function uniqueName(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
 }
 
+// deletedAt is a reserved column the engine adds to every table, so it comes
+// back on SELECT * alongside the schema's own columns.
+function row(id: number) {
+  return { id, deletedAt: null };
+}
+
 /** `useQuery`'s row type is inferred from the schema's literal `columns` shape — keep schema objects `satisfies AnySchema`, never `: AnySchema`, or that literal shape is lost. */
 type UseQueryResultOf<TSchema extends AnySchema> = ReturnType<typeof useQuery<TSchema>>;
 type UseInfiniteQueryResultOf<TSchema extends AnySchema> = ReturnType<typeof useInfiniteQuery<TSchema>>;

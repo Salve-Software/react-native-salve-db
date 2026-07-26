@@ -1,30 +1,19 @@
 import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
-import type { IConfigureProps, ICredentialsDefinition, IRegisterProps } from './types';
-import type { ConfigureParams } from '../../../specs/types/ConfigureParams';
+import type { IConfigureProps, IRegisterProps } from './types';
 import { registerAppOpenSync } from './library/registerAppOpenSync';
+import { mapCredentials } from './library/mapCredentials';
 import { registerReadSyncBridge } from '../../../sync';
-
-function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credentials'] {
-  switch (creds.provider) {
-    case 'oauth2':
-      return {
-        provider: creds.provider,
-        accessTokenHeaderName: creds.accessToken?.headerName ?? 'Authorization',
-        tokens: creds.tokens,
-        refresh: {
-          endpoint: creds.refresh.endpoint,
-          responseAccessTokenPath: creds.refresh.response.accessToken,
-          responseRefreshTokenPath: creds.refresh.response.refreshToken,
-        },
-      };
-  }
-}
+import { StudioAgent } from '../../../studio';
 
 export class ConfigureDb {
   private static _configured = false;
   private static _syncOnAppOpen = true;
 
-  constructor(private readonly _bridge: SalveDatabase) {}
+  private readonly _studioAgent: StudioAgent;
+
+  constructor(private readonly _bridge: SalveDatabase) {
+    this._studioAgent = new StudioAgent(_bridge);
+  }
 
   configure(props: IConfigureProps): void {
     if (!props.name || props.name.trim() === '') {
@@ -49,6 +38,10 @@ export class ConfigureDb {
     ConfigureDb._syncOnAppOpen = syncOnAppOpen;
     registerAppOpenSync(this._bridge, () => ConfigureDb._syncOnAppOpen);
     registerReadSyncBridge(this._bridge);
+
+    if (__DEV__) {
+      this._studioAgent.start(undefined, props.name);
+    }
   }
 
   register(props: IRegisterProps): Promise<void> {

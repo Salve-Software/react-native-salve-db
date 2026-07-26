@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include "../../http/SyncHttpRequester.hpp"
+#include "../../platform/platform.hpp"
 #include "../support/platform_test.hpp"
 
 using namespace margelo::nitro::salvedb;
@@ -7,6 +8,12 @@ using namespace margelo::nitro::salvedb;
 namespace {
 
 CredentialProvider testCredentials() {
+  // The secure store is process-wide and seedInitialTokens() deliberately
+  // won't overwrite an existing pair, so tokens left by another test would
+  // silently become this test's starting state.
+  platform::deleteSecureValue("salvedb.credentials.accessToken");
+  platform::deleteSecureValue("salvedb.credentials.refreshToken");
+
   CredentialProvider credentials("oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken");
   credentials.seedInitialTokens("access-1", "refresh-1");
   return credentials;

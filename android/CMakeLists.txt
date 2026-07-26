@@ -19,7 +19,7 @@ add_library(${PACKAGE_NAME} SHARED
 	src/main/cpp/BackgroundSchedulerJni.cpp
 	../cpp/http/HttpUrlBuilder.cpp
 	../cpp/http/CredentialHttpCaller.cpp
-	../cpp/database/HybridSalveDatabase.cpp
+	../cpp/HybridSalveDatabase.cpp
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
 	../cpp/database/NativeConfigStore.cpp

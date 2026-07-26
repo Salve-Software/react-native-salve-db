@@ -7,9 +7,11 @@
 
 namespace margelo::nitro::salvedb {
 
-// Tracks which registered columns are declared as `boolean` in the TS schema,
-// so SQLiteConnection::execute can coerce SQLite's 0/1 INTEGER storage back
-// to a JS bool on read — SQLite itself has no native boolean column type.
+/**
+ * Tracks which registered columns are declared as `boolean` in the TS schema,
+ * so SQLiteConnection::execute can coerce SQLite's 0/1 INTEGER storage back
+ * to a JS bool on read — SQLite itself has no native boolean column type.
+ */
 class SchemaRegistry {
 public:
   static SchemaRegistry& shared() {

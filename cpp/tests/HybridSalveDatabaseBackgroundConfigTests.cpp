@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
-#include "../../database/DatabaseManager.hpp"
-#include "../../database/NativeConfigStore.hpp"
-#include "../support/HybridDatabaseHarness.hpp"
-#include "../support/platform_test.hpp"
+#include "../database/DatabaseManager.hpp"
+#include "../database/NativeConfigStore.hpp"
+#include "support/HybridDatabaseHarness.hpp"
+#include "support/platform_test.hpp"
 
 using margelo::nitro::salvedb::DatabaseManager;
 using margelo::nitro::salvedb::NativeConfigStore;

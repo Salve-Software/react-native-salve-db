@@ -6,9 +6,11 @@
 
 namespace margelo::nitro::salvedb {
 
-// Plain C++ collaborator (not a HybridObject) — extracts a value from a
-// response json::Value via the MVP JsonPath subset ($.a.b, dot-separated
-// keys only, no array indexing/wildcards).
+/**
+ * Plain C++ collaborator (not a HybridObject) — extracts a value from a
+ * response json::Value via the MVP JsonPath subset ($.a.b, dot-separated
+ * keys only, no array indexing/wildcards).
+ */
 class JsonPathExtractor {
 public:
   // std::nullopt means the path is absent; an engaged optional holding a

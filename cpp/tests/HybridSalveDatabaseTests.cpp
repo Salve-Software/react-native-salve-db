@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include "../support/HybridDatabaseHarness.hpp"
+#include "support/HybridDatabaseHarness.hpp"
 
 using margelo::nitro::salvedb::tests::HybridDatabaseHarness;
 
@@ -48,10 +48,10 @@ TEST_CASE("execute() round-trips insert/select/update/delete across column types
     "db.execute('INSERT INTO items (id, label, price, active, createdAt) VALUES (?, ?, ?, ?, ?)', "
     "[1, 'widget', 9.99, true, 1700000000000])");
 
-  // MigrationEngine stores columns in a std::map, so CREATE TABLE emits them
-  // alphabetically regardless of the schema's declaration order.
+  // CREATE TABLE emits columns in schema declaration order; deletedAt is
+  // injected by MigrationEngine and lands last.
   auto selected = harness.run("db.execute('SELECT * FROM items WHERE id = 1', [])");
-  REQUIRE(selected == R"({"columns":["active","createdAt","deletedAt","id","label","price"],"rows":[[true,1700000000000,null,1,"widget",9.99]]})");
+  REQUIRE(selected == R"({"columns":["id","label","price","active","createdAt","deletedAt"],"rows":[[1,"widget",9.99,true,1700000000000,null]]})");
 
   harness.run("db.execute('UPDATE items SET label = ? WHERE id = 1', ['widget-updated'])");
   auto updated = harness.run("db.execute('SELECT label FROM items WHERE id = 1', [])");

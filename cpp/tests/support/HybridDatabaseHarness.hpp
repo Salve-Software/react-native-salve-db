@@ -4,7 +4,7 @@
 #include <InstallNitro.hpp>
 #include <HybridObjectRegistry.hpp>
 #include "TestDispatcher.hpp"
-#include "../../database/HybridSalveDatabase.hpp"
+#include "../../HybridSalveDatabase.hpp"
 #include <atomic>
 #include <chrono>
 #include <memory>

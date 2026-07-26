@@ -18,9 +18,13 @@ struct RelationRow {
   std::string parentTable;
 };
 
-// Plain C++ collaborator (not a HybridObject) — persists each schema's FK
-// relations in `_salve_relations`, so it survives a restart without depending
-// on JS having run register() in the current process.
+/**
+ * Plain C++ collaborator (not a HybridObject) — persists each schema's FK
+ * relations in `_salve_relations`, so it survives a restart without depending
+ * on JS having run register() in the current process. Feeds
+ * RelationCascadeRewriter the child tables/columns to update when a parent's
+ * id changes.
+ */
 class RelationStore {
 public:
   explicit RelationStore(std::shared_ptr<SQLiteConnection> conn);

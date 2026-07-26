@@ -19,6 +19,14 @@ struct InitialCredentialTokens {
   std::string refreshToken;
 };
 
+/**
+ * Process-wide singleton holding the one open SQLite connection plus
+ * everything configured via `Database.configure()` — credentials, network,
+ * background/app-open sync settings. Every other native collaborator reaches
+ * the connection through `DatabaseManager::shared()` rather than owning it,
+ * so state stays consistent across the JS-triggered and native-background
+ * entry points.
+ */
 class DatabaseManager {
 public:
   static DatabaseManager& shared() {
@@ -35,6 +43,11 @@ public:
   }
 
   bool isOpen() const { return _db != nullptr; }
+
+  // Distinct from isOpen(): a background wake reopens from persisted config
+  // without the app ever configuring.
+  bool appConfigured() const { return _appConfigured; }
+  void markAppConfigured() { _appConfigured = true; }
 
   // Builds (or replaces) the single global CredentialProvider. Seeds the
   // initial token pair, if provided, into secure storage.
@@ -88,6 +101,7 @@ public:
     _network.reset();
     _background.reset();
     _syncOnAppOpen = true;
+    _appConfigured = false;
   }
 
 private:
@@ -98,6 +112,7 @@ private:
   std::optional<BackgroundConfig> _background;
   std::mutex _syncMutex;
   bool _syncOnAppOpen = true;
+  bool _appConfigured = false;
 };
 
 } // namespace margelo::nitro::salvedb

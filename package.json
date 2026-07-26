@@ -19,7 +19,8 @@
     "release": "semantic-release",
     "build": "npm run typecheck && bob build",
     "codegen": "nitrogen --logLevel=\"debug\" && npm run build",
-    "postcodegen": "npm --prefix example run pod"
+    "postcodegen": "npm --prefix example run pod",
+    "db:studio": "npm run dev:server -w packages/salve-db-studio"
   },
   "keywords": [
     "react-native",
@@ -49,7 +50,8 @@
   ],
   "workspaces": [
     "example",
-    "packages/salve-db-server"
+    "packages/salve-db-server",
+    "packages/salve-db-studio"
   ],
   "repository": "https://github.com/Salve-Software/react-native-salve-db.git",
   "author": "Salve-Software",
@@ -67,11 +69,11 @@
     "@semantic-release/git": "^10.0.1",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^29.5.14",
-    "@types/react": "19.2.0",
+    "@types/react": "19.2.17",
     "conventional-changelog-conventionalcommits": "^10.2.1",
     "jest": "^30.4.2",
     "nitrogen": "0.36.1",
-    "react": "19.2.3",
+    "react": "19.2.8",
     "react-native": "0.86.0",
     "react-native-builder-bob": "^0.40.18",
     "react-native-nitro-modules": "0.36.1",

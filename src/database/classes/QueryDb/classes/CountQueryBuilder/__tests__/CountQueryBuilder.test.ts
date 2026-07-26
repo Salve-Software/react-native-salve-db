@@ -29,20 +29,20 @@ function executedWith(bridge: SalveDatabase) {
 }
 
 describe('CountQueryBuilder', () => {
-  test('bare count generates SELECT COUNT(*) without WHERE', () => {
+  test('bare count filters out soft-deleted rows', () => {
     const bridge = makeBridge(3);
     const result = new CountQueryBuilder(schema, bridge).execute();
     const [sql, params] = executedWith(bridge);
-    expect(sql).toBe('SELECT COUNT(*) FROM "users"');
+    expect(sql).toBe('SELECT COUNT(*) FROM "users" WHERE "deletedAt" IS NULL');
     expect(params).toEqual([]);
     expect(result).toBe(3);
   });
 
-  test('with where on the primary key appends WHERE clause', () => {
+  test('with where on the primary key ANDs the user clause onto the soft-delete filter', () => {
     const bridge = makeBridge(1);
     const result = new CountQueryBuilder(schema, bridge).where(eq('id', 42)).execute();
     const [sql, params] = executedWith(bridge);
-    expect(sql).toBe('SELECT COUNT(*) FROM "users" WHERE "id" = ?');
+    expect(sql).toBe('SELECT COUNT(*) FROM "users" WHERE "deletedAt" IS NULL AND "id" = ?');
     expect(params).toEqual([42]);
     expect(result).toBe(1);
   });
@@ -53,7 +53,9 @@ describe('CountQueryBuilder', () => {
       .where(and(gt('age', 60), eq('name', 'inactive')))
       .execute();
     const [sql, params] = executedWith(bridge);
-    expect(sql).toBe('SELECT COUNT(*) FROM "users" WHERE ("age" > ? AND "name" = ?)');
+    expect(sql).toBe(
+      'SELECT COUNT(*) FROM "users" WHERE "deletedAt" IS NULL AND ("age" > ? AND "name" = ?)'
+    );
     expect(params).toEqual([60, 'inactive']);
   });
 

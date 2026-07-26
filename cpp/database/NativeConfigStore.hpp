@@ -24,9 +24,11 @@ struct PersistedConfig {
   std::optional<BackgroundConfig> background;
 };
 
-// Durable, JS-independent mirror of the config passed to Database.configure(),
-// so a process woken purely by the native background scheduler can reopen the
-// database and know the sync endpoint without JS ever running.
+/**
+ * Durable, JS-independent mirror of the config passed to Database.configure(),
+ * so a process woken purely by the native background scheduler can reopen the
+ * database and know the sync endpoint without JS ever running.
+ */
 class NativeConfigStore {
 public:
   static void save(const PersistedConfig& config);

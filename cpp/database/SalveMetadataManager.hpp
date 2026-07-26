@@ -23,7 +23,13 @@ struct SyncMetadataRow {
   std::optional<int64_t> syncedAt;
 };
 
-// Plain C++ collaborator (not a HybridObject) — owns reads/writes of `_salve_sync_metadata`.
+/**
+ * Plain C++ collaborator (not a HybridObject) — owns reads/writes of
+ * `_salve_sync_metadata`, the table that tracks each row's sync lifecycle
+ * (localId → remoteId mapping, status, retry/error state). This is where the
+ * Replace Transaction acknowledges a row as SYNCED after the server assigns
+ * it a real id.
+ */
 class SalveMetadataManager {
 public:
   explicit SalveMetadataManager(std::shared_ptr<SQLiteConnection> conn);

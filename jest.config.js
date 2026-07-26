@@ -3,6 +3,7 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['<rootDir>/src/**/__tests__/**/*.test.{ts,tsx}'],
   globals: { __DEV__: true },
+  setupFiles: ['<rootDir>/jest.setup.js'],
   transform: {
     '^.+\\.tsx?$': ['babel-jest', {
       presets: [

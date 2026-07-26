@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <map>
 #include <vector>
 #include <variant>
 #include <stdexcept>
@@ -13,11 +12,12 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include "OrderedMap.hpp"
 
 namespace margelo::nitro::salvedb::json {
 
 struct Value;
-using Object = std::map<std::string, Value>;
+using Object = margelo::nitro::salvedb::OrderedMap<Value>;
 using Array  = std::vector<Value>;
 
 struct Value {
@@ -79,6 +79,7 @@ struct Value {
   }
 };
 
+/** Recursive-descent parser: raw JSON text -> json::Value tree. */
 class Parser {
   const std::string& _src;
   size_t _pos = 0;
@@ -270,7 +271,7 @@ inline void stringifyValue(const Value& v, std::ostringstream& out) {
 
 } // namespace detail
 
-// Object key order follows std::map's lexicographic order, not insertion order.
+// Object key order follows insertion (declaration) order, not alphabetical.
 inline std::string stringify(const Value& v) {
   std::ostringstream out;
   detail::stringifyValue(v, out);

@@ -1,5 +1,6 @@
 jest.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: jest.fn() },
+  Platform: { OS: 'ios' },
 }));
 
 import { ConfigureDb } from '../../ConfigureDb';
