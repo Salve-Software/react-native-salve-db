@@ -32,6 +32,7 @@ void setJavaVM(JavaVM* vm) {
   s_secureStorageClass = resolveGlobalClass(env, "com/salvedb/SalveDbSecureStorage");
   s_backgroundSchedulerClass = resolveGlobalClass(env, "com/salvedb/SalveDbBackgroundScheduler");
   registerHttpClientClass(resolveGlobalClass(env, "com/salvedb/SalveDbHttpClient"));
+  primeHttpJniCache(env);
 }
 
 namespace {
