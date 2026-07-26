@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings } from 'lucide-react';
+import { Search, Settings } from 'lucide-react';
 import type { ITableListProps } from './types';
 
 function isSystemTable(name: string) {
@@ -9,6 +9,7 @@ function isSystemTable(name: string) {
 
 export function TableList({ tables, currentTable, onSelect, onManage }: ITableListProps) {
   const [showSystem, setShowSystem] = useState(false);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (currentTable && isSystemTable(currentTable)) setShowSystem(true);
@@ -16,6 +17,20 @@ export function TableList({ tables, currentTable, onSelect, onManage }: ITableLi
 
   const userTables = tables.filter((name) => !isSystemTable(name));
   const systemTables = tables.filter(isSystemTable);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredUserTables = normalizedQuery
+    ? userTables.filter((name) => name.toLowerCase().includes(normalizedQuery))
+    : userTables;
+  const filteredSystemTables = normalizedQuery
+    ? systemTables.filter((name) => name.toLowerCase().includes(normalizedQuery))
+    : systemTables;
+
+  useEffect(() => {
+    if (normalizedQuery && filteredSystemTables.length > 0) setShowSystem(true);
+  }, [normalizedQuery, filteredSystemTables.length]);
+
+  const noMatches = tables.length > 0 && normalizedQuery !== '' && filteredUserTables.length === 0 && filteredSystemTables.length === 0;
 
   function renderRow(name: string) {
     const active = name === currentTable;
@@ -54,17 +69,29 @@ export function TableList({ tables, currentTable, onSelect, onManage }: ITableLi
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-line bg-surface py-3">
+      <div className="relative px-3 pb-2">
+        <Search className="pointer-events-none absolute left-6 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+        <input
+          type="text"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search tables…"
+          className="w-full rounded-md border border-line bg-surface-2 py-1.5 pl-7 pr-2 text-sm text-ink outline-none placeholder:text-muted/60 focus:border-accent"
+        />
+      </div>
+
       <div className="px-4 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
-        Tables{userTables.length > 0 && <span className="text-muted/60"> ({userTables.length})</span>}
+        Tables{filteredUserTables.length > 0 && <span className="text-muted/60"> ({filteredUserTables.length})</span>}
       </div>
 
       <nav className="flex flex-col gap-0.5 overflow-y-auto px-2">
-        {userTables.map(renderRow)}
+        {filteredUserTables.map(renderRow)}
 
         {tables.length === 0 && <p className="px-3 py-2 text-xs text-muted">No tables yet.</p>}
+        {noMatches && <p className="px-3 py-2 text-xs text-muted">No tables match &quot;{query}&quot;.</p>}
       </nav>
 
-      {systemTables.length > 0 && (
+      {filteredSystemTables.length > 0 && (
         <div className="mt-2 border-t border-line pt-2">
           <button
             onClick={() => setShowSystem((v) => !v)}
@@ -73,7 +100,7 @@ export function TableList({ tables, currentTable, onSelect, onManage }: ITableLi
             <motion.span aria-hidden="true" animate={{ rotate: showSystem ? 90 : 0 }} transition={{ duration: 0.15 }}>
               ▸
             </motion.span>
-            System <span className="text-muted/50">({systemTables.length})</span>
+            System <span className="text-muted/50">({filteredSystemTables.length})</span>
           </button>
 
           <AnimatePresence initial={false}>
@@ -85,7 +112,7 @@ export function TableList({ tables, currentTable, onSelect, onManage }: ITableLi
                 transition={{ duration: 0.15 }}
                 className="flex flex-col gap-0.5 overflow-hidden px-2"
               >
-                {systemTables.map(renderRow)}
+                {filteredSystemTables.map(renderRow)}
               </motion.nav>
             )}
           </AnimatePresence>

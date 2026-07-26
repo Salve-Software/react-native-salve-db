@@ -73,4 +73,41 @@ describe('TableList', () => {
     expect(onManage).toHaveBeenCalledWith('users');
     expect(onSelect).not.toHaveBeenCalled();
   });
+
+  it('filters user tables by the search query, case-insensitively', () => {
+    render(
+      <TableList tables={['users', 'orders', 'benchmark_rows']} currentTable={null} onSelect={vi.fn()} onManage={vi.fn()} />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Search tables…'), { target: { value: 'ORDE' } });
+
+    expect(screen.getByText('orders')).toBeInTheDocument();
+    expect(screen.queryByText('users')).not.toBeInTheDocument();
+    expect(screen.queryByText('benchmark_rows')).not.toBeInTheDocument();
+  });
+
+  it('filters system tables too and auto-expands the System section on a match', () => {
+    render(
+      <TableList
+        tables={['users', '_salve_relations', '_sync_apply_lock']}
+        currentTable={null}
+        onSelect={vi.fn()}
+        onManage={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Search tables…'), { target: { value: 'relations' } });
+
+    expect(screen.getByText('_salve_relations')).toBeInTheDocument();
+    expect(screen.queryByText('_sync_apply_lock')).not.toBeInTheDocument();
+    expect(screen.queryByText('users')).not.toBeInTheDocument();
+  });
+
+  it('shows a no-matches message when the query matches nothing', () => {
+    render(<TableList tables={['users', 'orders']} currentTable={null} onSelect={vi.fn()} onManage={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Search tables…'), { target: { value: 'zzz' } });
+
+    expect(screen.getByText('No tables match "zzz".')).toBeInTheDocument();
+  });
 });
