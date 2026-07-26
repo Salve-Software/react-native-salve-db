@@ -4,6 +4,7 @@ import type { IQueryClient } from './types';
 import type { AnySchema } from '../../../types';
 import { SelectQueryBuilder, InsertQueryBuilder, UpdateQueryBuilder, DeleteQueryBuilder, CountQueryBuilder } from './classes';
 import { ConfigureDb } from '../ConfigureDb';
+import { mapQueryResultToRows } from './library';
 
 export class QueryDb {
   constructor(private readonly _bridge: SalveDatabase) {}
@@ -51,11 +52,7 @@ export class QueryDb {
     this._assertConfigured('execute');
     const result = this._bridge.execute(sql, (params ?? []) as SqlValue[]);
 
-    return result.rows.map((row) => {
-      const obj: Record<string, unknown> = {};
-      result.columns.forEach((col, i) => { obj[col] = row[i] });
-      return obj;
-    })
+    return mapQueryResultToRows(result);
   }
 
   subscribeToChanges(callback: (tables: string[]) => void): number {
