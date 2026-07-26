@@ -347,18 +347,42 @@ export function RowGrid({
                         return (
                           <td
                             key={col.name}
-                            className={`whitespace-nowrap px-3 py-2 ${isPk ? 'text-muted' : 'cursor-text'} ${
-                              isDirty ? 'bg-accent/15 shadow-[inset_0_0_0_1px_rgba(34,209,108,0.5)]' : ''
-                            }`}
-                            contentEditable={!isPk}
-                            suppressContentEditableWarning
-                            onInput={(event) => {
-                              if (isPk) return;
-                              const newValue = event.currentTarget.textContent ?? '';
-                              setPendingValue(key, col.name, value, newValue);
-                            }}
+                            className={`relative whitespace-nowrap px-3 py-2 ${
+                              isPk
+                                ? 'text-muted'
+                                // The focus ring sits on the cell, not the input, so a focused
+                                // cell is outlined edge to edge the way the old contentEditable
+                                // <td> was. `outline` rather than a shadow so it composes with
+                                // the dirty highlight below instead of overriding it.
+                                : 'focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-accent'
+                            } ${isDirty ? 'bg-accent/15 shadow-[inset_0_0_0_1px_rgba(34,209,108,0.5)]' : ''}`}
                           >
-                            {displayValue === null ? <span className="italic text-muted/60">NULL</span> : displayValue}
+                            {isPk ? (
+                              displayValue === null ? <span className="italic text-muted/60">NULL</span> : displayValue
+                            ) : (
+                              <>
+                                {/*
+                                  The input is absolutely positioned so the whole cell — padding
+                                  included — is a click target, which a content-sized input is not.
+                                  That takes it out of flow, so this invisible copy of the text is
+                                  what gives the column its width.
+                                */}
+                                <span aria-hidden className="invisible inline-block min-w-16 whitespace-pre">
+                                  {displayValue ?? 'NULL'}
+                                </span>
+                                <input
+                                  value={displayValue ?? ''}
+                                  aria-label={`${col.name} of row ${key}`}
+                                  // A null cell shows NULL as a placeholder, so typing starts
+                                  // from empty instead of appending to the literal text "NULL".
+                                  placeholder={value === null ? 'NULL' : ''}
+                                  onChange={(event) => setPendingValue(key, col.name, value, event.target.value)}
+                                  // px-3 mirrors the cell's own padding so the text lands exactly
+                                  // on top of the sizer above.
+                                  className="absolute inset-0 h-full w-full bg-transparent px-3 text-ink outline-none placeholder:italic placeholder:text-muted/60"
+                                />
+                              </>
+                            )}
                           </td>
                         );
                       })}

@@ -49,11 +49,6 @@ body {
   );
 }
 
-td[contenteditable='true']:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
-}
-
 ::selection {
   background: color-mix(in srgb, var(--color-accent) 35%, transparent);
 }

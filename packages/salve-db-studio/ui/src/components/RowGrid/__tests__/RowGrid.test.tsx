@@ -31,7 +31,7 @@ describe('RowGrid', () => {
 
     expect(screen.getByText('id')).toBeInTheDocument();
     expect(screen.getByText('name')).toBeInTheDocument();
-    expect(screen.getByText('Ana')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Ana')).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no rows', () => {
@@ -40,10 +40,12 @@ describe('RowGrid', () => {
     expect(screen.getByText('No rows yet.')).toBeInTheDocument();
   });
 
-  it('the primary key column is not editable', () => {
+  it('the primary key column is rendered as plain text, not an editable field', () => {
     renderGrid();
 
-    expect(screen.getByText('1')).not.toHaveAttribute('contenteditable', 'true');
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('1')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('id of row 1')).not.toBeInTheDocument();
   });
 
   it('requires a second click to confirm a single row delete', () => {
@@ -69,54 +71,88 @@ describe('RowGrid', () => {
   });
 
   describe('editing', () => {
+    // Editable cells are <input>s rather than contentEditable <td>s: React
+    // rewrites a contentEditable's text node on every keystroke, which drops
+    // the caret back to position 0 mid-word.
+    function nameCell() {
+      return screen.getByLabelText('name of row 1');
+    }
+
+    function type(cell: HTMLElement, value: string) {
+      fireEvent.change(cell, { target: { value } });
+    }
+
+    it('renders editable cells as inputs holding the current value', () => {
+      renderGrid();
+
+      const cell = nameCell();
+      expect(cell.tagName).toBe('INPUT');
+      expect(cell).toHaveValue('Ana');
+    });
+
+    // jsdom has no Tailwind build, so this can only assert the classes are wired
+    // up — but that is exactly what silently went missing when the cell stopped
+    // being a contentEditable <td> and the `td[contenteditable]:focus` rule died.
+    it('outlines the whole cell while its input has focus', () => {
+      renderGrid();
+
+      const cell = nameCell().closest('td');
+      expect(cell).toHaveClass(
+        'focus-within:outline-2',
+        'focus-within:-outline-offset-2',
+        'focus-within:outline-accent'
+      );
+    });
+
+    it('shows NULL as a placeholder so typing does not append to the literal text', () => {
+      renderGrid({ rows: [{ id: 1, name: null }] });
+
+      const cell = nameCell();
+      expect(cell).toHaveValue('');
+      expect(cell).toHaveAttribute('placeholder', 'NULL');
+    });
+
     it('does not call onUpdateCell immediately when typing — stages it as a pending change', () => {
       const onUpdateCell = vi.fn();
       renderGrid({ onUpdateCell });
 
-      const cell = screen.getByText('Ana');
-      cell.textContent = 'Ana Souza';
-      fireEvent.input(cell);
+      type(nameCell(), 'Ana Souza');
 
       expect(onUpdateCell).not.toHaveBeenCalled();
       expect(screen.getByText('1 unsaved change')).toBeInTheDocument();
+      expect(nameCell()).toHaveValue('Ana Souza');
     });
 
     it('clears the pending change if the value is edited back to the original', async () => {
       renderGrid();
-      const cell = screen.getByText('Ana');
 
-      cell.textContent = 'Ana Souza';
-      fireEvent.input(cell);
+      type(nameCell(), 'Ana Souza');
       expect(screen.getByText('1 unsaved change')).toBeInTheDocument();
 
-      cell.textContent = 'Ana';
-      fireEvent.input(cell);
+      type(nameCell(), 'Ana');
       await waitFor(() => expect(screen.queryByText('1 unsaved change')).not.toBeInTheDocument());
     });
 
     it('Save changes commits every pending edit and clears the dirty state', () => {
       const onUpdateCell = vi.fn();
       renderGrid({ onUpdateCell });
-      const cell = screen.getByText('Ana');
-      cell.textContent = 'Ana Souza';
-      fireEvent.input(cell);
+      type(nameCell(), 'Ana Souza');
 
       fireEvent.click(screen.getByText('Save changes'));
 
       expect(onUpdateCell).toHaveBeenCalledWith(rows[0], 'name', 'Ana Souza');
     });
 
-    it('Discard clears pending edits without calling onUpdateCell', async () => {
+    it('Discard clears pending edits and restores the original value', async () => {
       const onUpdateCell = vi.fn();
       renderGrid({ onUpdateCell });
-      const cell = screen.getByText('Ana');
-      cell.textContent = 'Ana Souza';
-      fireEvent.input(cell);
+      type(nameCell(), 'Ana Souza');
 
       fireEvent.click(screen.getByText('Discard'));
 
       expect(onUpdateCell).not.toHaveBeenCalled();
       await waitFor(() => expect(screen.queryByText('Save changes')).not.toBeInTheDocument());
+      expect(nameCell()).toHaveValue('Ana');
     });
   });
 
@@ -193,7 +229,7 @@ describe('RowGrid', () => {
       fireEvent.click(screen.getByRole('checkbox', { name: 'name' }));
 
       const table = screen.getByRole('table');
-      expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+      expect(screen.queryByDisplayValue('Ana')).not.toBeInTheDocument();
       expect(within(table).getByText('id')).toBeInTheDocument();
     });
   });
