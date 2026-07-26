@@ -107,6 +107,27 @@ export function useStudioConnection(): IStudioConnection {
       .catch((err: Error) => setError(err.message));
   }, [currentTable, columns, send, loadRows]);
 
+  const truncateTable = useCallback((table: string): Promise<void> => {
+    return send('truncateTable', { table })
+      .then(() => {
+        if (table === currentTable) loadRows(table);
+      })
+      .catch((err: Error) => setError(err.message));
+  }, [currentTable, send, loadRows]);
+
+  const deleteTable = useCallback((table: string): Promise<void> => {
+    return send('dropTable', { table })
+      .then(() => {
+        if (table === currentTable) {
+          setCurrentTable(null);
+          setColumns([]);
+          setRows([]);
+        }
+        loadTables();
+      })
+      .catch((err: Error) => setError(err.message));
+  }, [currentTable, send, loadTables]);
+
   const runSql = useCallback((sql: string): Promise<Row[]> => {
     return send('execute', { sql }).then((result) => result as Row[]);
   }, [send]);
@@ -194,6 +215,8 @@ export function useStudioConnection(): IStudioConnection {
     insertRow,
     updateCell,
     deleteRow,
+    truncateTable,
+    deleteTable,
     runSql,
   };
 }

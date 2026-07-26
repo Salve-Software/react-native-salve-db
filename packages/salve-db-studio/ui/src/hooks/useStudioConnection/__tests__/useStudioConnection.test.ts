@@ -172,6 +172,74 @@ describe('useStudioConnection', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('truncateTable sends truncateTable and reloads rows for the truncated table', async () => {
+    const { result } = renderHook(() => useStudioConnection());
+    const socket = latestSocket();
+    act(() => socket.onopen?.());
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
+    act(() => socket.emit({ id: socket.findSent('listTables').id, ok: true, result: [{ name: 'users' }] }));
+    act(() => result.current.selectTable('users'));
+    act(() =>
+      socket.emit({
+        id: socket.findSent('tableInfo').id,
+        ok: true,
+        result: [{ cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 }],
+      })
+    );
+    await waitFor(() => expect(result.current.columns).toHaveLength(1));
+    act(() => socket.emit({ id: socket.findSent('queryRows').id, ok: true, result: [{ id: 1 }] }));
+    await waitFor(() => expect(result.current.rows).toEqual([{ id: 1 }]));
+
+    act(() => {
+      result.current.truncateTable('users');
+    });
+
+    const truncateCommand = socket.findSent('truncateTable');
+    expect(truncateCommand.table).toBe('users');
+    act(() => socket.emit({ id: truncateCommand.id, ok: true, result: { truncated: true } }));
+
+    await waitFor(() => expect(socket.sent.filter((m) => m.type === 'queryRows')).toHaveLength(2));
+    const queryRowsCalls = socket.sent.filter((m) => m.type === 'queryRows');
+    act(() => socket.emit({ id: queryRowsCalls[queryRowsCalls.length - 1]!.id, ok: true, result: [] }));
+    await waitFor(() => expect(result.current.rows).toEqual([]));
+  });
+
+  it('deleteTable sends dropTable, clears the current table, and reloads the table list', async () => {
+    const { result } = renderHook(() => useStudioConnection());
+    const socket = latestSocket();
+    act(() => socket.onopen?.());
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
+    act(() => socket.emit({ id: socket.findSent('listTables').id, ok: true, result: [{ name: 'users' }] }));
+    act(() => result.current.selectTable('users'));
+    act(() =>
+      socket.emit({
+        id: socket.findSent('tableInfo').id,
+        ok: true,
+        result: [{ cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 }],
+      })
+    );
+    await waitFor(() => expect(result.current.columns).toHaveLength(1));
+    act(() => socket.emit({ id: socket.findSent('queryRows').id, ok: true, result: [{ id: 1 }] }));
+    await waitFor(() => expect(result.current.rows).toEqual([{ id: 1 }]));
+
+    act(() => {
+      result.current.deleteTable('users');
+    });
+
+    const dropCommand = socket.findSent('dropTable');
+    expect(dropCommand.table).toBe('users');
+    act(() => socket.emit({ id: dropCommand.id, ok: true, result: { dropped: true } }));
+    await waitFor(() => expect(result.current.currentTable).toBeNull());
+    expect(result.current.columns).toEqual([]);
+    expect(result.current.rows).toEqual([]);
+
+    const listTablesCalls = socket.sent.filter((m) => m.type === 'listTables');
+    act(() =>
+      socket.emit({ id: listTablesCalls[listTablesCalls.length - 1]!.id, ok: true, result: [] })
+    );
+    await waitFor(() => expect(result.current.tables).toEqual([]));
+  });
+
   it('reconnects after the socket closes', () => {
     vi.useFakeTimers();
     renderHook(() => useStudioConnection());

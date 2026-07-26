@@ -3,21 +3,21 @@ import { TableList } from '../index';
 
 describe('TableList', () => {
   it('renders every table name', () => {
-    render(<TableList tables={['users', 'orders']} currentTable={null} onSelect={vi.fn()} />);
+    render(<TableList tables={['users', 'orders']} currentTable={null} onSelect={vi.fn()} onManage={vi.fn()} />);
 
     expect(screen.getByText('users')).toBeInTheDocument();
     expect(screen.getByText('orders')).toBeInTheDocument();
   });
 
   it('shows an empty message when there are no tables', () => {
-    render(<TableList tables={[]} currentTable={null} onSelect={vi.fn()} />);
+    render(<TableList tables={[]} currentTable={null} onSelect={vi.fn()} onManage={vi.fn()} />);
 
     expect(screen.getByText('No tables yet.')).toBeInTheDocument();
   });
 
   it('calls onSelect with the clicked table name', () => {
     const onSelect = vi.fn();
-    render(<TableList tables={['users', 'orders']} currentTable={null} onSelect={onSelect} />);
+    render(<TableList tables={['users', 'orders']} currentTable={null} onSelect={onSelect} onManage={vi.fn()} />);
 
     fireEvent.click(screen.getByText('orders'));
 
@@ -30,6 +30,7 @@ describe('TableList', () => {
         tables={['users', '_salve_relations', '_sync_apply_lock']}
         currentTable={null}
         onSelect={vi.fn()}
+        onManage={vi.fn()}
       />
     );
 
@@ -40,7 +41,9 @@ describe('TableList', () => {
   });
 
   it('reveals system tables when the System section is toggled', () => {
-    render(<TableList tables={['users', '_salve_relations']} currentTable={null} onSelect={vi.fn()} />);
+    render(
+      <TableList tables={['users', '_salve_relations']} currentTable={null} onSelect={vi.fn()} onManage={vi.fn()} />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'System (1)' }));
 
@@ -49,9 +52,25 @@ describe('TableList', () => {
 
   it('auto-expands the System section when a system table is selected', () => {
     render(
-      <TableList tables={['users', '_salve_relations']} currentTable="_salve_relations" onSelect={vi.fn()} />
+      <TableList
+        tables={['users', '_salve_relations']}
+        currentTable="_salve_relations"
+        onSelect={vi.fn()}
+        onManage={vi.fn()}
+      />
     );
 
     expect(screen.getByText('_salve_relations')).toBeInTheDocument();
+  });
+
+  it('calls onManage with the table name, without triggering onSelect', () => {
+    const onSelect = vi.fn();
+    const onManage = vi.fn();
+    render(<TableList tables={['users']} currentTable={null} onSelect={onSelect} onManage={onManage} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage users' }));
+
+    expect(onManage).toHaveBeenCalledWith('users');
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Settings } from 'lucide-react';
 import type { ITableListProps } from './types';
 
 function isSystemTable(name: string) {
   return name.startsWith('_');
 }
 
-export function TableList({ tables, currentTable, onSelect }: ITableListProps) {
+export function TableList({ tables, currentTable, onSelect, onManage }: ITableListProps) {
   const [showSystem, setShowSystem] = useState(false);
 
   useEffect(() => {
@@ -19,22 +20,35 @@ export function TableList({ tables, currentTable, onSelect }: ITableListProps) {
   function renderRow(name: string) {
     const active = name === currentTable;
     return (
-      <button
-        key={name}
-        onClick={() => onSelect(name)}
-        className={`relative rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
-          active ? 'text-accent-strong' : 'text-ink/80 hover:bg-white/5'
-        }`}
-      >
-        {active && (
-          <motion.span
-            layoutId="table-active-indicator"
-            className="absolute inset-0 rounded-md bg-accent/15"
-            transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-          />
-        )}
-        <span className="relative">{name}</span>
-      </button>
+      <div key={name} className="group relative">
+        <button
+          onClick={() => onSelect(name)}
+          className={`relative w-full rounded-md py-1.5 pl-3 pr-8 text-left text-sm transition-colors ${
+            active ? 'text-accent-strong' : 'text-ink/80 hover:bg-white/5'
+          }`}
+        >
+          {active && (
+            <motion.span
+              layoutId="table-active-indicator"
+              className="absolute inset-0 rounded-md bg-accent/15"
+              transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+            />
+          )}
+          <span className="relative block truncate">{name}</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label={`Manage ${name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onManage(name);
+          }}
+          className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted opacity-0 transition-opacity hover:bg-white/10 hover:text-ink group-hover:opacity-100"
+        >
+          <Settings className="h-3.5 w-3.5" />
+        </button>
+      </div>
     );
   }
 

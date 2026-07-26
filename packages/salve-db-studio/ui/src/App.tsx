@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useStudioConnection } from './hooks';
-import { StatusBadge, DeviceSelector, TableList, RowGrid, InsertForm, SqlRunner, Toast } from './components';
+import {
+  StatusBadge,
+  DeviceSelector,
+  TableList,
+  TableSettingsModal,
+  RowGrid,
+  InsertForm,
+  SqlRunner,
+  Toast,
+} from './components';
 
 function ConnectingState() {
   return (
@@ -37,9 +46,12 @@ export function App() {
     insertRow,
     updateCell,
     deleteRow,
+    truncateTable,
+    deleteTable,
     runSql,
   } = useStudioConnection();
   const [showInsertForm, setShowInsertForm] = useState(false);
+  const [managingTable, setManagingTable] = useState<string | null>(null);
 
   useEffect(() => {
     if (!error) return;
@@ -69,7 +81,12 @@ export function App() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <TableList tables={tables} currentTable={currentTable} onSelect={handleSelect} />
+        <TableList
+          tables={tables}
+          currentTable={currentTable}
+          onSelect={handleSelect}
+          onManage={setManagingTable}
+        />
 
         <main className="flex-1 overflow-y-auto p-6">
           {!appConnected ? (
@@ -130,6 +147,14 @@ export function App() {
       </div>
 
       <Toast message={error} onDismiss={clearError} />
+
+      <TableSettingsModal
+        table={managingTable}
+        isSystem={managingTable?.startsWith('_') ?? false}
+        onTruncate={truncateTable}
+        onDelete={deleteTable}
+        onClose={() => setManagingTable(null)}
+      />
     </div>
   );
 }

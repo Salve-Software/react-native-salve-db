@@ -83,6 +83,37 @@ describe('handleCommand', () => {
     expect(response).toEqual({ id: '6', ok: true, result: [{ total: 3 }] });
   });
 
+  test('truncateTable deletes every row from the table', () => {
+    const bridge = makeBridge();
+
+    const response = handleCommand(bridge, { id: '9', type: 'truncateTable', table: 'users' });
+
+    expect(bridge.execute).toHaveBeenCalledWith('DELETE FROM "users"', []);
+    expect(response).toEqual({ id: '9', ok: true, result: { truncated: true } });
+  });
+
+  test('dropTable drops a regular table', () => {
+    const bridge = makeBridge();
+
+    const response = handleCommand(bridge, { id: '10', type: 'dropTable', table: 'users' });
+
+    expect(bridge.execute).toHaveBeenCalledWith('DROP TABLE "users"', []);
+    expect(response).toEqual({ id: '10', ok: true, result: { dropped: true } });
+  });
+
+  test('dropTable refuses to drop an internal (_-prefixed) table', () => {
+    const bridge = makeBridge();
+
+    const response = handleCommand(bridge, { id: '11', type: 'dropTable', table: '_salve_relations' });
+
+    expect(response).toEqual({
+      id: '11',
+      ok: false,
+      error: expect.stringContaining('can only be truncated'),
+    });
+    expect(bridge.execute).not.toHaveBeenCalled();
+  });
+
   test('rejects a table name that is not a valid identifier', () => {
     const bridge = makeBridge();
 

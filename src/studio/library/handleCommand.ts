@@ -64,6 +64,19 @@ function runCommand(bridge: SalveDatabase, command: IStudioCommand): unknown {
       execRows(bridge, `DELETE FROM "${command.table}" WHERE "${command.primaryKey}" = ?`, [command.primaryKeyValue]);
       return { deleted: true };
 
+    case 'truncateTable':
+      assertIdentifier(command.table, 'table');
+      execRows(bridge, `DELETE FROM "${command.table}"`);
+      return { truncated: true };
+
+    case 'dropTable':
+      assertIdentifier(command.table, 'table');
+      if (command.table.startsWith('_')) {
+        throw new Error('Studio: internal tables can only be truncated, not dropped');
+      }
+      execRows(bridge, `DROP TABLE "${command.table}"`);
+      return { dropped: true };
+
     case 'execute':
       if (!command.sql) throw new Error('Studio: execute requires sql');
       return execRows(bridge, command.sql, command.params);

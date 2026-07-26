@@ -1,7 +1,16 @@
 /** One command sent by a Studio browser tab, relayed to the app unchanged. */
 export interface IStudioCommand {
   id: string;
-  type: 'listTables' | 'tableInfo' | 'queryRows' | 'insertRow' | 'updateRow' | 'deleteRow' | 'execute';
+  type:
+    | 'listTables'
+    | 'tableInfo'
+    | 'queryRows'
+    | 'insertRow'
+    | 'updateRow'
+    | 'deleteRow'
+    | 'truncateTable'
+    | 'dropTable'
+    | 'execute';
   table?: string;
   sql?: string;
   params?: unknown[];
