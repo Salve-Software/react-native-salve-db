@@ -3,12 +3,17 @@ import type { IConfigureProps, IRegisterProps } from './types';
 import { registerAppOpenSync } from './library/registerAppOpenSync';
 import { mapCredentials } from './library/mapCredentials';
 import { registerReadSyncBridge } from '../../../sync';
+import { StudioAgent } from '../../../studio';
 
 export class ConfigureDb {
   private static _configured = false;
   private static _syncOnAppOpen = true;
 
-  constructor(private readonly _bridge: SalveDatabase) {}
+  private readonly _studioAgent: StudioAgent;
+
+  constructor(private readonly _bridge: SalveDatabase) {
+    this._studioAgent = new StudioAgent(_bridge);
+  }
 
   configure(props: IConfigureProps): void {
     if (!props.name || props.name.trim() === '') {
@@ -33,6 +38,10 @@ export class ConfigureDb {
     ConfigureDb._syncOnAppOpen = syncOnAppOpen;
     registerAppOpenSync(this._bridge, () => ConfigureDb._syncOnAppOpen);
     registerReadSyncBridge(this._bridge);
+
+    if (__DEV__) {
+      this._studioAgent.start();
+    }
   }
 
   register(props: IRegisterProps): Promise<void> {
