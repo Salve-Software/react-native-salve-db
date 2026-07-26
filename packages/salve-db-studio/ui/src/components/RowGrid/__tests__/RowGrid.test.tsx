@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { RowGrid } from '../index';
 import type { IColumnInfo } from '../../../types';
 
@@ -8,9 +8,26 @@ const columns: IColumnInfo[] = [
 ];
 const rows = [{ id: 1, name: 'Ana' }];
 
+function renderGrid(overrides: Partial<React.ComponentProps<typeof RowGrid>> = {}) {
+  return render(
+    <RowGrid
+      columns={columns}
+      rows={rows}
+      page={0}
+      hasNextPage={false}
+      onNextPage={vi.fn()}
+      onPrevPage={vi.fn()}
+      onUpdateCell={vi.fn()}
+      onDeleteRow={vi.fn()}
+      onDeleteRows={vi.fn()}
+      {...overrides}
+    />
+  );
+}
+
 describe('RowGrid', () => {
   it('renders column headers and row values', () => {
-    render(<RowGrid columns={columns} rows={rows} onUpdateCell={vi.fn()} onDeleteRow={vi.fn()} />);
+    renderGrid();
 
     expect(screen.getByText('id')).toBeInTheDocument();
     expect(screen.getByText('name')).toBeInTheDocument();
@@ -18,40 +35,20 @@ describe('RowGrid', () => {
   });
 
   it('shows an empty state when there are no rows', () => {
-    render(<RowGrid columns={columns} rows={[]} onUpdateCell={vi.fn()} onDeleteRow={vi.fn()} />);
+    renderGrid({ rows: [] });
 
     expect(screen.getByText('No rows yet.')).toBeInTheDocument();
   });
 
-  it('calls onUpdateCell when an editable cell is blurred with a new value', () => {
-    const onUpdateCell = vi.fn();
-    render(<RowGrid columns={columns} rows={rows} onUpdateCell={onUpdateCell} onDeleteRow={vi.fn()} />);
-
-    const cell = screen.getByText('Ana');
-    cell.textContent = 'Ana Souza';
-    fireEvent.blur(cell);
-
-    expect(onUpdateCell).toHaveBeenCalledWith(rows[0], 'name', 'Ana Souza');
-  });
-
-  it('does not call onUpdateCell when the value is unchanged', () => {
-    const onUpdateCell = vi.fn();
-    render(<RowGrid columns={columns} rows={rows} onUpdateCell={onUpdateCell} onDeleteRow={vi.fn()} />);
-
-    fireEvent.blur(screen.getByText('Ana'));
-
-    expect(onUpdateCell).not.toHaveBeenCalled();
-  });
-
   it('the primary key column is not editable', () => {
-    render(<RowGrid columns={columns} rows={rows} onUpdateCell={vi.fn()} onDeleteRow={vi.fn()} />);
+    renderGrid();
 
     expect(screen.getByText('1')).not.toHaveAttribute('contenteditable', 'true');
   });
 
-  it('requires a second click to confirm delete', () => {
+  it('requires a second click to confirm a single row delete', () => {
     const onDeleteRow = vi.fn();
-    render(<RowGrid columns={columns} rows={rows} onUpdateCell={vi.fn()} onDeleteRow={onDeleteRow} />);
+    renderGrid({ onDeleteRow });
 
     fireEvent.click(screen.getByText('Delete'));
     expect(onDeleteRow).not.toHaveBeenCalled();
@@ -60,14 +57,144 @@ describe('RowGrid', () => {
     expect(onDeleteRow).toHaveBeenCalledWith(rows[0]);
   });
 
-  it('cancel aborts the delete confirmation without calling onDeleteRow', () => {
+  it('cancel aborts the single row delete confirmation', () => {
     const onDeleteRow = vi.fn();
-    render(<RowGrid columns={columns} rows={rows} onUpdateCell={vi.fn()} onDeleteRow={onDeleteRow} />);
+    renderGrid({ onDeleteRow });
 
     fireEvent.click(screen.getByText('Delete'));
     fireEvent.click(screen.getByText('Cancel'));
 
     expect(screen.getByText('Delete')).toBeInTheDocument();
     expect(onDeleteRow).not.toHaveBeenCalled();
+  });
+
+  describe('editing', () => {
+    it('does not call onUpdateCell immediately when typing — stages it as a pending change', () => {
+      const onUpdateCell = vi.fn();
+      renderGrid({ onUpdateCell });
+
+      const cell = screen.getByText('Ana');
+      cell.textContent = 'Ana Souza';
+      fireEvent.input(cell);
+
+      expect(onUpdateCell).not.toHaveBeenCalled();
+      expect(screen.getByText('1 unsaved change')).toBeInTheDocument();
+    });
+
+    it('clears the pending change if the value is edited back to the original', async () => {
+      renderGrid();
+      const cell = screen.getByText('Ana');
+
+      cell.textContent = 'Ana Souza';
+      fireEvent.input(cell);
+      expect(screen.getByText('1 unsaved change')).toBeInTheDocument();
+
+      cell.textContent = 'Ana';
+      fireEvent.input(cell);
+      await waitFor(() => expect(screen.queryByText('1 unsaved change')).not.toBeInTheDocument());
+    });
+
+    it('Save changes commits every pending edit and clears the dirty state', () => {
+      const onUpdateCell = vi.fn();
+      renderGrid({ onUpdateCell });
+      const cell = screen.getByText('Ana');
+      cell.textContent = 'Ana Souza';
+      fireEvent.input(cell);
+
+      fireEvent.click(screen.getByText('Save changes'));
+
+      expect(onUpdateCell).toHaveBeenCalledWith(rows[0], 'name', 'Ana Souza');
+    });
+
+    it('Discard clears pending edits without calling onUpdateCell', async () => {
+      const onUpdateCell = vi.fn();
+      renderGrid({ onUpdateCell });
+      const cell = screen.getByText('Ana');
+      cell.textContent = 'Ana Souza';
+      fireEvent.input(cell);
+
+      fireEvent.click(screen.getByText('Discard'));
+
+      expect(onUpdateCell).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByText('Save changes')).not.toBeInTheDocument());
+    });
+  });
+
+  describe('row selection', () => {
+    const twoRows = [
+      { id: 1, name: 'Ana' },
+      { id: 2, name: 'Bob' },
+    ];
+
+    it('shows a selection bar with the count once a row is checked', () => {
+      renderGrid({ rows: twoRows });
+
+      fireEvent.click(screen.getByLabelText('Select row 1'));
+
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+    });
+
+    it('select-all checks every row, and Delete selected requires confirmation', () => {
+      const onDeleteRows = vi.fn();
+      renderGrid({ rows: twoRows, onDeleteRows });
+
+      fireEvent.click(screen.getByLabelText('Select all rows'));
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Delete selected (2)'));
+      expect(onDeleteRows).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByText('Confirm'));
+      expect(onDeleteRows).toHaveBeenCalledWith(twoRows);
+    });
+
+    it('Clear empties the selection', async () => {
+      renderGrid({ rows: twoRows });
+
+      fireEvent.click(screen.getByLabelText('Select row 1'));
+      fireEvent.click(screen.getByText('Clear'));
+
+      await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
+    });
+  });
+
+  describe('pagination', () => {
+    it('disables Previous on the first page', () => {
+      renderGrid({ page: 0 });
+
+      expect(screen.getByLabelText('Previous page')).toBeDisabled();
+    });
+
+    it('calls onPrevPage/onNextPage', () => {
+      const onNextPage = vi.fn();
+      const onPrevPage = vi.fn();
+      renderGrid({ page: 1, hasNextPage: true, onNextPage, onPrevPage });
+
+      fireEvent.click(screen.getByLabelText('Next page'));
+      fireEvent.click(screen.getByLabelText('Previous page'));
+
+      expect(onNextPage).toHaveBeenCalledTimes(1);
+      expect(onPrevPage).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Page 2')).toBeInTheDocument();
+    });
+
+    it('disables Next when there is no next page', () => {
+      renderGrid({ hasNextPage: false });
+
+      expect(screen.getByLabelText('Next page')).toBeDisabled();
+    });
+  });
+
+  describe('column visibility', () => {
+    it('hides a column from the table when unchecked in the Columns menu', () => {
+      renderGrid();
+
+      fireEvent.click(screen.getByText('Columns'));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'name' }));
+
+      const table = screen.getByRole('table');
+      expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+      expect(within(table).getByText('id')).toBeInTheDocument();
+    });
   });
 });

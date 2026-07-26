@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useStudioConnection } from '../index';
+import { useStudioConnection, ROWS_PAGE_SIZE } from '../index';
 
 interface ISentCommand {
   id?: string;
@@ -238,6 +238,100 @@ describe('useStudioConnection', () => {
       socket.emit({ id: listTablesCalls[listTablesCalls.length - 1]!.id, ok: true, result: [] })
     );
     await waitFor(() => expect(result.current.tables).toEqual([]));
+  });
+
+  it('queryRows requests a page-plus-one window and flags hasNextPage when a full page is returned', async () => {
+    const { result } = renderHook(() => useStudioConnection());
+    const socket = latestSocket();
+    act(() => socket.onopen?.());
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
+    act(() => socket.emit({ id: socket.findSent('listTables').id, ok: true, result: [{ name: 'users' }] }));
+    act(() => result.current.selectTable('users'));
+    act(() =>
+      socket.emit({
+        id: socket.findSent('tableInfo').id,
+        ok: true,
+        result: [{ cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 }],
+      })
+    );
+    await waitFor(() => expect(result.current.columns).toHaveLength(1));
+
+    const queryRows = socket.findSent('queryRows');
+    expect(queryRows).toMatchObject({ table: 'users', limit: ROWS_PAGE_SIZE + 1, offset: 0 });
+
+    const fullPagePlusOne = Array.from({ length: ROWS_PAGE_SIZE + 1 }, (_, i) => ({ id: i }));
+    act(() => socket.emit({ id: queryRows.id, ok: true, result: fullPagePlusOne }));
+
+    await waitFor(() => expect(result.current.rows).toHaveLength(ROWS_PAGE_SIZE));
+    expect(result.current.hasNextPage).toBe(true);
+  });
+
+  it('nextPage/prevPage move the offset and reset on selectTable', async () => {
+    const { result } = renderHook(() => useStudioConnection());
+    const socket = latestSocket();
+    act(() => socket.onopen?.());
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
+    act(() => socket.emit({ id: socket.findSent('listTables').id, ok: true, result: [{ name: 'users' }] }));
+    act(() => result.current.selectTable('users'));
+    act(() =>
+      socket.emit({
+        id: socket.findSent('tableInfo').id,
+        ok: true,
+        result: [{ cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 }],
+      })
+    );
+    await waitFor(() => expect(result.current.columns).toHaveLength(1));
+    const fullPagePlusOne = Array.from({ length: ROWS_PAGE_SIZE + 1 }, (_, i) => ({ id: i }));
+    act(() => socket.emit({ id: socket.findSent('queryRows').id, ok: true, result: fullPagePlusOne }));
+    await waitFor(() => expect(result.current.hasNextPage).toBe(true));
+
+    act(() => result.current.nextPage());
+    expect(result.current.page).toBe(1);
+    let queryRowsCalls = socket.sent.filter((m) => m.type === 'queryRows');
+    expect(queryRowsCalls[queryRowsCalls.length - 1]).toMatchObject({ offset: ROWS_PAGE_SIZE });
+    act(() => socket.emit({ id: queryRowsCalls[queryRowsCalls.length - 1]!.id, ok: true, result: [] }));
+    await waitFor(() => expect(result.current.rows).toEqual([]));
+
+    act(() => result.current.prevPage());
+    expect(result.current.page).toBe(0);
+    queryRowsCalls = socket.sent.filter((m) => m.type === 'queryRows');
+    expect(queryRowsCalls[queryRowsCalls.length - 1]).toMatchObject({ offset: 0 });
+    act(() => socket.emit({ id: queryRowsCalls[queryRowsCalls.length - 1]!.id, ok: true, result: [] }));
+
+    act(() => result.current.selectTable('users'));
+    expect(result.current.page).toBe(0);
+  });
+
+  it('deleteRows deletes every given row and reloads rows once', async () => {
+    const { result } = renderHook(() => useStudioConnection());
+    const socket = latestSocket();
+    act(() => socket.onopen?.());
+    act(() => socket.emit({ type: 'devices', devices: oneDevice }));
+    act(() => socket.emit({ id: socket.findSent('listTables').id, ok: true, result: [{ name: 'users' }] }));
+    act(() => result.current.selectTable('users'));
+    act(() =>
+      socket.emit({
+        id: socket.findSent('tableInfo').id,
+        ok: true,
+        result: [{ cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 }],
+      })
+    );
+    await waitFor(() => expect(result.current.columns).toHaveLength(1));
+    act(() => socket.emit({ id: socket.findSent('queryRows').id, ok: true, result: [{ id: 1 }, { id: 2 }] }));
+    await waitFor(() => expect(result.current.rows).toHaveLength(2));
+
+    act(() => {
+      result.current.deleteRows([{ id: 1 }, { id: 2 }]);
+    });
+
+    const deleteCommands = socket.sent.filter((m) => m.type === 'deleteRow');
+    expect(deleteCommands).toHaveLength(2);
+    act(() => deleteCommands.forEach((cmd) => socket.emit({ id: cmd.id, ok: true, result: { deleted: true } })));
+
+    await waitFor(() => expect(socket.sent.filter((m) => m.type === 'queryRows')).toHaveLength(2));
+    const queryRowsCalls = socket.sent.filter((m) => m.type === 'queryRows');
+    act(() => socket.emit({ id: queryRowsCalls[queryRowsCalls.length - 1]!.id, ok: true, result: [] }));
+    await waitFor(() => expect(result.current.rows).toEqual([]));
   });
 
   it('reconnects after the socket closes', () => {

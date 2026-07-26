@@ -3,12 +3,15 @@ import type { IPendingHandlers, IStudioConnection } from './types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { primaryKeyColumn } from './library';
 
+export const ROWS_PAGE_SIZE = 50;
+
 /** Owns the WebSocket connection to the local Studio server and exposes device/table browsing/editing as plain state + actions. */
 export function useStudioConnection(): IStudioConnection {
   const wsRef = useRef<WebSocket | null>(null);
   const pendingRef = useRef(new Map<string, IPendingHandlers>());
   const nextIdRef = useRef(1);
   const selectedDeviceIdRef = useRef<string | null>(null);
+  const pageRef = useRef(0);
 
   const [devices, setDevices] = useState<IDevice[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
@@ -16,6 +19,8 @@ export function useStudioConnection(): IStudioConnection {
   const [currentTable, setCurrentTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<IColumnInfo[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const send = useCallback((type: string, payload: Record<string, unknown> = {}): Promise<unknown> => {
@@ -38,8 +43,13 @@ export function useStudioConnection(): IStudioConnection {
   }, [send]);
 
   const loadRows = useCallback((table: string) => {
-    send('queryRows', { table })
-      .then((result) => setRows(result as Row[]))
+    const offset = pageRef.current * ROWS_PAGE_SIZE;
+    send('queryRows', { table, limit: ROWS_PAGE_SIZE + 1, offset })
+      .then((result) => {
+        const fetched = result as Row[];
+        setHasNextPage(fetched.length > ROWS_PAGE_SIZE);
+        setRows(fetched.slice(0, ROWS_PAGE_SIZE));
+      })
       .catch((err: Error) => setError(err.message));
   }, [send]);
 
@@ -48,6 +58,9 @@ export function useStudioConnection(): IStudioConnection {
     setColumns([]);
     setRows([]);
     setTables([]);
+    pageRef.current = 0;
+    setPage(0);
+    setHasNextPage(false);
   }, []);
 
   const selectDevice = useCallback((id: string) => {
@@ -59,6 +72,8 @@ export function useStudioConnection(): IStudioConnection {
 
   const selectTable = useCallback((name: string) => {
     setCurrentTable(name);
+    pageRef.current = 0;
+    setPage(0);
     send('tableInfo', { table: name })
       .then((result) => {
         setColumns(result as IColumnInfo[]);
@@ -70,6 +85,21 @@ export function useStudioConnection(): IStudioConnection {
   const refresh = useCallback(() => {
     if (currentTable) loadRows(currentTable);
   }, [currentTable, loadRows]);
+
+  const gotoPage = useCallback((next: number) => {
+    if (!currentTable) return;
+    pageRef.current = Math.max(0, next);
+    setPage(pageRef.current);
+    loadRows(currentTable);
+  }, [currentTable, loadRows]);
+
+  const nextPage = useCallback(() => {
+    if (hasNextPage) gotoPage(pageRef.current + 1);
+  }, [hasNextPage, gotoPage]);
+
+  const prevPage = useCallback(() => {
+    gotoPage(pageRef.current - 1);
+  }, [gotoPage]);
 
   const insertRow = useCallback((values: Record<string, string>): Promise<void> => {
     if (!currentTable) return Promise.resolve();
@@ -107,10 +137,30 @@ export function useStudioConnection(): IStudioConnection {
       .catch((err: Error) => setError(err.message));
   }, [currentTable, columns, send, loadRows]);
 
+  const deleteRows = useCallback((rowsToDelete: Row[]): Promise<void> => {
+    if (!currentTable || rowsToDelete.length === 0) return Promise.resolve();
+    const pk = primaryKeyColumn(columns);
+    if (!pk) {
+      setError('Table has no primary key — deleting is disabled');
+      return Promise.resolve();
+    }
+    return Promise.all(
+      rowsToDelete.map((row) =>
+        send('deleteRow', { table: currentTable, primaryKey: pk, primaryKeyValue: row[pk] })
+      )
+    )
+      .then(() => loadRows(currentTable))
+      .catch((err: Error) => setError(err.message));
+  }, [currentTable, columns, send, loadRows]);
+
   const truncateTable = useCallback((table: string): Promise<void> => {
     return send('truncateTable', { table })
       .then(() => {
-        if (table === currentTable) loadRows(table);
+        if (table === currentTable) {
+          pageRef.current = 0;
+          setPage(0);
+          loadRows(table);
+        }
       })
       .catch((err: Error) => setError(err.message));
   }, [currentTable, send, loadRows]);
@@ -208,6 +258,10 @@ export function useStudioConnection(): IStudioConnection {
     currentTable,
     columns,
     rows,
+    page,
+    hasNextPage,
+    nextPage,
+    prevPage,
     error,
     clearError,
     selectTable,
@@ -215,6 +269,7 @@ export function useStudioConnection(): IStudioConnection {
     insertRow,
     updateCell,
     deleteRow,
+    deleteRows,
     truncateTable,
     deleteTable,
     runSql,

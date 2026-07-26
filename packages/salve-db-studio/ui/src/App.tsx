@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { RefreshCw, Terminal, X } from 'lucide-react';
 import { useStudioConnection } from './hooks';
 import {
   StatusBadge,
@@ -39,6 +40,10 @@ export function App() {
     currentTable,
     columns,
     rows,
+    page,
+    hasNextPage,
+    nextPage,
+    prevPage,
     error,
     clearError,
     selectTable,
@@ -46,12 +51,14 @@ export function App() {
     insertRow,
     updateCell,
     deleteRow,
+    deleteRows,
     truncateTable,
     deleteTable,
     runSql,
   } = useStudioConnection();
   const [showInsertForm, setShowInsertForm] = useState(false);
   const [managingTable, setManagingTable] = useState<string | null>(null);
+  const [showSqlRunner, setShowSqlRunner] = useState(false);
 
   useEffect(() => {
     if (!error) return;
@@ -75,6 +82,14 @@ export function App() {
       <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-2.5">
         <span className="text-sm font-semibold tracking-tight">Salve DB Studio</span>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSqlRunner(true)}
+            aria-label="Run SQL"
+            className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-line-strong hover:text-ink"
+          >
+            <Terminal className="h-3.5 w-3.5" />
+            SQL
+          </button>
           <DeviceSelector devices={devices} selectedDeviceId={selectedDeviceId} onSelect={selectDevice} />
           <StatusBadge connected={appConnected} />
         </div>
@@ -119,9 +134,10 @@ export function App() {
                     <div className="ml-auto flex gap-2">
                       <button
                         onClick={refresh}
-                        className="rounded-md border border-line px-3 py-1.5 text-sm text-muted transition-colors hover:border-line-strong hover:text-ink"
+                        aria-label="Refresh"
+                        className="rounded-md border border-line p-1.5 text-muted transition-colors hover:border-line-strong hover:text-ink"
                       >
-                        Refresh
+                        <RefreshCw className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setShowInsertForm((v) => !v)}
@@ -136,13 +152,21 @@ export function App() {
                     {showInsertForm && <InsertForm key="insert" columns={columns} onSubmit={handleInsert} />}
                   </AnimatePresence>
 
-                  <RowGrid columns={columns} rows={rows} onUpdateCell={updateCell} onDeleteRow={deleteRow} />
+                  <RowGrid
+                    columns={columns}
+                    rows={rows}
+                    page={page}
+                    hasNextPage={hasNextPage}
+                    onNextPage={nextPage}
+                    onPrevPage={prevPage}
+                    onUpdateCell={updateCell}
+                    onDeleteRow={deleteRow}
+                    onDeleteRows={deleteRows}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
           )}
-
-          <SqlRunner runSql={runSql} />
         </main>
       </div>
 
@@ -155,6 +179,35 @@ export function App() {
         onDelete={deleteTable}
         onClose={() => setManagingTable(null)}
       />
+
+      <AnimatePresence>
+        {showSqlRunner && (
+          <div
+            className="fixed inset-0 z-30 flex items-start justify-center bg-black/50 pt-24"
+            onClick={() => setShowSqlRunner(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: -8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: -8 }}
+              transition={{ duration: 0.15 }}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-2xl rounded-lg border border-line bg-surface p-4 shadow-xl"
+            >
+              <div className="mb-2 flex justify-end">
+                <button
+                  onClick={() => setShowSqlRunner(false)}
+                  aria-label="Close"
+                  className="text-muted transition-colors hover:text-ink"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <SqlRunner runSql={runSql} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -15,7 +15,7 @@ export function SqlRunner({ runSql }: ISqlRunnerProps) {
   }
 
   return (
-    <div className="mt-6 border-t border-line pt-4">
+    <div>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">Run SQL</span>
         <span className="text-[11px] text-muted/60">⌘/Ctrl + Enter to run</span>
