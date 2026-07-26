@@ -526,6 +526,39 @@ TEST_CASE("an HTTP failure on one push item marks it FAILED and the session cont
   REQUIRE(std::get<double>(metaRow.rows[0][1]) == 1.0);
 }
 
+TEST_CASE("a body-build failure (e.g. a BLOB column) fails that item and the session continues with the next", "[sync][SyncOrchestrator]") {
+  // Trigger dropped so the BLOB update bypasses its json_object() (which itself rejects BLOBs).
+  auto conn = openOrchestratorFixture("orchestrator_push_body_build_failed");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('2', 'b', 100)", {});
+  conn->execute("DROP TRIGGER \"customers_sync_after_update\"", {});
+  auto blob = margelo::nitro::ArrayBuffer::allocate(4);
+  conn->execute("UPDATE customers SET name = ? WHERE id = '1'", { blob });
+
+  int creates = 0;
+  respondByRoute(
+    nullptr,
+    [&](const HttpRequest& request) -> HttpOutcome {
+      ++creates;
+      return HttpResponse{201, {}, *request.body};
+    },
+    nullptr, nullptr
+  );
+
+  auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
+
+  REQUIRE(result.has_value());
+  REQUIRE(creates == 1); // only item '2' ever reached the HTTP layer
+  REQUIRE(syncQueueCount(*conn, "customers") == 1); // the blob item stays queued
+
+  auto meta = conn->execute("SELECT status FROM sync_queue WHERE entity = 'customers' AND entity_id = '1'", {});
+  REQUIRE(std::get<std::string>(meta.rows[0][0]) == "FAILED");
+
+  auto metaRow = conn->execute(
+    "SELECT status FROM _salve_sync_metadata WHERE tableName = 'customers' AND localId = '1'", {});
+  REQUIRE(std::get<std::string>(metaRow.rows[0][0]) == "FAILED");
+}
+
 TEST_CASE("a FAILED item is retried, with no intervention, on the next session", "[sync][SyncOrchestrator]") {
   auto conn = openOrchestratorFixture("orchestrator_push_item_retry");
   conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 100)", {});
