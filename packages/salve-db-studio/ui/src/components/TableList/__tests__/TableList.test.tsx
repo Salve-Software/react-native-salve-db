@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TableList } from '../TableList';
+import { TableList } from '../index';
 
 describe('TableList', () => {
   it('renders every table name', () => {

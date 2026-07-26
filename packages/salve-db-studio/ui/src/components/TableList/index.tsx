@@ -1,10 +1,5 @@
 import { motion } from 'motion/react';
-
-interface ITableListProps {
-  tables: string[];
-  currentTable: string | null;
-  onSelect: (name: string) => void;
-}
+import type { ITableListProps } from './types';
 
 export function TableList({ tables, currentTable, onSelect }: ITableListProps) {
   return (

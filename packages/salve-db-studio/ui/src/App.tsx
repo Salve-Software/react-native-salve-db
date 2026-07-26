@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useStudioConnection } from './hooks/useStudioConnection';
-import { StatusBadge } from './components/StatusBadge';
-import { TableList } from './components/TableList';
-import { RowGrid } from './components/RowGrid';
-import { InsertForm } from './components/InsertForm';
-import { SqlRunner } from './components/SqlRunner';
-import { Toast } from './components/Toast';
+import { useStudioConnection } from './hooks';
+import { StatusBadge, TableList, RowGrid, InsertForm, SqlRunner, Toast } from './components';
 
 function ConnectingState() {
   return (

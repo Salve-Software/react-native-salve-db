@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { RowGrid } from '../RowGrid';
-import type { IColumnInfo } from '../../types';
+import { RowGrid } from '../index';
+import type { IColumnInfo } from '../../../types';
 
 const columns: IColumnInfo[] = [
   { cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 },

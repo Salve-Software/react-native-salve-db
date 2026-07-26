@@ -1,11 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import type { IColumnInfo } from '../types';
-
-interface IInsertFormProps {
-  columns: IColumnInfo[];
-  onSubmit: (values: Record<string, string>) => void;
-}
+import type { IInsertFormProps } from './types';
 
 export function InsertForm({ columns, onSubmit }: IInsertFormProps) {
   const editableColumns = columns.filter((c) => Number(c.pk) === 0);

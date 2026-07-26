@@ -1,9 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-
-interface IToastProps {
-  message: string | null;
-  onDismiss: () => void;
-}
+import type { IToastProps } from './types';
 
 export function Toast({ message, onDismiss }: IToastProps) {
   return (

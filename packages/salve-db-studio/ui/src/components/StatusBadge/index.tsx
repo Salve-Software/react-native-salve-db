@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
+import type { IStatusBadgeProps } from './types';
 
-export function StatusBadge({ connected }: { connected: boolean }) {
+export function StatusBadge({ connected }: IStatusBadgeProps) {
   return (
     <motion.div
       layout

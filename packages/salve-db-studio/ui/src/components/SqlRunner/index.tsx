@@ -1,15 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { Row } from '../types';
-
-interface ISqlRunnerProps {
-  runSql: (sql: string) => Promise<Row[]>;
-}
-
-interface IResult {
-  text: string;
-  isError: boolean;
-}
+import type { ISqlRunnerProps, IResult } from './types';
 
 export function SqlRunner({ runSql }: ISqlRunnerProps) {
   const [sql, setSql] = useState('');

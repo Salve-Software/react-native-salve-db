@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { IColumnInfo, Row } from '../types';
-
-interface IRowGridProps {
-  columns: IColumnInfo[];
-  rows: Row[];
-  onUpdateCell: (row: Row, column: string, value: string) => void;
-  onDeleteRow: (row: Row) => void;
-}
+import type { IRowGridProps } from './types';
+import { primaryKeyColumn } from './library';
 
 function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
   const [confirming, setConfirming] = useState(false);
@@ -53,7 +47,7 @@ function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
 }
 
 export function RowGrid({ columns, rows, onUpdateCell, onDeleteRow }: IRowGridProps) {
-  const primaryKey = columns.find((c) => Number(c.pk) > 0)?.name ?? null;
+  const primaryKey = primaryKeyColumn(columns);
 
   if (rows.length === 0) {
     return (
