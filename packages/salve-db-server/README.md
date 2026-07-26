@@ -95,7 +95,7 @@ Nothing in `src/rest/` knows either set of names — they're the only two places
 SELECT * FROM <table> WHERE COALESCE("deletedAt", "updatedAt") > $1 ORDER BY COALESCE("deletedAt", "updatedAt") ASC, "id" ASC LIMIT $2
 ```
 
-Column names are quoted camelCase (`"updatedAt"`, `"deletedAt"`) — matches the JSON contract 1:1, no snake_case translation layer. `updatedAt`/`deletedAt` are `BIGINT` (epoch millis; `INTEGER` overflows around 2038) written from a monotonic clock kept in the app (`src/rest/tick.ts`), not the database's own clock — two writes landing in the same real millisecond must still get distinct, ordered cursor values, or an exclusive (`>`) cursor could skip one at a page boundary. Two known Postgres driver gotchas are handled explicitly rather than routed around: `BIGINT` returns as a `string` from `pg`/PGlite by default (coerced back to `number` in the store), and `products.price` deliberately uses `DOUBLE PRECISION` instead of `NUMERIC` to avoid the same string-coercion issue for a field where exact decimal precision doesn't matter for a reference server.
+Column names are quoted camelCase (`"updatedAt"`, `"deletedAt"`) — matches the JSON contract 1:1, no snake_case translation layer. `updatedAt`/`deletedAt` are `BIGINT` (epoch millis; `INTEGER` overflows around 2038) allocated by Postgres itself under an advisory lock (`_tick_state`, in `store.ts`), not a JS-side clock — two writes landing in the same real millisecond must still get distinct, ordered cursor values without ever reordering relative to commit, or an exclusive (`>`) cursor could skip one at a page boundary. Two known Postgres driver gotchas are handled explicitly rather than routed around: `BIGINT` returns as a `string` from `pg`/PGlite by default (coerced back to `number` in the store), and `products.price` deliberately uses `DOUBLE PRECISION` instead of `NUMERIC` to avoid the same string-coercion issue for a field where exact decimal precision doesn't matter for a reference server.
 
 Table schema lives in `docker/init.sql` — the single source both the real Postgres container (via `docker-entrypoint-initdb.d`) and every test's fresh PGlite instance (via `createTestExecutor()`) run against.
 
@@ -112,8 +112,7 @@ src/
 ├── db.ts              # shared pg.Pool, reads DATABASE_URL
 ├── rest/               # generic REST-resource behavior, shared by every module
 │   ├── types.ts          # IResourceStore<TEntity> — the port interface
-│   ├── store.ts           # PostgresResourceStore<TEntity> — the one implementation
-│   ├── tick.ts             # monotonic write clock, shared by every store instance
+│   ├── store.ts           # PostgresResourceStore<TEntity> — the one implementation, allocates its own write clock in Postgres
 │   ├── resource.ts          # createResourceModule<TEntity>(config) — the async router factory
 │   ├── validation.ts        # manual field validation helpers (no external library)
 │   ├── middleware.ts        # notFoundHandler / jsonErrorHandler / requestLogger
