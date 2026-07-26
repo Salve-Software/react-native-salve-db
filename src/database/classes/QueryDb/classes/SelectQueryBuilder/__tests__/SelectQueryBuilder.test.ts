@@ -32,11 +32,11 @@ function executedWith(bridge: SalveDatabase) {
 }
 
 describe('SelectQueryBuilder — SQL generation', () => {
-  test('bare select', () => {
+  test('bare select filters out soft-deleted rows', () => {
     const bridge = makeBridge();
     new SelectQueryBuilder(schema, bridge).limit(10).execute();
     const [sql, params] = executedWith(bridge);
-    expect(sql).toBe('SELECT * FROM "users" LIMIT 10');
+    expect(sql).toBe('SELECT * FROM "users" WHERE "deletedAt" IS NULL LIMIT 10');
     expect(params).toEqual([]);
   });
 
@@ -44,7 +44,7 @@ describe('SelectQueryBuilder — SQL generation', () => {
     const bridge = makeBridge();
     new SelectQueryBuilder(schema, bridge).where(eq('age', 30)).limit(10).execute();
     const [sql, params] = executedWith(bridge);
-    expect(sql).toBe('SELECT * FROM "users" WHERE "age" = ? LIMIT 10');
+    expect(sql).toBe('SELECT * FROM "users" WHERE "deletedAt" IS NULL AND "age" = ? LIMIT 10');
     expect(params).toEqual([30]);
   });
 
@@ -52,28 +52,28 @@ describe('SelectQueryBuilder — SQL generation', () => {
     const bridge = makeBridge();
     new SelectQueryBuilder(schema, bridge).where(eq('id', 1)).limit(1).execute();
     const [sql] = executedWith(bridge);
-    expect(sql).toBe('SELECT * FROM "users" WHERE "id" = ? LIMIT 1');
+    expect(sql).toBe('SELECT * FROM "users" WHERE "deletedAt" IS NULL AND "id" = ? LIMIT 1');
   });
 
   test('with orderBy asc (default) on an indexed column', () => {
     const bridge = makeBridge();
     new SelectQueryBuilder(schema, bridge).orderBy('name').limit(10).execute();
     const [sql] = executedWith(bridge);
-    expect(sql).toBe('SELECT * FROM "users" ORDER BY "name" ASC LIMIT 10');
+    expect(sql).toBe('SELECT * FROM "users" WHERE "deletedAt" IS NULL ORDER BY "name" ASC LIMIT 10');
   });
 
   test('with orderBy desc on an indexed column', () => {
     const bridge = makeBridge();
     new SelectQueryBuilder(schema, bridge).orderBy('age', 'desc').limit(10).execute();
     const [sql] = executedWith(bridge);
-    expect(sql).toBe('SELECT * FROM "users" ORDER BY "age" DESC LIMIT 10');
+    expect(sql).toBe('SELECT * FROM "users" WHERE "deletedAt" IS NULL ORDER BY "age" DESC LIMIT 10');
   });
 
   test('with offset', () => {
     const bridge = makeBridge();
     new SelectQueryBuilder(schema, bridge).limit(10).offset(20).execute();
     const [sql] = executedWith(bridge);
-    expect(sql).toBe('SELECT * FROM "users" LIMIT 10 OFFSET 20');
+    expect(sql).toBe('SELECT * FROM "users" WHERE "deletedAt" IS NULL LIMIT 10 OFFSET 20');
   });
 
   test('where + orderBy + limit + offset combined, both columns indexed', () => {
@@ -86,7 +86,7 @@ describe('SelectQueryBuilder — SQL generation', () => {
       .execute();
     const [sql, params] = executedWith(bridge);
     expect(sql).toBe(
-      'SELECT * FROM "users" WHERE ("age" > ? AND "deleted_at" IS NULL) ORDER BY "name" ASC LIMIT 5 OFFSET 10'
+      'SELECT * FROM "users" WHERE "deletedAt" IS NULL AND ("age" > ? AND "deleted_at" IS NULL) ORDER BY "name" ASC LIMIT 5 OFFSET 10'
     );
     expect(params).toEqual([18]);
   });
