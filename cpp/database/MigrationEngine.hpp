@@ -2,10 +2,10 @@
 
 #include "SQLiteConnection.hpp"
 #include "json_parser.hpp"
+#include "OrderedMap.hpp"
 #include "../sync/RelationStore.hpp"
 #include <memory>
 #include <string>
-#include <map>
 #include <vector>
 #include <optional>
 
@@ -35,7 +35,7 @@ struct SchemaDef {
   std::string name;
   int version = 1;
   std::string primaryKey;
-  std::map<std::string, ColumnDef> columns;
+  OrderedMap<ColumnDef> columns;
   std::vector<IndexDef> indexes;
   std::vector<RelationDef> relations;
   SyncSettings sync;
