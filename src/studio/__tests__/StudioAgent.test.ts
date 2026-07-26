@@ -135,6 +135,96 @@ describe('StudioAgent', () => {
     agent.stop();
   });
 
+  test('an error that re-fires while closing does not recurse, and reconnects once', () => {
+    jest.useFakeTimers();
+    const { bridge } = makeBridge();
+    const sockets: FakeSocket[] = [];
+    const factory = () => {
+      // Mirrors a refused connection: close() re-fails the socket, firing
+      // onerror again from inside the handler that called it.
+      const socket = new (class extends FakeSocket {
+        close() {
+          super.close();
+          this.onerror?.({});
+        }
+      })();
+      sockets.push(socket);
+      return socket;
+    };
+
+    const agent = new StudioAgent(bridge);
+    agent.start(factory);
+
+    expect(() => sockets[0]!.onerror?.({})).not.toThrow();
+    expect(sockets[0]!.closed).toBe(true);
+
+    jest.advanceTimersByTime(2000);
+    expect(sockets).toHaveLength(2);
+
+    agent.stop();
+  });
+
+  test('error followed by close only schedules a single reconnect', () => {
+    jest.useFakeTimers();
+    const { bridge } = makeBridge();
+    const sockets: FakeSocket[] = [];
+    const factory = () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    };
+
+    const agent = new StudioAgent(bridge);
+    agent.start(factory);
+
+    sockets[0]!.onerror?.({});
+    sockets[0]!.onclose?.();
+    jest.advanceTimersByTime(2000);
+
+    expect(sockets).toHaveLength(2);
+
+    agent.stop();
+  });
+
+  test('stop() wins over the socket close it triggers — no reconnect afterwards', () => {
+    jest.useFakeTimers();
+    const { bridge } = makeBridge();
+    const sockets: FakeSocket[] = [];
+    const factory = () => {
+      const socket = new (class extends FakeSocket {
+        close() {
+          super.close();
+          this.onclose?.();
+        }
+      })();
+      sockets.push(socket);
+      return socket;
+    };
+
+    const agent = new StudioAgent(bridge);
+    agent.start(factory);
+    sockets[0]!.onopen?.();
+
+    agent.stop();
+    jest.advanceTimersByTime(10_000);
+
+    expect(sockets).toHaveLength(1);
+  });
+
+  test('stays inert when the runtime has no WebSocket instead of throwing', () => {
+    const { bridge } = makeBridge();
+    const agent = new StudioAgent(bridge);
+
+    expect(() =>
+      agent.start(() => {
+        throw new Error('StudioAgent: no global WebSocket implementation available');
+      })
+    ).not.toThrow();
+
+    expect(bridge.subscribeToChanges).not.toHaveBeenCalled();
+    agent.stop();
+  });
+
   test('reconnects after the socket closes', () => {
     jest.useFakeTimers();
     const { bridge } = makeBridge();

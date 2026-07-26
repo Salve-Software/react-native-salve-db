@@ -36,17 +36,37 @@ export class StudioAgent {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
     }
-    if (this._changeSubscriptionId !== null) {
-      this._bridge.unsubscribeFromChanges(this._changeSubscriptionId);
-      this._changeSubscriptionId = null;
-    }
-    this._socket?.close();
+    this._unsubscribe();
+    // Detach before closing: `close()` fires `onclose`, which would otherwise
+    // read `_socket` as still current and schedule a reconnect after stop().
+    const socket = this._socket;
     this._socket = null;
+    socket?.close();
   }
 
   private _connect(socketFactory: StudioSocketFactory): void {
-    const socket = socketFactory(`ws://${STUDIO_DEFAULT_HOST}:${STUDIO_DEFAULT_PORT}`);
+    let socket: IStudioSocket;
+    try {
+      socket = socketFactory(`ws://${STUDIO_DEFAULT_HOST}:${STUDIO_DEFAULT_PORT}`);
+    } catch {
+      // No usable WebSocket in this runtime. Studio is a dev-only convenience,
+      // so stay inert rather than failing the caller's Database.configure().
+      return;
+    }
     this._socket = socket;
+
+    /**
+     * Runs once per socket, whichever of `error`/`close` lands first. The guard
+     * also breaks the recursion a refused connection causes: `close()` on a
+     * failed socket re-fails it, firing `error` again from inside this handler.
+     */
+    const handleDisconnect = () => {
+      if (this._socket !== socket) return;
+      this._socket = null;
+      this._unsubscribe();
+      socket.close();
+      this._reconnectTimer = setTimeout(() => this._connect(socketFactory), STUDIO_RECONNECT_DELAY_MS);
+    };
 
     socket.onopen = () => {
       socket.send(JSON.stringify({
@@ -66,14 +86,13 @@ export class StudioAgent {
       socket.send(JSON.stringify(handleCommand(this._bridge, command)));
     };
 
-    socket.onclose = () => {
-      if (this._changeSubscriptionId !== null) {
-        this._bridge.unsubscribeFromChanges(this._changeSubscriptionId);
-        this._changeSubscriptionId = null;
-      }
-      this._reconnectTimer = setTimeout(() => this._connect(socketFactory), STUDIO_RECONNECT_DELAY_MS);
-    };
+    socket.onclose = handleDisconnect;
+    socket.onerror = handleDisconnect;
+  }
 
-    socket.onerror = () => socket.close();
+  private _unsubscribe(): void {
+    if (this._changeSubscriptionId === null) return;
+    this._bridge.unsubscribeFromChanges(this._changeSubscriptionId);
+    this._changeSubscriptionId = null;
   }
 }
