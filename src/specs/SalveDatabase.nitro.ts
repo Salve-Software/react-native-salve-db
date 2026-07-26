@@ -35,10 +35,40 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
   // ── Sync ───────────────────────────────────────────────────────────────────
 
   /**
-   * Triggers a sync session for the given schema (foreground / on-open).
+   * Triggers a sync session for the given schema.
    * @param schemaName Name of an already-registered schema.
+   * @param discardIfBusy If true, resolves immediately with `undefined`
+   * instead of waiting when a sync session is already in progress (used by
+   * automatic triggers, e.g. read-flow). If false, waits for the in-progress
+   * session to finish (used by an explicit manual call) and always resolves
+   * with a result.
    */
-  triggerSync(schemaName: string): Promise<NativeSyncResult>;
+  triggerSync(schemaName: string, discardIfBusy: boolean): Promise<NativeSyncResult | undefined>;
+
+  /**
+   * Triggers a sync session for every schema registered with `sync.enabled`.
+   * One schema failing does not stop the rest.
+   * @param discardIfBusy If true, returns immediately with an empty array
+   * instead of waiting when a sync session is already in progress (used by
+   * automatic triggers). If false, waits for the in-progress session to
+   * finish (used by an explicit manual call).
+   */
+  triggerSyncAll(discardIfBusy: boolean): Promise<NativeSyncResult[]>;
+
+  // ── Change notification ─────────────────────────────────────────────────────
+
+  /**
+   * Subscribes to table-level write notifications (backed by sqlite3_update_hook).
+   * Fires once per commit — or once per statement outside an explicit transaction —
+   * listing every table touched, coalesced rather than per-row. Fires for every
+   * write regardless of origin: the query builder, raw SQL, migrations, or the
+   * native background sync engine.
+   * @returns A subscription id, pass to unsubscribeFromChanges to stop listening.
+   */
+  subscribeToChanges(callback: (tables: string[]) => void): number;
+
+  /** Stops a subscription previously created by subscribeToChanges. */
+  unsubscribeFromChanges(id: number): void;
 
   // ── Debug ──────────────────────────────────────────────────────────────────
 

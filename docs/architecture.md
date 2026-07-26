@@ -229,6 +229,14 @@ export interface DatabaseConfigDefinition {
      */
     credentials: CredentialsDefinition;
 
+    /**
+     * Agenda do job nativo de background (WorkManager/BGTaskScheduler).
+     * Existe um único job global, não um por schema — por isso a agenda
+     * vive aqui, não em `SyncDefinition.background`. Omitido = nenhum job
+     * agendado (background sync desligado).
+     */
+    background?: BackgroundParams;
+
 }
 ```
 
@@ -245,6 +253,18 @@ export interface CredentialsDefinition {
     accessToken: {
         /** @default "Authorization" */
         headerName?: string;
+    };
+
+    /**
+     * Par de tokens inicial, obtido pelo próprio fluxo de login do app
+     * (fora do escopo desta lib) antes de chamar `configure()`. Persistido
+     * nativamente (Keychain/Keystore) uma única vez — chamadas seguintes de
+     * `configure()` (ex: reabrir o app) não sobrescrevem um token já
+     * refreshado nativamente desde então.
+     */
+    tokens?: {
+        accessToken: string;
+        refreshToken: string;
     };
 
     /**
@@ -269,10 +289,20 @@ export interface CredentialsDefinition {
 
 # Background
 
+Per-schema — só decide se o schema participa da wake do job global, lido pelo Sync Orchestrator quando o job já acordou:
+
 ```ts
 export interface BackgroundDefinition {
 
     enabled: boolean;
+
+}
+```
+
+Global — a agenda do job em si, em `DatabaseConfigDefinition.background` (ver seção "Database Config" acima):
+
+```ts
+export interface BackgroundParams {
 
     minimumInterval: number;
 
@@ -626,11 +656,7 @@ export const CustomerSchema = {
 
         background: {
 
-            enabled: true,
-
-            minimumInterval: 15,
-
-            requiresNetwork: true
+            enabled: true
 
         },
 

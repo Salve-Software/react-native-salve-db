@@ -1,4 +1,5 @@
 #include "SQLiteConnection.hpp"
+#include "SchemaRegistry.hpp"
 
 #include <NitroModules/ArrayBuffer.hpp>
 #include <stdexcept>
@@ -6,7 +7,26 @@
 
 namespace margelo::nitro::salvedb {
 
-SQLiteConnection::SQLiteConnection(const std::string& path) {
+namespace {
+
+std::string setJournalMode(sqlite3* db, const char* mode) {
+  std::string sql = std::string("PRAGMA journal_mode=") + mode + ";";
+  sqlite3_stmt* stmt = nullptr;
+  if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+    throw std::runtime_error(std::string("SQLite journal_mode pragma failed: ") + sqlite3_errmsg(db));
+  }
+  std::string result;
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    const auto* text = sqlite3_column_text(stmt, 0);
+    result = text ? reinterpret_cast<const char*>(text) : "";
+  }
+  sqlite3_finalize(stmt);
+  return result;
+}
+
+} // namespace
+
+SQLiteConnection::SQLiteConnection(const std::string& path, bool walMode) {
   int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
   int rc = sqlite3_open_v2(path.c_str(), &_db, flags, nullptr);
   if (rc != SQLITE_OK) {
@@ -15,11 +35,36 @@ SQLiteConnection::SQLiteConnection(const std::string& path) {
     _db = nullptr;
     throw std::runtime_error("SQLite open failed (" + path + "): " + err);
   }
-  // WAL mode for concurrent read + write, busy timeout to avoid SQLITE_BUSY
-  sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+
+  std::string journalMode = setJournalMode(_db, walMode ? "WAL" : "DELETE");
+  if (walMode && journalMode != "wal") {
+    std::string err = "SQLite failed to enable WAL journal mode (got '" + journalMode + "')";
+    sqlite3_close(_db);
+    _db = nullptr;
+    throw std::runtime_error(err);
+  }
   sqlite3_exec(_db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
   sqlite3_busy_timeout(_db, 5000);
+  sqlite3_extended_result_codes(_db, 1); // makes prepare/step/exec return extended codes directly
+  sqlite3_update_hook(_db, &SQLiteConnection::onSqliteUpdate, this);
 }
+
+namespace {
+
+// Prefix is the only distinguishing signal that survives the JSI boundary (Nitro's
+// generated glue collapses thrown exceptions down to a plain message string). Callers
+// must read the primary code immediately after the failing call, before any other
+// sqlite3 API touches the connection's error state.
+std::string errorPrefix(int primaryCode) {
+  switch (primaryCode) {
+    case SQLITE_CONSTRAINT: return "SQLITE_CONSTRAINT: ";
+    case SQLITE_BUSY:
+    case SQLITE_LOCKED:     return "SQLITE_BUSY: ";
+    default:                return "SQLITE_ERROR: ";
+  }
+}
+
+} // namespace
 
 SQLiteConnection::~SQLiteConnection() {
   std::lock_guard<std::mutex> lock(_mutex);
@@ -29,12 +74,24 @@ SQLiteConnection::~SQLiteConnection() {
     sqlite3_exec(_db, "ROLLBACK", nullptr, nullptr, nullptr);
   }
 
+  if (_db) sqlite3_update_hook(_db, nullptr, nullptr);
+
   for (auto& [key, stmt] : _cache) {
     sqlite3_finalize(stmt->second);
   }
   _lru.clear();
   _cache.clear();
   if (_db) sqlite3_close(_db);
+}
+
+void SQLiteConnection::onSqliteUpdate(void* context, int /*op*/, const char* /*dbName*/, const char* table, sqlite3_int64 /*rowid*/) {
+  if (!table) return;
+  auto* self = static_cast<SQLiteConnection*>(context);
+  try {
+    self->_touchedTables.insert(table);
+  } catch (...) {
+    // Must not escape into SQLite's C call stack.
+  }
 }
 
 sqlite3_stmt* SQLiteConnection::getOrPrepare(const std::string& sql) {
@@ -50,7 +107,8 @@ sqlite3_stmt* SQLiteConnection::getOrPrepare(const std::string& sql) {
   sqlite3_stmt* stmt = nullptr;
   int rc = sqlite3_prepare_v2(_db, sql.c_str(), -1, &stmt, nullptr);
   if (rc != SQLITE_OK) {
-    throw std::runtime_error(std::string("SQLite prepare error: ") + sqlite3_errmsg(_db) + " — SQL: " + sql);
+    int primaryCode = sqlite3_extended_errcode(_db) & 0xff;
+    throw std::runtime_error(errorPrefix(primaryCode) + "SQLite prepare error: " + sqlite3_errmsg(_db) + " — SQL: " + sql);
   }
   _prepareCount++;
 
@@ -68,7 +126,7 @@ void SQLiteConnection::evictLRU() {
 }
 
 QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<SqlValue>& params) {
-  std::lock_guard<std::mutex> lock(_mutex);
+  std::unique_lock<std::mutex> lock(_mutex);
 
   sqlite3_stmt* stmt = getOrPrepare(sql);
   sqlite3_reset(stmt);
@@ -94,6 +152,7 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
 
   std::vector<std::string> columns;
   std::vector<std::vector<SqlValue>> rows;
+  std::vector<bool> isBoolCol;
   bool headerRead = false;
   int colCount = 0;
 
@@ -102,9 +161,16 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
     if (!headerRead) {
       colCount = sqlite3_column_count(stmt);
       columns.reserve(colCount);
+      isBoolCol.reserve(colCount);
       for (int i = 0; i < colCount; ++i) {
         const char* name = sqlite3_column_name(stmt, i);
         columns.emplace_back(name ? name : "");
+
+        // A column's origin table/name is fixed for the whole result set, so the
+        // (mutex-guarded) registry lookup only needs to happen once per column, not per cell.
+        const char* table  = sqlite3_column_table_name(stmt, i);
+        const char* origin = sqlite3_column_origin_name(stmt, i);
+        isBoolCol.push_back(table && origin && SchemaRegistry::shared().isBoolean(table, origin));
       }
       headerRead = true;
     }
@@ -116,9 +182,15 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
         case SQLITE_NULL:
           row.emplace_back(nitro::NullType{});
           break;
-        case SQLITE_INTEGER:
-          row.emplace_back(static_cast<double>(sqlite3_column_int64(stmt, i)));
+        case SQLITE_INTEGER: {
+          int64_t intVal = sqlite3_column_int64(stmt, i);
+          if (isBoolCol[i]) {
+            row.emplace_back(intVal != 0);
+          } else {
+            row.emplace_back(static_cast<double>(intVal));
+          }
           break;
+        }
         case SQLITE_FLOAT:
           row.emplace_back(sqlite3_column_double(stmt, i));
           break;
@@ -134,20 +206,29 @@ QueryResult SQLiteConnection::execute(const std::string& sql, const std::vector<
           break;
         }
         default:
-          row.emplace_back(nitro::NullType{});
+          // sqlite3_column_type only ever returns the 5 cases above per SQLite's docs.
+          throw std::runtime_error("Unexpected SQLite column type");
       }
     }
     rows.push_back(std::move(row));
   }
 
+  // Capture the failure's error state before reset()/clear_bindings() run, so a future
+  // reordering of those calls can't silently make this read a stale/cleared code.
+  bool failed = rc != SQLITE_DONE && rc != SQLITE_ROW;
+  int primaryCode = failed ? (sqlite3_extended_errcode(_db) & 0xff) : 0;
+  std::string errMsg = failed ? sqlite3_errmsg(_db) : std::string{};
+
   sqlite3_reset(stmt);
   sqlite3_clear_bindings(stmt);
 
-  if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
-    throw std::runtime_error(std::string("SQLite execute error: ") + sqlite3_errmsg(_db));
+  if (failed) {
+    throw std::runtime_error(errorPrefix(primaryCode) + "SQLite execute error: " + errMsg);
   }
 
-  return QueryResult{std::move(columns), std::move(rows)};
+  QueryResult result{std::move(columns), std::move(rows)};
+  if (!_inTransaction) flushChangeNotifications(lock);
+  return result;
 }
 
 void SQLiteConnection::beginTransaction() {
@@ -161,10 +242,11 @@ void SQLiteConnection::beginTransaction() {
 }
 
 void SQLiteConnection::commit() {
-  std::lock_guard<std::mutex> lock(_mutex);
+  std::unique_lock<std::mutex> lock(_mutex);
 
   execLocked("COMMIT");
   _inTransaction = false;
+  flushChangeNotifications(lock);
 }
 
 void SQLiteConnection::rollback() {
@@ -172,21 +254,58 @@ void SQLiteConnection::rollback() {
 
   execLocked("ROLLBACK");
   _inTransaction = false;
+  // Discard without notifying — nothing in _touchedTables was actually persisted.
+  _touchedTables.clear();
 }
 
 void SQLiteConnection::exec(const std::string& sql) {
-  std::lock_guard<std::mutex> lock(_mutex);
+  std::unique_lock<std::mutex> lock(_mutex);
   execLocked(sql);
+  if (!_inTransaction) flushChangeNotifications(lock);
 }
 
 void SQLiteConnection::execLocked(const std::string& sql) {
   char* errMsg = nullptr;
   int rc = sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &errMsg);
   if (rc != SQLITE_OK) {
+    int primaryCode = sqlite3_extended_errcode(_db) & 0xff;
     std::string err = errMsg ? errMsg : "unknown error";
     sqlite3_free(errMsg);
-    throw std::runtime_error("SQLite exec error: " + err + " — SQL: " + sql);
+    throw std::runtime_error(errorPrefix(primaryCode) + "SQLite exec error: " + err + " — SQL: " + sql);
   }
+}
+
+void SQLiteConnection::flushChangeNotifications(std::unique_lock<std::mutex>& lock) {
+  if (_touchedTables.empty()) return;
+
+  std::vector<std::string> tables(_touchedTables.begin(), _touchedTables.end());
+  _touchedTables.clear();
+
+  std::vector<std::function<void(std::vector<std::string>)>> callbacks;
+  callbacks.reserve(_subscribers.size());
+  for (auto& [id, callback] : _subscribers) callbacks.push_back(callback);
+
+  lock.unlock();
+  for (auto& callback : callbacks) {
+    try {
+      callback(tables);
+    } catch (...) {
+      // A subscriber's failure must not fail the write that triggered it,
+      // nor block notifications to the remaining subscribers.
+    }
+  }
+}
+
+int SQLiteConnection::subscribe(std::function<void(std::vector<std::string>)> callback) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  int id = _nextSubscriberId++;
+  _subscribers[id] = std::move(callback);
+  return id;
+}
+
+void SQLiteConnection::unsubscribe(int id) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  _subscribers.erase(id);
 }
 
 } // namespace margelo::nitro::salvedb

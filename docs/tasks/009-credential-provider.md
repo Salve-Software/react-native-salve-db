@@ -1,6 +1,6 @@
 # TASK-009 — Credential Provider (Android+iOS)
 
-**Status:** ⬜ Não iniciado
+**Status:** 🟡 Em andamento
 **Prioridade:** P1 (núcleo do MVP)
 **Área:** Android+iOS
 **Depende de:** TASK-002, TASK-008
@@ -34,12 +34,16 @@ Sync → Access Token → 401? → Refresh Token → salva novos tokens → reex
 
 ## Critérios de aceite
 
-- [ ] Token salvo/lido corretamente do Keychain (iOS) e Keystore (Android) — teste manual ou instrumentado confirmando que sobrevive a restart do app.
-- [ ] Header de auth injetado automaticamente em request de sync, usando `headerName` configurado (default `"Authorization"`).
-- [ ] Simular resposta `401` dispara o fluxo de refresh automaticamente, sem intervenção do JS.
-- [ ] Requisição original é reexecutada com sucesso após refresh bem-sucedido, de forma transparente pra quem chamou.
-- [ ] Refresh que falha (ex: `refreshToken` também expirado/inválido) propaga um erro claro até o Sync Orchestrator (TASK-012), não trava silenciosamente.
-- [ ] Nenhum token (access ou refresh) atravessa a JSI bridge pro lado JS em nenhum momento — grep/review confirmando isso.
+- [ ] Token salvo/lido corretamente do Keychain (iOS) e Keystore (Android) — teste manual ou instrumentado confirmando que sobrevive a restart do app. Lógica implementada (`ios/SalveDbPlatform.mm` via Security framework, `android/.../SalveDbSecureStorage.kt` via `EncryptedSharedPreferences`/Keystore) e coberta no host contra um test double (`cpp/tests/support/platform_test.cpp`); falta verificação em dispositivo/simulador real.
+- [x] Header de auth injetado automaticamente em request de sync, usando `headerName` configurado (default `"Authorization"`) — `CredentialProvider::getAuthHeader()`, testado.
+- [ ] Simular resposta `401` dispara o fluxo de refresh automaticamente, sem intervenção do JS. Mecanismo pronto (`CredentialProvider::refresh(HttpCaller)`, injeta a chamada HTTP já que TASK-010 não existe ainda) e testado isoladamente; falta o Sync Orchestrator (TASK-012) chamá-lo de fato na resposta 401 real.
+- [ ] Requisição original é reexecutada com sucesso após refresh bem-sucedido — depende de TASK-010 (HTTP Client) existir; fora do alcance desta tarefa isoladamente.
+- [x] Refresh que falha (ex: `refreshToken` também expirado/inválido) propaga um erro claro até o Sync Orchestrator (TASK-012), não trava silenciosamente — testado (status não-2xx, JsonPath ausente na resposta).
+- [x] Nenhum token (access ou refresh) atravessa a JSI bridge pro lado JS em nenhum momento — `CredentialProvider` é C++ puro, sem `JSIConverter`; o único ponto de contato com JSI é o seed inicial em `configure()` (ver nota de escopo abaixo).
+
+## Nota de escopo (achado durante implementação)
+
+O contrato `CredentialsDefinition`/`CredentialsParams` (TASK-001) não tinha campo nenhum pro par de tokens inicial, apesar de "Fora de escopo" abaixo sempre ter descrito que "o token inicial chega via `configure()`". Adicionado `credentials.tokens?: { accessToken, refreshToken }` em `ICredentialsDefinition`/`ConfigureParams`/`docs/architecture.md` (`CredentialsDefinition`) pra fechar esse gap — só passa pela bridge uma vez, no seed; depois disso o token só existe nativamente. Corpo do request de refresh é fixo (`{"refreshToken": "<valor>"}`), não usa o Interpretador de Expressões da TASK-008 pra montá-lo — ver correção de escopo já registrada no comentário da issue #10 (débito documentado em #50).
 
 ## Fora de escopo
 

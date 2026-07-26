@@ -1,0 +1,61 @@
+{
+  "name": "salve-db-studio",
+  "version": "0.0.1",
+  "description": "Local, live-connected Studio for browsing/editing a running app's Salve DB (Prisma/Drizzle Studio style)",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "bin": "dist/index.js",
+  "files": [
+    "dist",
+    "public"
+  ],
+  "repository": "https://github.com/Salve-Software/react-native-salve-db.git",
+  "author": "Salve-Software",
+  "bugs": "https://github.com/Salve-Software/react-native-salve-db/issues",
+  "homepage": "https://github.com/Salve-Software/react-native-salve-db#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "predev:server": "vite build",
+    "dev:server": "tsx watch src/index.ts",
+    "dev:ui": "vite build --watch",
+    "build": "tsc -p tsconfig.json && vite build",
+    "prestart": "npm run build",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit",
+    "test:server": "tsx --test src/tests/*.test.ts",
+    "test:ui": "vitest run",
+    "test": "npm run test:server && npm run test:ui"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.0.4",
+    "jsdom": "^29.1.1",
+    "lucide-react": "^1.27.0",
+    "motion": "^12.42.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">= 22.11.0"
+  }
+}

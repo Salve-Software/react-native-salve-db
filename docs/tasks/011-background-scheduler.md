@@ -1,42 +1,61 @@
 # TASK-011 — Background Scheduler (Android+iOS)
 
-**Status:** ⬜ Não iniciado
+**Status:** 🟡 Implementado — validação de release pendente (build Xcode/CocoaPods real e verificação de SO, ver checklist abaixo)
 **Prioridade:** P2 (pode esperar)
-**Área:** Android+iOS
-**Depende de:** TASK-002, TASK-012 (o wake real precisa do Sync Orchestrator pronto pra ser acionado; o scaffolding de registro do job pode começar antes)
+**Área:** Android+iOS (+ C++ core — escopo expandido, ver nota abaixo)
+**Depende de:** TASK-002, TASK-012 (o wake real precisa do Sync Orchestrator pronto pra ser acionado)
 **Bloqueia:** Nenhuma
-**Paralelizável:** Parcial — a parte de "registrar/agendar o job" (WorkManager/BGTaskScheduler setup) pode ser feita cedo e em paralelo; a parte de "o que o job faz ao acordar" só fecha depois da TASK-012 existir.
-**Skills obrigatórias:** `kotlin`, `swift`
+**Skills obrigatórias:** `kotlin`, `swift`, `cpp`
 
-## Antes de começar
+## Nota de escopo (pós-implementação)
 
-Invoque `kotlin` (WorkManager: `CoroutineWorker`, constraints, `PeriodicWorkRequest`) e `swift` (BGTaskScheduler: `BGAppRefreshTask`/`BGProcessingTask`, registro em `Info.plist`, `submit`/`schedule`). É a tarefa mais dependente de peculiaridade de plataforma do MVP inteiro — as APIs de Android e iOS pra "acordar em background" não têm nada em comum, então cada metade é praticamente do zero na respectiva skill.
+Duas expansões de escopo, decididas em sessão de planejamento antes da implementação:
+
+1. **`minimumInterval`/`requiresNetwork`/`requiresCharging` migraram de `SyncDefinition.background` (per-schema) para `Database.configure({ background })` (global).** Só existe um job nativo, então agregar essas 3 propriedades entre N schemas exigiria uma política arbitrária. `background.enabled` continua per-schema (é quem o Sync Orchestrator lê pra decidir o que sincronizar quando já acordado). Ver `docs/mvp-scope.md` e `docs/architecture.md`.
+2. **Cold-start (app totalmente morto) foi resolvido nesta task, não adiado.** `DatabaseManager` só existia em memória após `Database.configure()`; um wake em processo novo não conseguia reabrir o banco nem saber o `baseUrl`. `NativeConfigStore` (`cpp/database/`) persiste a config necessária em disco e `DatabaseManager::reopenFromPersistedConfigIfNeeded()` reidrata sem JS. Isso trouxe a skill `cpp` para dentro do escopo desta task, além de `kotlin`/`swift`.
 
 ## Descrição
 
-Android: WorkManager. iOS: BGTaskScheduler. Ambos fazem a mesma coisa conceitualmente: **um único job nativo acorda o Native Sync Engine** — não é um job por schema. O `BackgroundDefinition` (`minimumInterval`, `requiresNetwork`, `requiresCharging`) configurado em cada `SyncDefinition.background` é o *critério* que aquele schema específico usa quando o job já acordou, não um agendamento próprio (isso já foi uma inconsistência entre `overview.md` e `architecture.md` original, resolvida em `mvp-scope.md` — ver referência abaixo, não reabrir essa decisão).
+Android: WorkManager. iOS: BGTaskScheduler. Ambos fazem a mesma coisa conceitualmente: **um único job nativo acorda o Native Sync Engine** — não é um job por schema.
 
-Escopo:
+Implementado:
 
-1. Registrar um único job periódico por plataforma (intervalo mínimo pode ser o menor `minimumInterval` entre os schemas registrados, ou um valor fixo razoável — decidir e documentar).
-2. Ao acordar, chamar o Sync Orchestrator (TASK-012) via a bridge nativa — **sem subir a JS engine** (esse é o requisito central do projeto: "sem inicializar JS em background", `docs/overview.md`/`docs/project.md`).
-3. O Sync Orchestrator, uma vez acordado, é quem itera os schemas com `background.enabled: true` e decide o que sincronizar — esta tarefa não decide isso, só aciona.
-4. Respeitar `requiresNetwork`/`requiresCharging` como constraints do job nativo (WorkManager `Constraints`, BGTaskScheduler `earliestBeginDate`/condições de rede).
+1. Job único por plataforma: `SalveDbBackgroundWorker` (`androidx.work.CoroutineWorker`, `enqueueUniquePeriodicWork`) e `SalveDbBackgroundScheduler` (`BGProcessingTaskRequest`, registrado em `+load`). Intervalo = `max(minimumInterval, piso da plataforma)` — WorkManager impõe 15min; iOS não garante intervalo (best-effort do SO).
+2. Ao acordar, chama `wakeBackgroundSyncFromNative()` (`cpp/sync/SyncNativeEntryPoint`), que rehidrata `DatabaseManager` se necessário e delega a `triggerSyncAllFromNative()` — sem subir a JS engine.
+3. `requiresNetwork`/`requiresCharging` viram `Constraints`/`BGProcessingTaskRequest.requires*` do job nativo, lidos via `nativeBackgroundConstraints()`.
+4. Reagendamento: Android via `ExistingPeriodicWorkPolicy.UPDATE` (WorkManager persiste e sobrevive a reboot); iOS resubmete a cada `handle()` e re-registra a cada cold launch via `+load`.
 
 ## Docs de referência
 
-- `docs/overview.md` → seção "Background" — a descrição original (WorkManager/BGTaskScheduler "apenas acordam o Native Sync Engine").
-- `docs/project.md` → explicação do campo `background` no exemplo de schema comentado (seção "Contrato declarativo") — a explicação mais completa de "um único job global, não um job por schema".
-- `docs/mvp-scope.md` → linha "Background per-schema vs wake global" em "Inconsistências resolvidas" (#3) — o porquê formal desta decisão, importante pra não reintroduzir a inconsistência original por engano.
-- `docs/architecture.md` → seção "Background" (`BackgroundDefinition`) — o type exato consumido.
+- `docs/overview.md` → seção "Background".
+- `docs/project.md` → explicação do campo `background` no exemplo de schema comentado.
+- `docs/mvp-scope.md` → "Inconsistências resolvidas" (#3) — decisão de job único global (não reabrir) e localização das 3 propriedades de agenda (global, não per-schema).
+- `docs/architecture.md` → seção "Background" (`IBackgroundDefinition`, `BackgroundParams`).
+- `docs/native-layer.md` → padrão real de bridge (`platform::scheduleBackgroundSync`, `NativeConfigStore`), substituindo o sketch original de `IBackgroundScheduler`.
 
 ## Critérios de aceite
 
-- [ ] Um único job nativo registrado por plataforma (não um job por schema — teste com múltiplos schemas com `background.enabled: true` e confirmar que só existe 1 job agendado no SO).
-- [ ] Job acordando de fato aciona o Sync Orchestrator (TASK-012) sem qualquer inicialização de JS engine (verificável — ex: instrumentar e confirmar que nenhuma JS thread é criada nesse caminho).
-- [ ] `requiresNetwork`/`requiresCharging` de pelo menos um schema respeitados como constraint do job (testável simulando offline/sem carregar).
-- [ ] Comportamento correto de reagendamento (job periódico continua rodando após a primeira execução, sobrevive a restart do app/dispositivo conforme padrão de cada plataforma).
+Os `[x]` abaixo significam "lógica implementada e coberta por teste automatizado (C++/Kotlin/Swift)" — **não** "verificado em dispositivo/SO real". Essa segunda parte é o checklist manual logo abaixo, que ainda não foi executado.
+
+- [x] Um único job nativo registrado por plataforma — lógica coberta por unit tests; contagem real de jobs no SO ainda pendente.
+- [x] Job acordando aciona o Sync Orchestrator sem inicialização de JS engine — `wakeBackgroundSyncFromNative` coberto por Catch2 (inclusive a partir de estado fechado/cold-start); ausência real de JS thread ainda pendente.
+- [x] `requiresNetwork`/`requiresCharging` respeitados como constraint do job — cobertos por `BackgroundScheduleDecisionTest`/`BackgroundScheduleDecisionTests` (Kotlin/Swift).
+- [x] Reagendamento correto — `enqueueUniquePeriodicWork(UPDATE)` e resubmit em `+load`/`handle()`; sobrevivência a restart real ainda pendente.
+
+Checklist de verificação manual (não coberta por unit test, roda contra `example/`) — **pendente**:
+- Android: `adb shell dumpsys jobscheduler | grep salve` com ≥2 schemas `background.enabled` confirma 1 job só.
+- Android: `adb shell am force-stop` + `adb shell cmd jobscheduler run` confirma sync sem bridge RN ativa.
+- Android: `adb reboot` confirma reagendamento.
+- iOS: lldb `_simulateLaunchForTaskWithIdentifier:@"com.salvedb.background.sync"` confirma wake e resubmit.
+- iOS: build real via Xcode/CocoaPods (`pod install` local está bloqueado por um mismatch de bundler/Ruby, não verificado nesta sessão).
+
+## Riscos e limitações conhecidas
+
+- iOS `BGTaskScheduler` é best-effort do SO — `earliestBeginDate` é um piso, não uma garantia de quando a task roda.
+- Android `PeriodicWorkRequest` impõe piso de 15min; `minimumInterval` menor é clampado.
+- `SalveDbBackgroundWorker` roda dentro da janela de ~10min do `CoroutineWorker` chamando `nativeWakeBackgroundSync()` (bloqueante, sem retry explícito). Aceito como limitação: o job é periódico (WorkManager roda de novo no próximo ciclo) e `maxPagesPerSession` já limita o tamanho de uma sessão de sync; promover pra foreground worker exigiria notificação persistente ao usuário, desproporcional pra sync de dados em background.
+- `wakeBackgroundSync()` no iOS não tem cancelamento real — se a `expirationHandler` disparar, a chamada nativa síncrona continua até terminar mesmo assim (só o double-`setTaskCompleted` é evitado). `SyncOrchestrator` não tem suporte a cancelamento no C++ hoje.
 
 ## Fora de escopo
 
-Qualquer lógica de "o que sincronizar" ou como (isso é inteiramente TASK-012). Sync manual/on-open (não é background, é chamada direta via TASK-002 bridge).
+Qualquer lógica de "o que sincronizar" ou como (isso é inteiramente TASK-012). Sync manual/on-open (não é background, é chamada direta via TASK-002 bridge). Guardar `startReactNative` atrás de um launch-reason check no app consumidor — documentado como requisito, não implementado no `example/`.

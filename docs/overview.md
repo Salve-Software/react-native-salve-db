@@ -505,7 +505,7 @@ iOS: BGTaskScheduler
 
   
 
-Um único job nativo acorda o Native Sync Engine. O engine então itera todos os schemas com `sync.background.enabled: true` e decide o que sincronizar — não é um job agendado por schema, o agendamento (`minimumInterval`, `requiresNetwork`) é só o critério que cada schema usa quando o job já acordou.
+Um único job nativo acorda o Native Sync Engine. O engine então itera todos os schemas com `sync.background.enabled: true` e decide o que sincronizar — não é um job agendado por schema. O agendamento em si (`minimumInterval`, `requiresNetwork`, `requiresCharging`) é global, configurado em `Database.configure({ background })`, já que só existe um job.
 
   
 

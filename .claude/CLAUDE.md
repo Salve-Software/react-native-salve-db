@@ -66,5 +66,8 @@ Read sync_queue (up to pageSize)
 
 ## Task status
 
-See `docs/tasks/README.md`. Only TASK-001 (TypeScript Contracts) is done.
-Next up: TASK-002 (Nitro HybridObject Spec).
+Tracked as GitHub issues in `Salve-Software/react-native-salve-db` (#2–#16); `docs/tasks/README.md` mirrors the same numbering.
+
+Done: TASK-001 (TS contracts), TASK-002 (Nitro spec), TASK-003 (test harness), TASK-004 (SQLite core), TASK-005 (migration engine), TASK-006 (Trigger Engine & Sync Queue), TASK-007 (query executor), TASK-008 (expression interpreter), TASK-009 (credential provider), TASK-010 (HTTP client), TASK-011 (Background Scheduler — real `WorkManager` `PeriodicWorkRequest` on Android and `BGTaskScheduler`/`BGProcessingTaskRequest` on iOS, both registered at process start and waking `SyncOrchestrator::triggerSyncAll` via `SyncNativeEntryPoint.cpp`, independent of the app-open/connectivity-monitor triggers from TASK-016), TASK-012 (Sync Orchestrator — `triggerSync`/`triggerSyncAll` fully implemented, not a stub), TASK-013 (TS query builder — Drizzle-style `select/insert/update/delete`), TASK-014 (public `Database.configure/register` API), TASK-016 (wire `triggerSync` into app lifecycle: manual sync, app-open trigger, native connectivity monitor) — all implemented with real JSI/Jest test coverage, no mocks.
+
+Not started: TASK-015 (README rewrite).

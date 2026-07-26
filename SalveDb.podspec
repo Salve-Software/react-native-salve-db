@@ -23,7 +23,14 @@ Pod::Spec.new do |s|
     # Vendored SQLite amalgamation (same source used on Android)
     "cpp/third_party/sqlite3/*.{c,h}",
   ]
-  s.exclude_files = "cpp/tests/**/*"
+  s.exclude_files = ["cpp/tests/**/*", "ios/tests/**/*"]
+
+  # Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
+  s.pod_target_xcconfig = { 'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SQLITE_ENABLE_COLUMN_METADATA=1' }
+  # NWPathMonitor (connectivity monitor) and BGTaskScheduler (background scheduler).
+  s.frameworks = 'Network', 'BackgroundTasks'
+  # Exposes SalveDbSyncBridge to SalveDbConnectivityMonitor.swift.
+  s.public_header_files = ["ios/Sync/SalveDbSyncBridge.h"]
 
   load 'nitrogen/generated/ios/SalveDb+autolinking.rb'
   add_nitrogen_files(s)

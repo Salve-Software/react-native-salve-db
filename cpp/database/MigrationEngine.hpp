@@ -2,9 +2,10 @@
 
 #include "SQLiteConnection.hpp"
 #include "json_parser.hpp"
+#include "OrderedMap.hpp"
+#include "../sync/RelationStore.hpp"
 #include <memory>
 #include <string>
-#include <map>
 #include <vector>
 #include <optional>
 
@@ -25,14 +26,27 @@ struct IndexDef {
   bool unique = false;
 };
 
+struct SyncSettings {
+  bool enabled = false;
+  json::Value definition; // full `sync` JSON object, unparsed
+};
+
 struct SchemaDef {
   std::string name;
   int version = 1;
   std::string primaryKey;
-  std::map<std::string, ColumnDef> columns;
+  OrderedMap<ColumnDef> columns;
   std::vector<IndexDef> indexes;
+  std::vector<RelationDef> relations;
+  SyncSettings sync;
 };
 
+/**
+ * Owns schema lifecycle for one SQLite connection: creates tables on first
+ * registration, adds missing columns on version bumps (ADD COLUMN only, no
+ * DROP/RENAME), and keeps sync triggers/relation indexes in sync with the
+ * declared schema. Called once per schema via `registerSchema`.
+ */
 class MigrationEngine {
 public:
   explicit MigrationEngine(std::shared_ptr<SQLiteConnection> conn);
@@ -43,16 +57,21 @@ public:
   static SchemaDef parseSchemaJson(const std::string& json);
 
 private:
-  std::shared_ptr<SQLiteConnection> _conn;
+  std::shared_ptr<SQLiteConnection> _db;
 
   void createTable(const SchemaDef& schema);
-  void migrateTable(const SchemaDef& schema);
+  bool migrateTable(const SchemaDef& schema); // true if a column was added
 
   int storedVersion(const std::string& schemaName);
   void setStoredVersion(const std::string& schemaName, int version);
 
   std::string sqliteType(const std::string& colType) const;
   std::vector<std::string> existingColumns(const std::string& tableName);
+
+  void createSyncTriggers(const SchemaDef& schema);
+  void dropSyncTriggers(const SchemaDef& schema);
+
+  void createRelationIndexes(const SchemaDef& schema);
 };
 
 } // namespace margelo::nitro::salvedb

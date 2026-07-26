@@ -1,21 +1,27 @@
 #include "MigrationEngine.hpp"
+#include "json_parser.hpp"
+#include "SchemaRegistry.hpp"
+#include "SalveMetadataManager.hpp"
+#include "../sync/SyncDefinitionStore.hpp"
+#include "../sync/SyncCursorStore.hpp"
 
 #include <sstream>
 #include <algorithm>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace margelo::nitro::salvedb {
 
 MigrationEngine::MigrationEngine(std::shared_ptr<SQLiteConnection> conn)
-  : _conn(std::move(conn)) {}
+  : _db(std::move(conn)) {}
 
 namespace {
 
 // Rolls back on scope exit unless commit() ran, so a mid-sequence throw can't leave a half-applied migration.
 class TransactionGuard {
 public:
-  explicit TransactionGuard(SQLiteConnection& conn) : _conn(conn) {
-    _conn.beginTransaction();
+  explicit TransactionGuard(SQLiteConnection& conn) : _db(conn) {
+    _db.beginTransaction();
   }
 
   TransactionGuard(const TransactionGuard&) = delete;
@@ -24,7 +30,7 @@ public:
   ~TransactionGuard() {
     if (!_committed) {
       try {
-        _conn.rollback();
+        _db.rollback();
       } catch (...) {
         // destructors must not throw
       }
@@ -32,12 +38,12 @@ public:
   }
 
   void commit() {
-    _conn.commit();
+    _db.commit();
     _committed = true;
   }
 
 private:
-  SQLiteConnection& _conn;
+  SQLiteConnection& _db;
   bool _committed = false;
 };
 
@@ -75,8 +81,92 @@ static constexpr auto kVersionTable = R"sql(
   );
 )sql";
 
+// ── Sync queue / apply lock (global, created once regardless of schema) ──────
+
+static constexpr auto kSyncQueueTable = R"sql(
+  CREATE TABLE IF NOT EXISTS sync_queue (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    operation  TEXT    NOT NULL,
+    entity     TEXT    NOT NULL,
+    entity_id  TEXT    NOT NULL,
+    payload    TEXT    NOT NULL,
+    updated_at INTEGER NOT NULL,
+    status     TEXT    NOT NULL DEFAULT 'PENDING',
+    retryCount INTEGER NOT NULL DEFAULT 0,
+    lastError  TEXT
+  );
+)sql";
+
+static constexpr auto kSyncQueueEntityIndex = R"sql(
+  CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_id ON sync_queue (entity, id);
+)sql";
+
+static constexpr auto kSyncApplyLockTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _sync_apply_lock (
+    id INTEGER PRIMARY KEY CHECK (id = 1)
+  );
+)sql";
+
+static constexpr auto kSyncCursorTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_sync_cursors (
+    entity TEXT PRIMARY KEY,
+    cursor TEXT NOT NULL
+  );
+)sql";
+
+static constexpr auto kSyncDefinitionTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_sync_definitions (
+    name       TEXT PRIMARY KEY,
+    definition TEXT NOT NULL
+  );
+)sql";
+
+static constexpr auto kSyncMetadataTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_sync_metadata (
+    tableName  TEXT NOT NULL,
+    localId    TEXT NOT NULL,
+    entityId   TEXT NOT NULL,
+    remoteId   TEXT,
+    operation  TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    retryCount INTEGER DEFAULT 0,
+    lastError  TEXT,
+    version    INTEGER,
+    createdAt  INTEGER NOT NULL,
+    updatedAt  INTEGER NOT NULL,
+    syncedAt   INTEGER,
+    PRIMARY KEY (tableName, localId)
+  );
+)sql";
+
+static constexpr auto kSyncMetadataRemoteIdIndex = R"sql(
+  CREATE INDEX IF NOT EXISTS idx_salve_sync_metadata_remote_id
+    ON _salve_sync_metadata (tableName, remoteId);
+)sql";
+
+// ON CONFLICT target for the sync triggers below: a trigger only ever knows
+// NEW/OLD's current PK, so upserts must key off entityId, not the frozen localId.
+static constexpr auto kSyncMetadataEntityIdIndex = R"sql(
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_salve_sync_metadata_entity_id
+    ON _salve_sync_metadata (tableName, entityId);
+)sql";
+
+static constexpr auto kRelationsTable = R"sql(
+  CREATE TABLE IF NOT EXISTS _salve_relations (
+    childTable  TEXT NOT NULL,
+    fkColumn    TEXT NOT NULL,
+    parentTable TEXT NOT NULL,
+    PRIMARY KEY (childTable, fkColumn)
+  );
+)sql";
+
+static constexpr auto kRelationsParentIndex = R"sql(
+  CREATE INDEX IF NOT EXISTS idx_salve_relations_parent
+    ON _salve_relations (parentTable);
+)sql";
+
 int MigrationEngine::storedVersion(const std::string& schemaName) {
-  auto result = _conn->execute(
+  auto result = _db->execute(
     "SELECT version FROM _salve_schema_versions WHERE name = ?",
     { schemaName }
   );
@@ -85,7 +175,7 @@ int MigrationEngine::storedVersion(const std::string& schemaName) {
 }
 
 void MigrationEngine::setStoredVersion(const std::string& schemaName, int version) {
-  _conn->execute(
+  _db->execute(
     "INSERT OR REPLACE INTO _salve_schema_versions (name, version) VALUES (?, ?)",
     { schemaName, static_cast<double>(version) }
   );
@@ -106,7 +196,7 @@ std::string MigrationEngine::sqliteType(const std::string& colType) const {
 // ── Existing columns ──────────────────────────────────────────────────────────
 
 std::vector<std::string> MigrationEngine::existingColumns(const std::string& tableName) {
-  auto result = _conn->execute("PRAGMA table_info(\"" + tableName + "\")", {});
+  auto result = _db->execute("PRAGMA table_info(\"" + tableName + "\")", {});
   std::vector<std::string> cols;
   for (auto& row : result.rows) {
     // PRAGMA table_info columns: cid, name, type, notnull, dflt_value, pk
@@ -135,7 +225,7 @@ void MigrationEngine::createTable(const SchemaDef& schema) {
   }
 
   ddl << "\n);";
-  _conn->exec(ddl.str());
+  _db->exec(ddl.str());
 
   // Indexes
   for (auto& idx : schema.indexes) {
@@ -147,18 +237,20 @@ void MigrationEngine::createTable(const SchemaDef& schema) {
       idxDdl << "\"" << idx.columns[i] << "\"";
     }
     idxDdl << ");";
-    _conn->exec(idxDdl.str());
+    _db->exec(idxDdl.str());
   }
 }
 
 // ── ALTER TABLE ADD COLUMN (migration) ───────────────────────────────────────
 
-void MigrationEngine::migrateTable(const SchemaDef& schema) {
+bool MigrationEngine::migrateTable(const SchemaDef& schema) {
   auto existing = existingColumns(schema.name);
+  bool added = false;
 
   for (auto& [colName, col] : schema.columns) {
     bool found = std::find(existing.begin(), existing.end(), colName) != existing.end();
     if (!found) {
+      added = true;
       std::ostringstream alter;
       alter << "ALTER TABLE \"" << schema.name << "\" ADD COLUMN \""
             << colName << "\" " << sqliteType(col.type);
@@ -174,39 +266,219 @@ void MigrationEngine::migrateTable(const SchemaDef& schema) {
         else
           alter << " DEFAULT ''";
       }
-      _conn->exec(alter.str());
+      _db->exec(alter.str());
 
       // ALTER TABLE ADD COLUMN can't carry a UNIQUE constraint directly.
       if (col.unique) {
-        _conn->exec("CREATE UNIQUE INDEX IF NOT EXISTS \"" + schema.name + "_" + colName +
+        _db->exec("CREATE UNIQUE INDEX IF NOT EXISTS \"" + schema.name + "_" + colName +
                     "_unique\" ON \"" + schema.name + "\" (\"" + colName + "\")");
       }
     }
   }
+
+  return added;
+}
+
+// ── Sync triggers ──────────────────────────────────────────────────────────
+
+namespace {
+
+std::string buildJsonObjectArgs(const SchemaDef& schema, const std::string& rowAlias) {
+  std::ostringstream args;
+  bool first = true;
+  for (auto& [colName, col] : schema.columns) {
+    if (!first) args << ", ";
+    first = false;
+    args << "'" << colName << "', " << rowAlias << ".\"" << colName << "\"";
+  }
+  return args.str();
+}
+
+} // namespace
+
+void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
+  const std::string& t  = schema.name;
+  const std::string& pk = schema.primaryKey;
+  std::string rowCols = buildJsonObjectArgs(schema, "NEW");
+
+  std::ostringstream insertTrig;
+  insertTrig << "CREATE TRIGGER IF NOT EXISTS \"" << t << "_sync_after_insert\"\n"
+             << "AFTER INSERT ON \"" << t << "\"\n"
+             << "WHEN NOT EXISTS (SELECT 1 FROM _sync_apply_lock)\n"
+             << "BEGIN\n"
+             << "  INSERT INTO sync_queue (operation, entity, entity_id, payload, updated_at)\n"
+             << "  VALUES ('insert', '" << t << "', NEW.\"" << pk << "\",\n"
+             << "    json_object(" << rowCols << "),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "  INSERT INTO _salve_sync_metadata\n"
+             << "    (tableName, localId, entityId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', NEW.\"" << pk << "\", NEW.\"" << pk << "\", NULL, 'insert', 'PENDING', 0, NULL,\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
+             << "  ON CONFLICT(tableName, entityId) DO UPDATE SET\n"
+             << "    operation = excluded.operation,\n"
+             << "    status    = excluded.status,\n"
+             << "    updatedAt = excluded.updatedAt;\n"
+             << "END;";
+  _db->exec(insertTrig.str());
+
+  std::ostringstream updateTrig;
+  updateTrig << "CREATE TRIGGER IF NOT EXISTS \"" << t << "_sync_after_update\"\n"
+             << "AFTER UPDATE ON \"" << t << "\"\n"
+             << "WHEN NOT EXISTS (SELECT 1 FROM _sync_apply_lock)\n"
+             << "BEGIN\n"
+             << "  INSERT INTO sync_queue (operation, entity, entity_id, payload, updated_at)\n"
+             << "  VALUES ('update', '" << t << "', NEW.\"" << pk << "\",\n"
+             << "    json_object(" << rowCols << "),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "  INSERT INTO _salve_sync_metadata\n"
+             << "    (tableName, localId, entityId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', NEW.\"" << pk << "\", NEW.\"" << pk << "\", NULL,\n"
+             << "    CASE WHEN NEW.\"deletedAt\" IS NOT NULL THEN 'delete' ELSE 'update' END,\n"
+             << "    CASE WHEN NEW.\"deletedAt\" IS NOT NULL THEN 'DELETED' ELSE 'PENDING' END,\n"
+             << "    0, NULL,\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
+             << "  ON CONFLICT(tableName, entityId) DO UPDATE SET\n"
+             << "    operation = excluded.operation,\n"
+             << "    status    = excluded.status,\n"
+             << "    updatedAt = excluded.updatedAt;\n"
+             << "END;";
+  _db->exec(updateTrig.str());
+
+  // PK-only payload: the row is already gone by the time AFTER DELETE fires.
+  std::ostringstream deleteTrig;
+  deleteTrig << "CREATE TRIGGER IF NOT EXISTS \"" << t << "_sync_after_delete\"\n"
+             << "AFTER DELETE ON \"" << t << "\"\n"
+             << "WHEN NOT EXISTS (SELECT 1 FROM _sync_apply_lock)\n"
+             << "BEGIN\n"
+             << "  INSERT INTO sync_queue (operation, entity, entity_id, payload, updated_at)\n"
+             << "  VALUES ('delete', '" << t << "', OLD.\"" << pk << "\",\n"
+             << "    json_object('" << pk << "', OLD.\"" << pk << "\"),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER));\n"
+             << "  INSERT INTO _salve_sync_metadata\n"
+             << "    (tableName, localId, entityId, remoteId, operation, status, retryCount, version, createdAt, updatedAt, syncedAt)\n"
+             << "  VALUES ('" << t << "', OLD.\"" << pk << "\", OLD.\"" << pk << "\", NULL, 'delete', 'DELETED', 0, NULL,\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER),\n"
+             << "    CAST(strftime('%s','now') * 1000 AS INTEGER), NULL)\n"
+             << "  ON CONFLICT(tableName, entityId) DO UPDATE SET\n"
+             << "    operation = excluded.operation,\n"
+             << "    status    = excluded.status,\n"
+             << "    updatedAt = excluded.updatedAt;\n"
+             << "END;";
+  _db->exec(deleteTrig.str());
+}
+
+void MigrationEngine::createRelationIndexes(const SchemaDef& schema) {
+  for (auto& rel : schema.relations) {
+    _db->exec(
+      "CREATE INDEX IF NOT EXISTS \"" + schema.name + "_" + rel.column + "_fk_idx\""
+      " ON \"" + schema.name + "\" (\"" + rel.column + "\")"
+    );
+  }
+}
+
+void MigrationEngine::dropSyncTriggers(const SchemaDef& schema) {
+  const std::string& t = schema.name;
+  _db->exec("DROP TRIGGER IF EXISTS \"" + t + "_sync_after_insert\";");
+  _db->exec("DROP TRIGGER IF EXISTS \"" + t + "_sync_after_update\";");
+  _db->exec("DROP TRIGGER IF EXISTS \"" + t + "_sync_after_delete\";");
 }
 
 // ── Public: registerSchema ────────────────────────────────────────────────────
 
 void MigrationEngine::registerSchema(const SchemaDef& schema) {
-  TransactionGuard txn(*_conn);
+  TransactionGuard txn(*_db);
 
-  // Ensure version tracking table exists
-  _conn->exec(kVersionTable);
+  // Ensure version tracking / sync queue tables exist
+  _db->exec(kVersionTable);
+  _db->exec(kSyncQueueTable);
+  _db->exec(kSyncQueueEntityIndex);
+  _db->exec(kSyncApplyLockTable);
+  _db->exec(kSyncCursorTable);
+  _db->exec(kSyncDefinitionTable);
+  _db->exec(kSyncMetadataTable);
+  _db->exec(kSyncMetadataRemoteIdIndex);
+
+  // Retro-migration for installs created before entityId existed (#77):
+  // split the frozen localId from the mutable "current PK" tracking column.
+  auto metadataColumns = existingColumns("_salve_sync_metadata");
+  if (std::find(metadataColumns.begin(), metadataColumns.end(), "entityId") == metadataColumns.end()) {
+    _db->exec("ALTER TABLE _salve_sync_metadata ADD COLUMN entityId TEXT NOT NULL DEFAULT ''");
+    _db->exec("UPDATE _salve_sync_metadata SET entityId = localId WHERE entityId = ''");
+  }
+  _db->exec(kSyncMetadataEntityIdIndex);
+
+  // Retro-migration: sync_queue gains status/retryCount/lastError (#84).
+  auto queueColumns = existingColumns("sync_queue");
+  if (std::find(queueColumns.begin(), queueColumns.end(), "status") == queueColumns.end()) {
+    _db->exec("ALTER TABLE sync_queue ADD COLUMN status     TEXT    NOT NULL DEFAULT 'PENDING'");
+    _db->exec("ALTER TABLE sync_queue ADD COLUMN retryCount INTEGER NOT NULL DEFAULT 0");
+    _db->exec("ALTER TABLE sync_queue ADD COLUMN lastError  TEXT");
+  }
+
+  // Engine migration (#84): cursor format changed, reset once so pull restarts from since=0.
+  constexpr int kSyncEngineVersion = 2;
+  constexpr auto kSyncEngineVersionKey = "_salve_sync_engine";
+  if (storedVersion(kSyncEngineVersionKey) < kSyncEngineVersion) {
+    SyncCursorStore(_db).removeAll();
+    setStoredVersion(kSyncEngineVersionKey, kSyncEngineVersion);
+  }
+
+  _db->exec(kRelationsTable);
+  _db->exec(kRelationsParentIndex);
 
   int stored = storedVersion(schema.name);
+  bool columnsChanged = false;
 
   if (stored == 0) {
     createTable(schema);
+    columnsChanged = true;
   } else if (schema.version > stored) {
-    migrateTable(schema);
+    columnsChanged = migrateTable(schema);
+  } else {
+    // Even at same version, ensure reserved columns exist (for library upgrades).
+    columnsChanged = migrateTable(schema);
   }
-  // If schema.version == stored, nothing to do (idempotent)
+
+  if (schema.sync.enabled) {
+    if (columnsChanged) {
+      dropSyncTriggers(schema);
+    }
+    createSyncTriggers(schema);
+    // Backfill only once (first time metadata table is used for this schema).
+    auto backfillCheck = _db->execute(
+      "SELECT 1 FROM _salve_sync_metadata WHERE tableName = ? LIMIT 1",
+      { schema.name }
+    );
+    if (backfillCheck.rows.empty()) {
+      SalveMetadataManager(_db).backfillSyncedRows(schema.name, schema.primaryKey);
+    }
+  } else {
+    dropSyncTriggers(schema);
+  }
 
   if (schema.version != stored) {
     setStoredVersion(schema.name, schema.version);
   }
 
+  SyncDefinitionStore defStore(_db);
+  if (schema.sync.enabled) {
+    defStore.save(schema.name, schema.sync.definition);
+  } else {
+    defStore.remove(schema.name);
+  }
+
+  RelationStore(_db).replaceForChild(schema.name, schema.relations);
+  createRelationIndexes(schema);
+
   txn.commit();
+
+  std::unordered_set<std::string> booleanColumns;
+  for (auto& [colName, col] : schema.columns) {
+    if (col.type == "boolean") booleanColumns.insert(colName);
+  }
+  SchemaRegistry::shared().registerBooleanColumns(schema.name, std::move(booleanColumns));
 }
 
 // ── JSON parsing ──────────────────────────────────────────────────────────────
@@ -223,6 +495,8 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
 
   if (schema.name.empty())
     throw std::runtime_error("registerSchema: 'name' is required");
+  if (schema.name.rfind("_salve", 0) == 0)
+    throw std::runtime_error("registerSchema: schema names starting with '_salve' are reserved for system tables");
   if (schema.primaryKey.empty())
     throw std::runtime_error("registerSchema: 'primaryKey' is required");
 
@@ -259,6 +533,52 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
       }
     }
   }
+
+  auto relationsVal = root.get("relations");
+  if (relationsVal && relationsVal->get().isArray()) {
+    for (auto& relVal : relationsVal->get().asArray()) {
+      if (!relVal.isObject()) continue;
+      RelationDef rel;
+      rel.column     = relVal.getString("column");
+      rel.references = relVal.getString("references");
+      if (rel.references.empty())
+        throw std::runtime_error("registerSchema: relation 'references' is required");
+      if (!schema.columns.count(rel.column))
+        throw std::runtime_error("registerSchema: relation column '" + rel.column + "' is not a declared column");
+      bool duplicate = std::any_of(schema.relations.begin(), schema.relations.end(),
+        [&](const RelationDef& r) { return r.column == rel.column; });
+      if (duplicate)
+        throw std::runtime_error("registerSchema: relation column '" + rel.column + "' is already declared");
+      schema.relations.push_back(std::move(rel));
+    }
+  }
+
+  auto syncVal = root.get("sync");
+  if (syncVal && syncVal->get().isObject()) {
+    const json::Value& syncObj = syncVal->get();
+    schema.sync.enabled    = syncObj.getBool("enabled", false);
+    schema.sync.definition = syncObj;
+
+    if (schema.sync.enabled) {
+      auto updatedAt = schema.columns.find("updatedAt");
+      bool valid = updatedAt != schema.columns.end()
+        && updatedAt->second.type == "datetime"
+        && !updatedAt->second.nullable;
+      if (!valid) {
+        throw std::runtime_error(
+          "registerSchema: sync.enabled requires a NOT NULL 'datetime' column named 'updatedAt' (used for lastWriteWins)"
+        );
+      }
+    }
+  }
+
+  if (schema.columns.count("deletedAt")) {
+    throw std::runtime_error("registerSchema: 'deletedAt' is a reserved column managed by SalveDb");
+  }
+  ColumnDef deletedAtCol;
+  deletedAtCol.type = "datetime";
+  deletedAtCol.nullable = true;
+  schema.columns["deletedAt"] = deletedAtCol;
 
   return schema;
 }

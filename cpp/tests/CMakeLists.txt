@@ -107,24 +107,52 @@ set(PROJECT_CPP_DIR "${CMAKE_SOURCE_DIR}/..")
 set(GENERATED_CPP_DIR "${CMAKE_SOURCE_DIR}/../../nitrogen/generated/shared/c++")
 
 set(PROJECT_SOURCES
-  "${PROJECT_CPP_DIR}/database/HybridSalveDatabase.cpp"
+  "${PROJECT_CPP_DIR}/HybridSalveDatabase.cpp"
   "${PROJECT_CPP_DIR}/database/SQLiteConnection.cpp"
   "${PROJECT_CPP_DIR}/database/DatabaseManager.cpp"
+  "${PROJECT_CPP_DIR}/database/NativeConfigStore.cpp"
   "${PROJECT_CPP_DIR}/database/MigrationEngine.cpp"
+  "${PROJECT_CPP_DIR}/database/SalveMetadataManager.cpp"
+  "${PROJECT_CPP_DIR}/database/SchemaRegistry.cpp"
   "${PROJECT_CPP_DIR}/query/QueryExecutor.cpp"
   "${PROJECT_CPP_DIR}/sync/SyncOrchestrator.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncNativeEntryPoint.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncApplyGuard.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncQueueStore.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncDefinitionStore.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncCursorStore.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncContract.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncPushPhase.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncPullPhase.cpp"
+  "${PROJECT_CPP_DIR}/sync/SyncOperationApplier.cpp"
+  "${PROJECT_CPP_DIR}/sync/RelationStore.cpp"
+  "${PROJECT_CPP_DIR}/sync/RelationCascadeRewriter.cpp"
+  "${PROJECT_CPP_DIR}/expression/JsonPathExtractor.cpp"
+  "${PROJECT_CPP_DIR}/credentials/CredentialProvider.cpp"
+  "${PROJECT_CPP_DIR}/http/HttpUrlBuilder.cpp"
+  "${PROJECT_CPP_DIR}/http/CredentialHttpCaller.cpp"
+  "${PROJECT_CPP_DIR}/http/SyncHttpCaller.cpp"
+  "${PROJECT_CPP_DIR}/http/SyncHttpRequester.cpp"
   "${PROJECT_CPP_DIR}/third_party/sqlite3/sqlite3.c"
   "${GENERATED_CPP_DIR}/HybridSalveDatabaseSpec.cpp"
 )
 
-# Test files mirror cpp/'s own layout: cpp/database/* -> tests/database/,
-# cpp/query/* -> tests/query/, cpp/sync/* -> tests/sync/. Shared harness code
-# (Hermes+Nitro bootstrap, test Dispatcher, platform stub) lives in support/.
+# Test files mirror cpp/'s own layout: cpp/HybridSalveDatabase.* -> tests/*
+# (root), cpp/database/* -> tests/database/, cpp/query/* -> tests/query/,
+# cpp/sync/* -> tests/sync/. Shared harness code (Hermes+Nitro bootstrap, test
+# Dispatcher, platform stub) lives in support/.
+file(GLOB TEST_SOURCES_ROOT
+  "${CMAKE_SOURCE_DIR}/*.cpp"
+)
 file(GLOB_RECURSE TEST_SOURCES
   "${CMAKE_SOURCE_DIR}/database/*.cpp"
   "${CMAKE_SOURCE_DIR}/query/*.cpp"
   "${CMAKE_SOURCE_DIR}/sync/*.cpp"
+  "${CMAKE_SOURCE_DIR}/expression/*.cpp"
+  "${CMAKE_SOURCE_DIR}/credentials/*.cpp"
+  "${CMAKE_SOURCE_DIR}/http/*.cpp"
 )
+list(APPEND TEST_SOURCES ${TEST_SOURCES_ROOT})
 
 # ── Real test suite: Catch2 + HybridSalveDatabase through real JSI ─────────
 add_executable(salvedb_tests
@@ -136,12 +164,18 @@ add_executable(salvedb_tests
 target_include_directories(salvedb_tests PRIVATE
   ${NITRO_MODULES_INCLUDE_DIRS}
   "${CMAKE_SOURCE_DIR}/support"
+  "${PROJECT_CPP_DIR}"
   "${PROJECT_CPP_DIR}/database"
+  "${PROJECT_CPP_DIR}/platform"
   "${PROJECT_CPP_DIR}/query"
   "${PROJECT_CPP_DIR}/sync"
+  "${PROJECT_CPP_DIR}/expression"
+  "${PROJECT_CPP_DIR}/credentials"
+  "${PROJECT_CPP_DIR}/http"
   "${PROJECT_CPP_DIR}/third_party/sqlite3"
   "${GENERATED_CPP_DIR}"
 )
+target_compile_definitions(salvedb_tests PRIVATE SQLITE_ENABLE_COLUMN_METADATA=1)
 target_link_libraries(salvedb_tests PRIVATE Catch2::Catch2WithMain)
 target_link_options(salvedb_tests PRIVATE "-F${HERMES_FRAMEWORKS_DIR}" "-framework" "hermesvm")
 set_target_properties(salvedb_tests PROPERTIES

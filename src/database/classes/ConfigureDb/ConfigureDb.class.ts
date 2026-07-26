@@ -1,45 +1,47 @@
 import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
-import type { IConfigureProps, ICredentialsDefinition, IRegisterProps } from './types';
-import type { ConfigureParams } from '../../../specs/types/ConfigureParams';
-import { NitroModules } from 'react-native-nitro-modules';
-
-const _bridge = NitroModules.createHybridObject<SalveDatabase>('SalveDatabase');
-
-function mapCredentials(creds: ICredentialsDefinition): ConfigureParams['credentials'] {
-  switch (creds.provider) {
-    case 'oauth2':
-      return {
-        provider: creds.provider,
-        accessTokenHeaderName: creds.accessToken?.headerName ?? 'Authorization',
-        refresh: {
-          endpoint: creds.refresh.endpoint,
-          responseAccessTokenPath: creds.refresh.response.accessToken,
-          responseRefreshTokenPath: creds.refresh.response.refreshToken,
-        },
-      };
-  }
-}
+import type { IConfigureProps, IRegisterProps } from './types';
+import { registerAppOpenSync } from './library/registerAppOpenSync';
+import { mapCredentials } from './library/mapCredentials';
+import { registerReadSyncBridge } from '../../../sync';
+import { StudioAgent } from '../../../studio';
 
 export class ConfigureDb {
   private static _configured = false;
+  private static _syncOnAppOpen = true;
 
-  constructor() {}
+  private readonly _studioAgent: StudioAgent;
+
+  constructor(private readonly _bridge: SalveDatabase) {
+    this._studioAgent = new StudioAgent(_bridge);
+  }
 
   configure(props: IConfigureProps): void {
     if (!props.name || props.name.trim() === '') {
       throw new Error("Database.configure: 'name' is required");
     }
 
-    _bridge.configure({
+    const syncOnAppOpen = props.syncOnAppOpen ?? true;
+
+    this._bridge.configure({
       name: props.name,
       baseUrl: props.baseUrl,
       network: props.network,
       credentials: props.credentials !== undefined
         ? mapCredentials(props.credentials)
         : undefined,
+      walMode: props.walMode ?? true,
+      syncOnAppOpen,
+      background: props.background,
     });
 
     ConfigureDb._configured = true;
+    ConfigureDb._syncOnAppOpen = syncOnAppOpen;
+    registerAppOpenSync(this._bridge, () => ConfigureDb._syncOnAppOpen);
+    registerReadSyncBridge(this._bridge);
+
+    if (__DEV__) {
+      this._studioAgent.start(undefined, props.name);
+    }
   }
 
   register(props: IRegisterProps): Promise<void> {
@@ -59,7 +61,7 @@ export class ConfigureDb {
       );
     }
 
-    return _bridge.registerSchema(JSON.stringify(schema));
+    return this._bridge.registerSchema(JSON.stringify(schema));
   }
 
   static isConfigured(): boolean {

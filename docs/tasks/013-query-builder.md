@@ -1,6 +1,6 @@
 # TASK-013 — Query Builder (TS, estilo Drizzle)
 
-**Status:** ⬜ Não iniciado
+**Status:** ✅ Finalizado — `src/database/classes/QueryDb/` (`SelectQueryBuilder`, `InsertQueryBuilder`, `UpdateQueryBuilder`, `DeleteQueryBuilder`) + helpers de condição em `src/utils/`, com 514 linhas de testes Jest sobre a geração de SQL.
 **Prioridade:** P1 (núcleo do MVP)
 **Área:** TS
 **Depende de:** TASK-001, TASK-002 (a lógica de geração de SQL/operadores pode ser construída e testada com um `execute()` mockado antes da TASK-007 estar pronta — a integração end-to-end real depende dela)

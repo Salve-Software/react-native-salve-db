@@ -12,11 +12,35 @@ interface RefreshParams {
   responseRefreshTokenPath: string;
 }
 
+interface InitialTokensParams {
+  accessToken: string;
+  refreshToken: string;
+}
+
+interface BackgroundParams {
+  /**
+   * Minimum interval between background sync wakes, in milliseconds. Android
+   * clamps this to WorkManager's 15-minute floor; iOS treats it as an
+   * `earliestBeginDate` hint — BGTaskScheduler decides the actual timing.
+   */
+  minimumInterval: number;
+  /** Require network connectivity for the background job to run. */
+  requiresNetwork?: boolean;
+  /** Require the device to be charging for the background job to run. */
+  requiresCharging?: boolean;
+}
+
 interface CredentialsParams {
   /** Auth provider. Determines how the native engine authenticates sync requests. */
   provider: string;
   /** Header used to send the access token in sync requests (e.g. `"Authorization"`). */
   accessTokenHeaderName: string;
+  /**
+   * Initial token pair obtained by the app's own login flow. Seeded into
+   * Keychain/Keystore once at configure() time; omitted on later configure()
+   * calls (e.g. app restart) since the tokens already persisted natively.
+   */
+  tokens?: InitialTokensParams;
   /** Token refresh contract. Executed natively on 401 — JS never participates. */
   refresh: RefreshParams;
 }
@@ -30,4 +54,22 @@ export interface ConfigureParams {
   network?: NetworkParams;
   /** Global auth credentials. Required when sync is used. */
   credentials?: CredentialsParams;
+  /**
+   * Enables SQLite's WAL journal mode on the opened connection.
+   * @default true
+   */
+  walMode?: boolean;
+  /**
+   * Automatically triggers a sync of every sync-enabled schema when the app
+   * returns to the foreground.
+   * @default true
+   */
+  syncOnAppOpen?: boolean;
+  /**
+   * Enables the native background sync job (WorkManager on Android,
+   * BGTaskScheduler on iOS) — a single global job, not one per schema, that
+   * wakes the Sync Orchestrator without starting the JS engine. Omit to
+   * leave background sync disabled.
+   */
+  background?: BackgroundParams;
 }

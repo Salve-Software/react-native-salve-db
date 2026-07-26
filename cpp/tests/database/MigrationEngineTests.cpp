@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "../../database/MigrationEngine.hpp"
 #include "../../database/SQLiteConnection.hpp"
-#include "../../database/platform.hpp"
+#include "../../platform/platform.hpp"
 #include <memory>
 
 using namespace margelo::nitro::salvedb;
@@ -10,7 +10,7 @@ namespace {
 
 std::string uniqueDbPath(const std::string& testName) {
   static int counter = 0;
-  return getPlatformDocumentsDirectory() + "/" + testName + "_" + std::to_string(++counter) + ".db";
+  return platform::getDocumentsDirectory() + "/" + testName + "_" + std::to_string(++counter) + ".db";
 }
 
 int storedVersion(SQLiteConnection& conn, const std::string& name) {
@@ -48,7 +48,7 @@ TEST_CASE("registerSchema creates table and indexes from a new schema", "[migrat
     "indexes": [{ "name": "idx_widgets_label", "columns": ["label"] }]
   })"));
 
-  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "sku", "status"});
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "sku", "status", "deletedAt"});
   REQUIRE(indexExists(*conn, "idx_widgets_label"));
 
   conn->execute("INSERT INTO widgets (id, label, sku) VALUES (1, 'a', 'sku-1')", {});
@@ -95,7 +95,7 @@ TEST_CASE("version bump with a new column applies ADD COLUMN and preserves data"
     }
   })"));
 
-  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "price"});
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "deletedAt", "price"});
   auto row = conn->execute("SELECT label, price FROM widgets WHERE id = 1", {});
   REQUIRE(std::get<std::string>(row.rows[0][0]) == "a");
   REQUIRE(storedVersion(*conn, "widgets") == 2);
@@ -164,7 +164,7 @@ TEST_CASE("removing a column from the schema leaves it orphaned with data intact
     "columns": { "id": { "type": "integer" }, "label": { "type": "text" } }
   })"));
 
-  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "legacyNote"});
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "legacyNote", "deletedAt"});
   auto row = conn->execute("SELECT legacyNote FROM widgets WHERE id = 1", {});
   REQUIRE(std::get<std::string>(row.rows[0][0]) == "keep-me");
   REQUIRE(storedVersion(*conn, "widgets") == 2);
@@ -188,9 +188,9 @@ TEST_CASE("opening at version N with a schema at N+2 applies all pending columns
     }
   })"));
 
-  // ALTER-added columns append in schema-map (alphabetical) order after the
-  // original CREATE TABLE columns — the physical layout isn't re-sorted.
-  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "active", "price"});
+  // ALTER-added columns append after the original CREATE TABLE columns, in the
+  // order they're declared in the schema — the physical layout isn't re-sorted.
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "deletedAt", "price", "active"});
   auto row = conn->execute("SELECT label FROM widgets WHERE id = 1", {});
   REQUIRE(std::get<std::string>(row.rows[0][0]) == "a");
   REQUIRE(storedVersion(*conn, "widgets") == 3);
@@ -217,4 +217,176 @@ TEST_CASE("a failure mid-registration rolls back the whole migration", "[migrati
   CHECK_THROWS(conn->execute("SELECT * FROM widgets", {}));
   REQUIRE(storedVersion(*conn, "widgets") == 0);
   REQUIRE(storedVersion(*conn, "existing") == 1); // unrelated, already-committed schema is untouched
+}
+
+namespace {
+
+bool tableExists(SQLiteConnection& conn, const std::string& name) {
+  auto r = conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", { name });
+  return !r.rows.empty();
+}
+
+int triggerCount(SQLiteConnection& conn, const std::string& tableName) {
+  auto r = conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = ?", { tableName });
+  return static_cast<int>(std::get<double>(r.rows[0][0]));
+}
+
+std::string triggerSql(SQLiteConnection& conn, const std::string& name) {
+  auto r = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", { name });
+  REQUIRE(!r.rows.empty());
+  return std::get<std::string>(r.rows[0][0]);
+}
+
+} // namespace
+
+TEST_CASE("sync_queue and _sync_apply_lock are created once and survive repeated registerSchema", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_tables_once"));
+  MigrationEngine engine(conn);
+  std::string schemaJson = R"({
+    "name": "widgets", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" } }
+  })";
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(schemaJson));
+  REQUIRE(tableExists(*conn, "sync_queue"));
+  REQUIRE(tableExists(*conn, "_sync_apply_lock"));
+
+  conn->execute(
+    "INSERT INTO sync_queue (operation, entity, entity_id, payload, updated_at) VALUES ('insert','widgets','1','{}',0)", {});
+  engine.registerSchema(MigrationEngine::parseSchemaJson(schemaJson));
+
+  auto rows = conn->execute("SELECT COUNT(*) FROM sync_queue", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 1.0);
+}
+
+TEST_CASE("sync.enabled: true creates 3 triggers matching schema.columns", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_triggers"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
+
+  REQUIRE(triggerCount(*conn, "customers") == 3);
+
+  auto insertSql = triggerSql(*conn, "customers_sync_after_insert");
+  REQUIRE(insertSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\", 'updatedAt', NEW.\"updatedAt\", 'deletedAt', NEW.\"deletedAt\")") != std::string::npos);
+
+  auto updateSql = triggerSql(*conn, "customers_sync_after_update");
+  REQUIRE(updateSql.find("json_object('id', NEW.\"id\", 'name', NEW.\"name\", 'phone', NEW.\"phone\", 'updatedAt', NEW.\"updatedAt\", 'deletedAt', NEW.\"deletedAt\")") != std::string::npos);
+
+  auto deleteSql = triggerSql(*conn, "customers_sync_after_delete");
+  REQUIRE(deleteSql.find("json_object('id', OLD.\"id\")") != std::string::npos);
+  REQUIRE(deleteSql.find("'name'") == std::string::npos); // delete payload is PK-only
+}
+
+TEST_CASE("sync.enabled: false or absent creates no triggers", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_disabled"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "no_sync_field", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" } }
+  })"));
+  REQUIRE(triggerCount(*conn, "no_sync_field") == 0);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "sync_off", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" } },
+    "sync": { "enabled": false }
+  })"));
+  REQUIRE(triggerCount(*conn, "sync_off") == 0);
+}
+
+TEST_CASE("enabling sync.enabled with no column change still creates triggers", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_enable_no_version_bump"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } }
+  })"));
+  REQUIRE(triggerCount(*conn, "customers") == 0);
+
+  // Version bump when enabling sync to add the status column.
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 2, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
+
+  REQUIRE(triggerCount(*conn, "customers") == 3);
+
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
+  auto rows = conn->execute("SELECT COUNT(*) FROM sync_queue WHERE entity = 'customers'", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 1.0);
+}
+
+TEST_CASE("migrating a sync-enabled schema with a new column regenerates triggers", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_migrate_regen"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 2, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
+
+  REQUIRE(triggerCount(*conn, "customers") == 3);
+  auto insertSql = triggerSql(*conn, "customers_sync_after_insert");
+  REQUIRE(insertSql.find("'phone', NEW.\"phone\"") != std::string::npos);
+}
+
+TEST_CASE("turning sync.enabled off across versions drops orphaned triggers", "[migration][sync]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_toggle_off"));
+  MigrationEngine engine(conn);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
+  REQUIRE(triggerCount(*conn, "customers") == 3);
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 2, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "note": { "type": "text" } },
+    "sync": { "enabled": false }
+  })"));
+  REQUIRE(triggerCount(*conn, "customers") == 0);
+}
+
+TEST_CASE("sync.enabled: true without a datetime 'updatedAt' column throws", "[migration][sync]") {
+  CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "sync": { "enabled": true }
+  })"), std::runtime_error);
+
+  CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "integer" } },
+    "sync": { "enabled": true }
+  })"), std::runtime_error);
+
+  // datetime type but nullable (default), no explicit "nullable": false
+  CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime" } },
+    "sync": { "enabled": true }
+  })"), std::runtime_error);
+
+  CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true }
+  })"));
 }

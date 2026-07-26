@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include "../../database/SQLiteConnection.hpp"
-#include "../../database/platform.hpp"
+#include "../../platform/platform.hpp"
 #include <atomic>
 #include <thread>
 #include <vector>
@@ -13,7 +13,7 @@ using namespace margelo::nitro::salvedb;
 // Real std::threads hammer the same SQLiteConnection concurrently — no JSI
 // involved, this exercises SQLiteConnection's own locking directly.
 TEST_CASE("SQLiteConnection::execute is safe under real concurrent threads", "[cache][thread-safety]") {
-  SQLiteConnection conn(getPlatformDocumentsDirectory() + "/concurrency_test.db");
+  SQLiteConnection conn(platform::getDocumentsDirectory() + "/concurrency_test.db");
   conn.exec("DROP TABLE IF EXISTS concurrency_t");
   conn.exec("CREATE TABLE concurrency_t (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER)");
 

@@ -28,21 +28,31 @@ function executedWith(bridge: SalveDatabase) {
   return (bridge.execute as jest.Mock).mock.calls[0] as [string, unknown[]];
 }
 
+const NOW = 1_700_000_000_000;
+
 describe('DeleteQueryBuilder', () => {
-  test('bare delete generates DELETE FROM without WHERE', () => {
+  beforeEach(() => {
+    jest.spyOn(Date, 'now').mockReturnValue(NOW);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('bare delete soft-deletes every row by stamping deletedAt', () => {
     const bridge = makeBridge();
     new DeleteQueryBuilder(schema, bridge).execute();
     const [sql, params] = executedWith(bridge);
-    expect(sql).toBe('DELETE FROM "users"');
-    expect(params).toEqual([]);
+    expect(sql).toBe('UPDATE "users" SET "deletedAt" = ?');
+    expect(params).toEqual([NOW]);
   });
 
   test('with where on the primary key appends WHERE clause', () => {
     const bridge = makeBridge();
     new DeleteQueryBuilder(schema, bridge).where(eq('id', 42)).execute();
     const [sql, params] = executedWith(bridge);
-    expect(sql).toBe('DELETE FROM "users" WHERE "id" = ?');
-    expect(params).toEqual([42]);
+    expect(sql).toBe('UPDATE "users" SET "deletedAt" = ? WHERE "id" = ?');
+    expect(params).toEqual([NOW, 42]);
   });
 
   test('with compound where on indexed columns', () => {
@@ -51,8 +61,8 @@ describe('DeleteQueryBuilder', () => {
       .where(and(gt('age', 60), eq('name', 'inactive')))
       .execute();
     const [sql, params] = executedWith(bridge);
-    expect(sql).toBe('DELETE FROM "users" WHERE ("age" > ? AND "name" = ?)');
-    expect(params).toEqual([60, 'inactive']);
+    expect(sql).toBe('UPDATE "users" SET "deletedAt" = ? WHERE ("age" > ? AND "name" = ?)');
+    expect(params).toEqual([NOW, 60, 'inactive']);
   });
 
   test('throws when where() targets a non-indexed, non-primary-key column', () => {

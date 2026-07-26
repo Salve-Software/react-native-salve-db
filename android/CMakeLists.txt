@@ -13,13 +13,42 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/third_party/sqlite3/sqlite3.c
 	src/main/cpp/cpp-adapter.cpp
 	src/main/cpp/platform_android.cpp
-	../cpp/database/HybridSalveDatabase.cpp
+	src/main/cpp/JniSupport.cpp
+	src/main/cpp/platform_android_http.cpp
+	src/main/cpp/SyncConnectivityJni.cpp
+	src/main/cpp/BackgroundSchedulerJni.cpp
+	../cpp/http/HttpUrlBuilder.cpp
+	../cpp/http/CredentialHttpCaller.cpp
+	../cpp/HybridSalveDatabase.cpp
 	../cpp/database/SQLiteConnection.cpp
 	../cpp/database/DatabaseManager.cpp
+	../cpp/database/NativeConfigStore.cpp
 	../cpp/database/MigrationEngine.cpp
+		../cpp/database/SalveMetadataManager.cpp
+	../cpp/database/SchemaRegistry.cpp
 	../cpp/query/QueryExecutor.cpp
 	../cpp/sync/SyncOrchestrator.cpp
+	../cpp/sync/SyncNativeEntryPoint.cpp
+	../cpp/sync/SyncApplyGuard.cpp
+	../cpp/sync/SyncQueueStore.cpp
+	../cpp/sync/SyncDefinitionStore.cpp
+	../cpp/sync/SyncCursorStore.cpp
+	../cpp/sync/SyncContract.cpp
+	../cpp/sync/SyncPushPhase.cpp
+	../cpp/sync/SyncPullPhase.cpp
+	../cpp/sync/SyncOperationApplier.cpp
+	../cpp/sync/RelationStore.cpp
+	../cpp/sync/RelationCascadeRewriter.cpp
+	../cpp/expression/JsonPathExtractor.cpp
+	../cpp/credentials/CredentialProvider.cpp
+	../cpp/http/SyncHttpCaller.cpp
+	../cpp/http/SyncHttpRequester.cpp
 )
+
+# Needed for sqlite3_column_table_name/origin_name, used to coerce boolean columns on read.
+# target_compile_definitions (not add_compile_definitions, which needs CMake >= 3.12)
+# keeps this working under the cmake_minimum_required(3.9.0) declared above.
+target_compile_definitions(${PACKAGE_NAME} PRIVATE SQLITE_ENABLE_COLUMN_METADATA=1)
 
 # Add Nitrogen specs :)
 include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/SalveDb+autolinking.cmake)
@@ -29,8 +58,12 @@ include_directories(
         "src/main/cpp"
         "../cpp"
         "../cpp/database"
+        "../cpp/platform"
         "../cpp/query"
         "../cpp/sync"
+        "../cpp/expression"
+        "../cpp/credentials"
+        "../cpp/http"
         "../cpp/third_party/sqlite3"
 )
 
