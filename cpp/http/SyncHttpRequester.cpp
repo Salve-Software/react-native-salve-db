@@ -15,28 +15,33 @@ SyncHttpRequester::SyncHttpRequester(CredentialProvider& credentials, const Netw
   : _credentials(credentials), _network(network) {}
 
 SyncHttpOutcome SyncHttpRequester::withRetryAnd401(const std::function<SyncHttpOutcome(const AuthHeader&)>& call) {
-  bool refreshed = false;
-  int failedAttempts = 0; // counts only genuine network failures — a 401 refresh never touches this
-  while (true) {
-    auto authHeader = _credentials.getAuthHeader();
-    SyncHttpOutcome outcome = call(authHeader);
+  try {
+    bool refreshed = false;
+    int failedAttempts = 0; // counts only genuine network failures — a 401 refresh never touches this
+    while (true) {
+      auto authHeader = _credentials.getAuthHeader();
+      SyncHttpOutcome outcome = call(authHeader);
 
-    if (auto* error = std::get_if<HttpNetworkError>(&outcome)) {
-      ++failedAttempts;
-      if (failedAttempts < kMaxAttempts) {
-        std::this_thread::sleep_for(kRetryDelay);
-        continue;
+      if (auto* error = std::get_if<HttpNetworkError>(&outcome)) {
+        ++failedAttempts;
+        if (failedAttempts < kMaxAttempts) {
+          std::this_thread::sleep_for(kRetryDelay);
+          continue;
+        }
+        return *error;
       }
-      return *error;
-    }
 
-    auto& response = std::get<SyncHttpResponse>(outcome);
-    if (response.statusCode == 401 && !refreshed) {
-      refreshed = true;
-      _credentials.refresh(CredentialHttpCaller::create(_network));
-      continue; // reexecute — does not consume a retry attempt
+      auto& response = std::get<SyncHttpResponse>(outcome);
+      if (response.statusCode == 401 && !refreshed) {
+        refreshed = true;
+        _credentials.refresh(CredentialHttpCaller::create(_network));
+        continue; // reexecute — does not consume a retry attempt
+      }
+      return response;
     }
-    return response;
+  } catch (const std::exception& e) {
+    // Credential lookup/refresh can throw — keeps the "never throws" contract for callers.
+    return HttpNetworkError{HttpNetworkErrorKind::Other, e.what()};
   }
 }
 
