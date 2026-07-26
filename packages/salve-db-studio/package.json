@@ -18,9 +18,11 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
+    "predev:server": "vite build",
     "dev:server": "tsx watch src/index.ts",
     "dev:ui": "vite build --watch",
     "build": "tsc -p tsconfig.json && vite build",
+    "prestart": "npm run build",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit",
     "test:server": "tsx --test src/tests/*.test.ts",
