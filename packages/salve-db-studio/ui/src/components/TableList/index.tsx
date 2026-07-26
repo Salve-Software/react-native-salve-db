@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Settings } from 'lucide-react';
+import { Search, Settings, X } from 'lucide-react';
 import type { ITableListProps } from './types';
 
 function isSystemTable(name: string) {
@@ -69,18 +69,30 @@ export function TableList({ tables, currentTable, onSelect, onManage }: ITableLi
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-line bg-surface py-3">
-      <div className="relative px-3 pb-2">
-        <Search className="pointer-events-none absolute left-6 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-        <input
-          type="text"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search tables…"
-          className="w-full rounded-md border border-line bg-surface-2 py-1.5 pl-7 pr-2 text-sm text-ink outline-none placeholder:text-muted/60 focus:border-accent"
-        />
+      <div className="border-b border-line px-3 pb-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search tables…"
+            className="w-full rounded-md border border-line bg-surface-2 py-2 pl-9 pr-8 text-sm text-ink outline-none placeholder:text-muted/50 focus:border-accent"
+          />
+          {query && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setQuery('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted transition-colors hover:text-ink"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="px-4 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+      <div className="px-4 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
         Tables{filteredUserTables.length > 0 && <span className="text-muted/60"> ({filteredUserTables.length})</span>}
       </div>
 

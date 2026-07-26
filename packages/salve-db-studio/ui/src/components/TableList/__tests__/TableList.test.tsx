@@ -110,4 +110,17 @@ describe('TableList', () => {
 
     expect(screen.getByText('No tables match "zzz".')).toBeInTheDocument();
   });
+
+  it('clears the search query when the clear button is clicked', () => {
+    render(<TableList tables={['users', 'orders']} currentTable={null} onSelect={vi.fn()} onManage={vi.fn()} />);
+    const input = screen.getByPlaceholderText('Search tables…');
+
+    fireEvent.change(input, { target: { value: 'orders' } });
+    expect(screen.queryByText('users')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(input).toHaveValue('');
+    expect(screen.getByText('users')).toBeInTheDocument();
+  });
 });
