@@ -15,9 +15,11 @@ struct RefreshHttpResponse {
   json::Value body;
 };
 
-// Single global credential (MVP: no per-schema override). Owns the
-// Keychain/Keystore-backed token pair and the native refresh flow. Tokens
-// never cross the JSI bridge — nothing here is exposed to JS.
+/**
+ * Single global credential (MVP: no per-schema override). Owns the
+ * Keychain/Keystore-backed token pair and the native refresh flow. Tokens
+ * never cross the JSI bridge — nothing here is exposed to JS.
+ */
 class CredentialProvider {
 public:
   using HttpCaller = std::function<RefreshHttpResponse(const std::string& endpoint, const json::Value& requestBody)>;

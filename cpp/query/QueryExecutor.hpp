@@ -7,8 +7,11 @@
 
 namespace margelo::nitro::salvedb {
 
-// Plain C++ collaborator (not a HybridObject) — owned and forwarded to by
-// HybridSalveDatabase, which is the single Nitro-facing orchestrator.
+/**
+ * Plain C++ collaborator (not a HybridObject) — owned and forwarded to by
+ * HybridSalveDatabase, which is the single Nitro-facing orchestrator. Runs
+ * raw SQL against the SQLite connection and manages explicit transactions.
+ */
 class QueryExecutor {
 public:
   QueryResult execute(const std::string& sql, const std::vector<SqlValue>& params);

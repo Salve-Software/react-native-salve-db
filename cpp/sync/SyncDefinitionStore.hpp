@@ -9,11 +9,13 @@
 
 namespace margelo::nitro::salvedb {
 
-// Plain C++ collaborator (not a HybridObject) — persists each schema's full
-// `sync` contract in `_salve_sync_definitions`, so it survives a restart
-// without depending on JS having run register() in the current process.
-// Unlike SyncCursorStore, definitionFor parses the JSON itself: the only
-// consumer (SyncOrchestrator) always needs it as json::Value, never raw text.
+/**
+ * Plain C++ collaborator (not a HybridObject) — persists each schema's full
+ * `sync` contract in `_salve_sync_definitions`, so it survives a restart
+ * without depending on JS having run register() in the current process.
+ * Unlike SyncCursorStore, definitionFor parses the JSON itself: the only
+ * consumer (SyncOrchestrator) always needs it as json::Value, never raw text.
+ */
 class SyncDefinitionStore {
 public:
   explicit SyncDefinitionStore(std::shared_ptr<SQLiteConnection> conn);

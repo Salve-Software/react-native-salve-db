@@ -107,7 +107,7 @@ set(PROJECT_CPP_DIR "${CMAKE_SOURCE_DIR}/..")
 set(GENERATED_CPP_DIR "${CMAKE_SOURCE_DIR}/../../nitrogen/generated/shared/c++")
 
 set(PROJECT_SOURCES
-  "${PROJECT_CPP_DIR}/database/HybridSalveDatabase.cpp"
+  "${PROJECT_CPP_DIR}/HybridSalveDatabase.cpp"
   "${PROJECT_CPP_DIR}/database/SQLiteConnection.cpp"
   "${PROJECT_CPP_DIR}/database/DatabaseManager.cpp"
   "${PROJECT_CPP_DIR}/database/NativeConfigStore.cpp"
@@ -137,9 +137,13 @@ set(PROJECT_SOURCES
   "${GENERATED_CPP_DIR}/HybridSalveDatabaseSpec.cpp"
 )
 
-# Test files mirror cpp/'s own layout: cpp/database/* -> tests/database/,
-# cpp/query/* -> tests/query/, cpp/sync/* -> tests/sync/. Shared harness code
-# (Hermes+Nitro bootstrap, test Dispatcher, platform stub) lives in support/.
+# Test files mirror cpp/'s own layout: cpp/HybridSalveDatabase.* -> tests/*
+# (root), cpp/database/* -> tests/database/, cpp/query/* -> tests/query/,
+# cpp/sync/* -> tests/sync/. Shared harness code (Hermes+Nitro bootstrap, test
+# Dispatcher, platform stub) lives in support/.
+file(GLOB TEST_SOURCES_ROOT
+  "${CMAKE_SOURCE_DIR}/*.cpp"
+)
 file(GLOB_RECURSE TEST_SOURCES
   "${CMAKE_SOURCE_DIR}/database/*.cpp"
   "${CMAKE_SOURCE_DIR}/query/*.cpp"
@@ -148,6 +152,7 @@ file(GLOB_RECURSE TEST_SOURCES
   "${CMAKE_SOURCE_DIR}/credentials/*.cpp"
   "${CMAKE_SOURCE_DIR}/http/*.cpp"
 )
+list(APPEND TEST_SOURCES ${TEST_SOURCES_ROOT})
 
 # ── Real test suite: Catch2 + HybridSalveDatabase through real JSI ─────────
 add_executable(salvedb_tests
@@ -159,6 +164,7 @@ add_executable(salvedb_tests
 target_include_directories(salvedb_tests PRIVATE
   ${NITRO_MODULES_INCLUDE_DIRS}
   "${CMAKE_SOURCE_DIR}/support"
+  "${PROJECT_CPP_DIR}"
   "${PROJECT_CPP_DIR}/database"
   "${PROJECT_CPP_DIR}/platform"
   "${PROJECT_CPP_DIR}/query"

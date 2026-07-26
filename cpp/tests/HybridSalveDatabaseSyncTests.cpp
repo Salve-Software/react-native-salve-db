@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
-#include "../../database/DatabaseManager.hpp"
-#include "../../platform/platform.hpp"
-#include "../support/HybridDatabaseHarness.hpp"
-#include "../support/platform_test.hpp"
+#include "../database/DatabaseManager.hpp"
+#include "../platform/platform.hpp"
+#include "support/HybridDatabaseHarness.hpp"
+#include "support/platform_test.hpp"
 #include <atomic>
 #include <chrono>
 #include <thread>

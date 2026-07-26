@@ -18,6 +18,13 @@ namespace margelo::nitro::salvedb {
 
 using SqlValue = std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>;
 
+/**
+ * Owns one sqlite3 handle: statement execution/params binding, an LRU
+ * prepared-statement cache, explicit transactions, and coalesced
+ * table-change notifications sourced from SQLite's update hook. Everything
+ * above this layer (QueryExecutor, SalveMetadataManager, sync stores, etc.)
+ * goes through here rather than touching sqlite3 directly.
+ */
 class SQLiteConnection {
 public:
   explicit SQLiteConnection(const std::string& path, bool walMode = true);

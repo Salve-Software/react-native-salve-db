@@ -6,8 +6,10 @@
 
 namespace margelo::nitro::salvedb {
 
-// Encapsulates BEGIN/lock/apply/unlock/COMMIT so downstream sync-apply code
-// (TASK-012) never has to hand-roll the _sync_apply_lock bypass SQL.
+/**
+ * Encapsulates BEGIN/lock/apply/unlock/COMMIT so downstream sync-apply code
+ * never has to hand-roll the _sync_apply_lock bypass SQL.
+ */
 class SyncApplyGuard {
 public:
   explicit SyncApplyGuard(std::shared_ptr<SQLiteConnection> conn);
