@@ -15,6 +15,9 @@ async function freshStore(): Promise<PostgresResourceStore<IWidget>> {
   await db.exec(
     'CREATE TABLE widgets (id SERIAL PRIMARY KEY, label TEXT NOT NULL, "updatedAt" BIGINT NOT NULL, "deletedAt" BIGINT)'
   );
+  await db.exec(
+    'CREATE TABLE _tick_state (id INTEGER PRIMARY KEY DEFAULT 1, last_tick BIGINT NOT NULL DEFAULT 0, CHECK (id = 1)); INSERT INTO _tick_state (id, last_tick) VALUES (1, 0);'
+  );
   return new PostgresResourceStore<IWidget>(db, { table: 'widgets', columns: ['label'] });
 }
 
@@ -30,6 +33,21 @@ describe('PostgresResourceStore', () => {
       assert.equal(b.id, 2);
       assert.equal(a.deletedAt, null);
       assert.ok(Number.isInteger(a.updatedAt));
+    });
+
+    // updatedAt is now allocated inside Postgres under an advisory lock, not a JS clock, so overlapping calls can't produce out-of-order or colliding values.
+    it('concurrent creates never collide or reorder relative to id assignment', async () => {
+      const store = await freshStore();
+
+      const [a, b, c] = await Promise.all([
+        store.create({ label: 'a' }),
+        store.create({ label: 'b' }),
+        store.create({ label: 'c' }),
+      ]);
+
+      const updatedAts = [a.updatedAt, b.updatedAt, c.updatedAt];
+      assert.deepEqual([...updatedAts].sort((x, y) => x - y), updatedAts);
+      assert.equal(new Set(updatedAts).size, 3);
     });
   });
 

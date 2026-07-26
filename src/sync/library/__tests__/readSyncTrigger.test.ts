@@ -14,6 +14,11 @@ function makeBridge() {
   } as unknown as SalveDatabase;
 }
 
+// requestReadSync now dispatches a tick later — drain a few microtask ticks before asserting.
+async function flushMicrotasks(): Promise<void> {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+}
+
 describe('readSyncTrigger', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -30,33 +35,36 @@ describe('readSyncTrigger', () => {
     expect(() => requestReadSync('customers')).not.toThrow();
   });
 
-  test('first call for a schema triggers triggerSync(schemaName, true)', () => {
+  test('first call for a schema triggers triggerSync(schemaName, true)', async () => {
     const bridge = makeBridge();
     registerReadSyncBridge(bridge);
 
     requestReadSync('customers');
+    await flushMicrotasks();
 
     expect(bridge.triggerSync).toHaveBeenCalledWith('customers', true);
     expect(bridge.triggerSyncAll).not.toHaveBeenCalled();
   });
 
-  test('a second call for the same schema within the 5s window does not trigger again', () => {
+  test('a second call for the same schema within the 5s window does not trigger again', async () => {
     const bridge = makeBridge();
     registerReadSyncBridge(bridge);
 
     requestReadSync('customers');
     requestReadSync('customers');
+    await flushMicrotasks();
 
     expect(bridge.triggerSync).toHaveBeenCalledTimes(1);
   });
 
-  test('a call at 4999ms still does not trigger again', () => {
+  test('a call at 4999ms still does not trigger again', async () => {
     const bridge = makeBridge();
     registerReadSyncBridge(bridge);
 
     requestReadSync('customers');
     jest.setSystemTime(4999);
     requestReadSync('customers');
+    await flushMicrotasks();
 
     expect(bridge.triggerSync).toHaveBeenCalledTimes(1);
   });
@@ -66,27 +74,28 @@ describe('readSyncTrigger', () => {
     registerReadSyncBridge(bridge);
 
     requestReadSync('customers');
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushMicrotasks();
 
     jest.setSystemTime(5000);
     requestReadSync('customers');
+    await flushMicrotasks();
 
     expect(bridge.triggerSync).toHaveBeenCalledTimes(2);
   });
 
-  test('schemas have independent throttle windows', () => {
+  test('schemas have independent throttle windows', async () => {
     const bridge = makeBridge();
     registerReadSyncBridge(bridge);
 
     requestReadSync('a');
     requestReadSync('b');
+    await flushMicrotasks();
 
     expect(bridge.triggerSync).toHaveBeenNthCalledWith(1, 'a', true);
     expect(bridge.triggerSync).toHaveBeenNthCalledWith(2, 'b', true);
   });
 
-  test('a call while the previous attempt is still in flight is discarded, even outside the throttle window', () => {
+  test('a call while the previous attempt is still in flight is discarded, even outside the throttle window', async () => {
     const bridge = {
       triggerSync: jest.fn().mockReturnValue(new Promise(() => {})), // never resolves
       triggerSyncAll: jest.fn(),
@@ -96,6 +105,7 @@ describe('readSyncTrigger', () => {
     requestReadSync('customers');
     jest.setSystemTime(10000);
     requestReadSync('customers');
+    await flushMicrotasks();
 
     expect(bridge.triggerSync).toHaveBeenCalledTimes(1);
   });
@@ -105,11 +115,11 @@ describe('readSyncTrigger', () => {
     registerReadSyncBridge(bridge);
 
     requestReadSync('customers');
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushMicrotasks();
 
     jest.setSystemTime(5000);
     requestReadSync('customers');
+    await flushMicrotasks();
 
     expect(bridge.triggerSync).toHaveBeenCalledTimes(2);
   });
@@ -122,11 +132,11 @@ describe('readSyncTrigger', () => {
     registerReadSyncBridge(bridge);
 
     requestReadSync('customers');
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushMicrotasks();
 
     jest.setSystemTime(4999);
     requestReadSync('customers');
+    await flushMicrotasks();
 
     expect(bridge.triggerSync).toHaveBeenCalledTimes(1);
   });
@@ -140,14 +150,38 @@ describe('readSyncTrigger', () => {
     registerReadSyncBridge(bridge);
 
     expect(() => requestReadSync('customers')).not.toThrow();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushMicrotasks();
 
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
 
-  test('registering a new bridge clears throttle and in-flight state from a previous registration', () => {
+  test('a synchronous throw from triggerSync() is caught, not left uncaught, and inFlight is still released', async () => {
+    const bridge = {
+      triggerSync: jest.fn().mockImplementation(() => {
+        throw new Error('marshaling failed');
+      }),
+      triggerSyncAll: jest.fn(),
+    } as unknown as SalveDatabase;
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    registerReadSyncBridge(bridge);
+
+    expect(() => requestReadSync('customers')).not.toThrow();
+    await flushMicrotasks();
+
+    expect(consoleError).toHaveBeenCalled();
+
+    // inFlight must have been released despite the synchronous throw, or
+    // this schema would be stuck forever.
+    jest.setSystemTime(5000);
+    requestReadSync('customers');
+    await flushMicrotasks();
+
+    expect(bridge.triggerSync).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+
+  test('registering a new bridge clears throttle and in-flight state from a previous registration', async () => {
     const first = makeBridge();
     registerReadSyncBridge(first);
     requestReadSync('customers'); // marks 'customers' as attempted at t=0
@@ -156,6 +190,7 @@ describe('readSyncTrigger', () => {
     registerReadSyncBridge(second); // should clear the throttle window
 
     requestReadSync('customers'); // would be discarded by the old window if not cleared
+    await flushMicrotasks();
 
     expect(second.triggerSync).toHaveBeenCalledWith('customers', true);
   });

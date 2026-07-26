@@ -21,6 +21,7 @@ export const UserSchema = {
   },
   indexes: [
     { name: 'idx_users_updated_at', columns: ['updatedAt'] },
+    { name: 'idx_users_email', columns: ['email'] },
   ],
   sync: {
     enabled: true,

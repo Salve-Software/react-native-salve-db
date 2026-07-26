@@ -1,5 +1,4 @@
 import type { IResourceBase, IResourceStore, IListQuery, ResourceRow, WritableFields } from './types';
-import { tick } from './tick';
 
 /**
  * Minimal structural contract both `pg.Pool` and `@electric-sql/pglite`'s
@@ -34,6 +33,17 @@ function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+// Allocates updatedAt/deletedAt atomically under an advisory lock held for the whole transaction — mirrors the old in-process tick() (monotonic, never collides) but can't reorder relative to another writer's commit.
+const ALLOCATE_TICK_MS = `
+  WITH _lock AS (SELECT pg_advisory_xact_lock(823170563)),
+       _tick AS (
+         UPDATE _tick_state SET last_tick = GREATEST((extract(epoch FROM clock_timestamp()) * 1000)::bigint, last_tick + 1)
+         FROM _lock WHERE id = 1
+         RETURNING last_tick
+       )
+`;
+const TICK_MS = `(SELECT last_tick FROM _tick)`;
+
 /**
  * Postgres-backed data layer for one entity — see `IResourceStore` for the
  * port contract this implements. Table/column names come from
@@ -67,29 +77,32 @@ export class PostgresResourceStore<TEntity extends IResourceBase> implements IRe
 
   async create(fields: WritableFields<TEntity>): Promise<TEntity> {
     const table = quoteIdent(this._config.table);
-    const updatedAt = tick();
     const values = this._config.columns.map((column) => (fields as Record<string, unknown>)[column]);
     const columnList = this._config.columns.map(quoteIdent).join(', ');
     const placeholders = this._config.columns.map((_, i) => `$${i + 1}`).join(', ');
 
     const result = await this._executor.query(
-      `INSERT INTO ${table} (${columnList}, "updatedAt", "deletedAt") VALUES (${placeholders}, $${this._config.columns.length + 1}, NULL) RETURNING *`,
-      [...values, updatedAt]
+      `${ALLOCATE_TICK_MS}
+       INSERT INTO ${table} (${columnList}, "updatedAt", "deletedAt")
+       SELECT ${placeholders}, ${TICK_MS}, NULL
+       RETURNING *`,
+      values
     );
     return normalizeRow(result.rows[0] as Record<string, unknown>) as unknown as TEntity;
   }
 
   async update(id: number, patch: Partial<WritableFields<TEntity>>): Promise<TEntity | null> {
     const table = quoteIdent(this._config.table);
-    const updatedAt = tick();
     const patchedColumns = this._config.columns.filter((column) => column in (patch as object));
     const setClauses = patchedColumns.map((column, i) => `${quoteIdent(column)} = $${i + 1}`);
-    setClauses.push(`"updatedAt" = $${patchedColumns.length + 1}`);
+    setClauses.push(`"updatedAt" = ${TICK_MS}`);
     const values = patchedColumns.map((column) => (patch as Record<string, unknown>)[column]);
 
     const result = await this._executor.query(
-      `UPDATE ${table} SET ${setClauses.join(', ')} WHERE "id" = $${patchedColumns.length + 2} AND "deletedAt" IS NULL RETURNING *`,
-      [...values, updatedAt, id]
+      `${ALLOCATE_TICK_MS}
+       UPDATE ${table} SET ${setClauses.join(', ')} WHERE "id" = $${patchedColumns.length + 1} AND "deletedAt" IS NULL
+       RETURNING *`,
+      [...values, id]
     );
     const row = result.rows[0] as Record<string, unknown> | undefined;
     return row === undefined ? null : (normalizeRow(row) as unknown as TEntity);
@@ -97,10 +110,11 @@ export class PostgresResourceStore<TEntity extends IResourceBase> implements IRe
 
   async remove(id: number): Promise<boolean> {
     const table = quoteIdent(this._config.table);
-    const deletedAt = tick();
     const result = await this._executor.query(
-      `UPDATE ${table} SET "deletedAt" = $1 WHERE "id" = $2 AND "deletedAt" IS NULL RETURNING "id"`,
-      [deletedAt, id]
+      `${ALLOCATE_TICK_MS}
+       UPDATE ${table} SET "deletedAt" = ${TICK_MS} WHERE "id" = $1 AND "deletedAt" IS NULL
+       RETURNING "id"`,
+      [id]
     );
     return result.rows.length > 0;
   }

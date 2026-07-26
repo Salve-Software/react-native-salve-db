@@ -92,6 +92,31 @@ TEST_CASE("a 401 refresh does not eat into the retry budget for a subsequent net
   REQUIRE(networkAttempts == 3);
 }
 
+TEST_CASE("a credential lookup failure comes back as HttpNetworkError, not a thrown exception", "[http][SyncHttpRequester]") {
+  CredentialProvider credentials("oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken");
+  // No seedInitialTokens() call — getAuthHeader() throws with no token stored.
+  SyncHttpRequester requester(credentials, testNetwork());
+
+  auto outcome = requester.list(testEndpoint(), 0, 20);
+
+  REQUIRE(std::holds_alternative<HttpNetworkError>(outcome));
+}
+
+TEST_CASE("a refresh failure comes back as HttpNetworkError, not a thrown exception", "[http][SyncHttpRequester]") {
+  platform::test::setHttpExecuteResult([](const HttpRequest& request) -> HttpOutcome {
+    if (request.url.find("/auth/refresh") != std::string::npos) {
+      return HttpResponse{200, {}, R"({"unexpected": "shape"})"}; // missing accessToken/refreshToken
+    }
+    return HttpResponse{401, {}, "{}"};
+  });
+
+  auto credentials = testCredentials();
+  SyncHttpRequester requester(credentials, testNetwork());
+  auto outcome = requester.list(testEndpoint(), 0, 20);
+
+  REQUIRE(std::holds_alternative<HttpNetworkError>(outcome));
+}
+
 TEST_CASE("a non-2xx response is returned as a value, not thrown", "[http][SyncHttpRequester]") {
   platform::test::setHttpExecuteResult([](const HttpRequest&) -> HttpOutcome {
     return HttpResponse{404, {}, "{}"};

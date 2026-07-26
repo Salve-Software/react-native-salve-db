@@ -33,8 +33,10 @@ export function requestReadSync(schemaName: string): void {
   lastAttemptAt.set(schemaName, now);
   inFlight.add(schemaName);
 
-  bridge
-    .triggerSync(schemaName, true)
+  // Deferred a tick so a synchronous throw from triggerSync() becomes a rejection .catch() can still see.
+  const currentBridge = bridge;
+  Promise.resolve()
+    .then(() => currentBridge.triggerSync(schemaName, true))
     .catch((err) => {
       console.error('Database: read-triggered sync failed', err);
     })

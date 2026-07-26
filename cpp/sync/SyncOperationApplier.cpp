@@ -119,7 +119,8 @@ ApplyStats SyncOperationApplier::apply(const std::string& expectedEntity, const 
     for (auto& [col, val] : row.asObject()) {
       if (cols.all.count(col) == 0) continue; // unknown server field — ignore, don't fail the page
       columns.push_back(col);
-      values.push_back(toSqlValue(val));
+      // Canonical string form for the PK column, matching pkValue elsewhere — avoids a REAL/TEXT mismatch.
+      values.push_back(col == pkCol ? SqlValue(pkValue) : toSqlValue(val));
     }
 
     std::ostringstream sql;

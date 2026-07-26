@@ -93,11 +93,20 @@ PushPhaseResult runPushPhase(const std::string& entity, const SyncContract& cont
     std::optional<json::Value> body;
 
     if (!isDelete) {
-      RowSnapshot snapshot = readRowSnapshot(*conn, entity, pkCol, currentId);
-      if (snapshot.tombstoned) {
-        isDelete = true;
-      } else if (snapshot.exists) {
-        body = std::move(snapshot.body);
+      // Isolated per item — a body-build failure here shouldn't abort every remaining queued item.
+      try {
+        RowSnapshot snapshot = readRowSnapshot(*conn, entity, pkCol, currentId);
+        if (snapshot.tombstoned) {
+          isDelete = true;
+        } else if (snapshot.exists) {
+          body = std::move(snapshot.body);
+        }
+      } catch (const std::exception& e) {
+        std::string error = std::string("failed to build push body: ") + e.what();
+        queue.markFailed(item.id, error);
+        metadata.markFailed(entity, localIdForApply, error, nowMillis());
+        result.failed++;
+        continue;
       }
     }
 

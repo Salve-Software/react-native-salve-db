@@ -63,6 +63,12 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug --no-daemon --build-cache -PreactNativeArchitectures=${{ env.DEVICE_ARCH }}
 
+      - name: Start salve-db-server (PGlite test mode)
+        working-directory: packages/salve-db-server
+        run: |
+          npm run start:pglite &
+          npx wait-on http://localhost:4000/users -t 30000
+
       - name: Run React Native Harness
         uses: callstackincubator/react-native-harness@v1.2.0
         with:

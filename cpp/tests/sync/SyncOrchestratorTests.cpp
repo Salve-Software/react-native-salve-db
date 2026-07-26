@@ -80,6 +80,30 @@ void respondByRoute(RouteHandler onList, RouteHandler onCreate, RouteHandler onU
 
 HttpResponse emptyList() { return HttpResponse{200, {}, "[]"}; }
 
+// Holds the sync mutex from a background thread — same-thread lock+tryLock is UB.
+class LockHolder {
+public:
+  LockHolder() {
+    _thread = std::thread([this]() {
+      auto held = DatabaseManager::shared().lockSync();
+      _ready.store(true);
+      while (!_release.load()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    });
+    while (!_ready.load()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ~LockHolder() {
+    _release.store(true);
+    _thread.join();
+  }
+  LockHolder(const LockHolder&) = delete;
+  LockHolder& operator=(const LockHolder&) = delete;
+
+private:
+  std::thread _thread;
+  std::atomic<bool> _ready{false};
+  std::atomic<bool> _release{false};
+};
+
 } // namespace
 
 // ── Locking (unchanged by the #84 rewrite) ────────────────────────────────
@@ -87,8 +111,7 @@ HttpResponse emptyList() { return HttpResponse{200, {}, "[]"}; }
 TEST_CASE("DatabaseManager::tryLockSync fails while another thread holds lockSync", "[sync][SyncOrchestrator][concurrency]") {
   openOrchestratorFixture("orchestrator_lock_contention");
 
-  auto held = DatabaseManager::shared().lockSync();
-  REQUIRE(held.owns_lock());
+  LockHolder holder;
 
   auto contended = DatabaseManager::shared().tryLockSync();
   REQUIRE_FALSE(contended.owns_lock());
@@ -125,7 +148,7 @@ TEST_CASE("concurrent triggerSync calls are serialized instead of racing into a 
 TEST_CASE("triggerSyncAll discards silently when a sync session is already in progress", "[sync][SyncOrchestrator][concurrency]") {
   openOrchestratorFixture("orchestrator_all_discard");
 
-  auto held = DatabaseManager::shared().lockSync();
+  LockHolder holder;
 
   auto results = SyncOrchestrator().triggerSyncAll(/*discardIfBusy*/ true);
 
@@ -142,10 +165,7 @@ TEST_CASE("triggerSync discards silently when a sync session is already in progr
     return emptyList();
   });
 
-  // Same-thread try_lock on a mutex this thread already owns is technically
-  // UB per the standard — accepted here for consistency with the
-  // triggerSyncAll discard test above, which uses the same pattern.
-  auto held = DatabaseManager::shared().lockSync();
+  LockHolder holder;
 
   auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ true);
 
@@ -314,11 +334,38 @@ TEST_CASE("a page tied on the same millisecond as the cursor stops the session i
 
   auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
 
-  REQUIRE(calls == 1); // stops after the stalled page instead of re-fetching it forever
+  REQUIRE(calls == 2); // initial page + one escalation attempt confirming nothing more exists
   REQUIRE(result->inserted == 2.0);
 
   SyncCursorStore cursorStore(conn);
   REQUIRE_FALSE(cursorStore.load("customers").has_value());
+}
+
+TEST_CASE("a full page tied on one timestamp escalates the limit and captures the rest of the group instead of losing rows (L1)", "[sync][SyncOrchestrator]") {
+  auto conn = openOrchestratorFixture("orchestrator_pull_boundary_escalation", /*pageSize*/ 2, /*maxPagesPerSession*/ 20);
+
+  int calls = 0;
+  respondByRoute(
+    [&](const HttpRequest& request) -> HttpOutcome {
+      ++calls;
+      // 3 rows tied on one timestamp, but the server only honors limit=2 on
+      // the first request — escalating to a bigger limit should recover the
+      // 3rd row instead of stalling with only 2 applied.
+      if (request.url.ends_with("limit=2")) {
+        return HttpResponse{200, {}, R"([{"id":"srv1","name":"a","updatedAt":1},{"id":"srv2","name":"b","updatedAt":1}])"};
+      }
+      return HttpResponse{200, {}, R"([{"id":"srv1","name":"a","updatedAt":1},{"id":"srv2","name":"b","updatedAt":1},{"id":"srv3","name":"c","updatedAt":1}])"};
+    },
+    nullptr, nullptr, nullptr
+  );
+
+  auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
+
+  REQUIRE(calls == 2); // initial pageSize=2 request, then one escalated retry
+  REQUIRE(result->inserted == 3.0); // all 3 tied rows applied, not just the first 2
+
+  auto rows = conn->execute("SELECT COUNT(*) FROM customers", {});
+  REQUIRE(static_cast<int>(std::get<double>(rows.rows[0][0])) == 3);
 }
 
 TEST_CASE("pull stops at maxPagesPerSession and a later call resumes from the persisted cursor", "[sync][SyncOrchestrator]") {
@@ -477,6 +524,39 @@ TEST_CASE("an HTTP failure on one push item marks it FAILED and the session cont
     "SELECT status, retryCount FROM _salve_sync_metadata WHERE tableName = 'customers' AND localId = '1'", {});
   REQUIRE(std::get<std::string>(metaRow.rows[0][0]) == "FAILED");
   REQUIRE(std::get<double>(metaRow.rows[0][1]) == 1.0);
+}
+
+TEST_CASE("a body-build failure (e.g. a BLOB column) fails that item and the session continues with the next", "[sync][SyncOrchestrator]") {
+  // Trigger dropped so the BLOB update bypasses its json_object() (which itself rejects BLOBs).
+  auto conn = openOrchestratorFixture("orchestrator_push_body_build_failed");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 100)", {});
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('2', 'b', 100)", {});
+  conn->execute("DROP TRIGGER \"customers_sync_after_update\"", {});
+  auto blob = margelo::nitro::ArrayBuffer::allocate(4);
+  conn->execute("UPDATE customers SET name = ? WHERE id = '1'", { blob });
+
+  int creates = 0;
+  respondByRoute(
+    nullptr,
+    [&](const HttpRequest& request) -> HttpOutcome {
+      ++creates;
+      return HttpResponse{201, {}, *request.body};
+    },
+    nullptr, nullptr
+  );
+
+  auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
+
+  REQUIRE(result.has_value());
+  REQUIRE(creates == 1); // only item '2' ever reached the HTTP layer
+  REQUIRE(syncQueueCount(*conn, "customers") == 1); // the blob item stays queued
+
+  auto meta = conn->execute("SELECT status FROM sync_queue WHERE entity = 'customers' AND entity_id = '1'", {});
+  REQUIRE(std::get<std::string>(meta.rows[0][0]) == "FAILED");
+
+  auto metaRow = conn->execute(
+    "SELECT status FROM _salve_sync_metadata WHERE tableName = 'customers' AND localId = '1'", {});
+  REQUIRE(std::get<std::string>(metaRow.rows[0][0]) == "FAILED");
 }
 
 TEST_CASE("a FAILED item is retried, with no intervention, on the next session", "[sync][SyncOrchestrator]") {

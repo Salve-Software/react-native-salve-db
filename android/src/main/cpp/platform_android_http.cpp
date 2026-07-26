@@ -3,7 +3,6 @@
 #include "../../../../cpp/platform/platform.hpp"
 #include "JniSupport.hpp"
 #include <algorithm>
-#include <mutex>
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb::platform {
@@ -27,27 +26,6 @@ jclass httpClientClass() {
     throw std::runtime_error("SalveDb: SalveDbHttpClient class was not resolved — setJavaVM (JNI_OnLoad) must run first");
   }
   return s_httpClientClass;
-}
-
-std::once_flag s_cacheOnceFlag;
-
-void ensureCached(JNIEnv* env) {
-  std::call_once(s_cacheOnceFlag, [env]() {
-    s_resultClass = resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpJniResult");
-    s_stringClass = resolveGlobalClass(env, "java/lang/String");
-    s_executeMethod = env->GetStaticMethodID(
-      httpClientClass(), "execute",
-      "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;J)Lcom/salvedb/http/SalveDbHttpJniResult;"
-    );
-    s_isSuccessField = env->GetFieldID(s_resultClass, "isSuccess", "Z");
-    s_statusCodeField = env->GetFieldID(s_resultClass, "statusCode", "I");
-    s_responseHeaderNamesField = env->GetFieldID(s_resultClass, "responseHeaderNames", "[Ljava/lang/String;");
-    s_responseHeaderValuesField = env->GetFieldID(s_resultClass, "responseHeaderValues", "[Ljava/lang/String;");
-    s_responseBodyField = env->GetFieldID(s_resultClass, "responseBody", "Ljava/lang/String;");
-    s_errorKindField = env->GetFieldID(s_resultClass, "errorKind", "Ljava/lang/String;");
-    s_errorMessageField = env->GetFieldID(s_resultClass, "errorMessage", "Ljava/lang/String;");
-    throwIfJavaExceptionPending(env, "SalveDbHttpClient JNI cache resolution");
-  });
 }
 
 const char* methodName(HttpMethod method) {
@@ -92,11 +70,30 @@ void registerHttpClientClass(jclass cls) {
   s_httpClientClass = cls;
 }
 
+void primeHttpJniCache(JNIEnv* env) {
+  s_resultClass = resolveGlobalClass(env, "com/salvedb/http/SalveDbHttpJniResult");
+  s_stringClass = resolveGlobalClass(env, "java/lang/String");
+  s_executeMethod = env->GetStaticMethodID(
+    httpClientClass(), "execute",
+    "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;J)Lcom/salvedb/http/SalveDbHttpJniResult;"
+  );
+  s_isSuccessField = env->GetFieldID(s_resultClass, "isSuccess", "Z");
+  s_statusCodeField = env->GetFieldID(s_resultClass, "statusCode", "I");
+  s_responseHeaderNamesField = env->GetFieldID(s_resultClass, "responseHeaderNames", "[Ljava/lang/String;");
+  s_responseHeaderValuesField = env->GetFieldID(s_resultClass, "responseHeaderValues", "[Ljava/lang/String;");
+  s_responseBodyField = env->GetFieldID(s_resultClass, "responseBody", "Ljava/lang/String;");
+  s_errorKindField = env->GetFieldID(s_resultClass, "errorKind", "Ljava/lang/String;");
+  s_errorMessageField = env->GetFieldID(s_resultClass, "errorMessage", "Ljava/lang/String;");
+  throwIfJavaExceptionPending(env, "SalveDbHttpClient JNI cache resolution");
+}
+
 HttpOutcome httpExecute(const HttpRequest& request) {
   ScopedJNIEnv scoped;
   JNIEnv* env = scoped.env();
   jclass cls = httpClientClass();
-  ensureCached(env);
+  if (!s_resultClass) {
+    throw std::runtime_error("SalveDb: SalveDbHttpJniResult class was not resolved — setJavaVM (JNI_OnLoad) must run first");
+  }
 
   // Bounds every local ref created below (request/response strings, arrays,
   // the result object) — freed on return or on exception unwind, so a reused

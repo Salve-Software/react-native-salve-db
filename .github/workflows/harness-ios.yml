@@ -55,6 +55,12 @@ jobs:
         run: |
           set -o pipefail && xcodebuild             CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++             -derivedDataPath build -UseModernBuildSystem=YES             -workspace SalveDbExample.xcworkspace             -scheme SalveDbExample             -sdk iphonesimulator             -configuration Debug             build             CODE_SIGNING_ALLOWED=NO
 
+      - name: Start salve-db-server (PGlite test mode)
+        working-directory: packages/salve-db-server
+        run: |
+          npm run start:pglite &
+          npx wait-on http://localhost:4000/users -t 30000
+
       - name: Run React Native Harness
         uses: callstackincubator/react-native-harness@v1.2.0
         with:
