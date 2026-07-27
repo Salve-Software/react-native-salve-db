@@ -172,6 +172,36 @@ TEST_CASE("removing a column from the schema leaves it orphaned with data intact
   REQUIRE(storedVersion(*conn, "widgets") == 2);
 }
 
+TEST_CASE("registerSchema recreates a table dropped externally, even though _salve_schema_versions still has a stored version", "[migration]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("recreate_after_external_drop"));
+  MigrationEngine engine(conn);
+  std::string schemaJson = R"({
+    "name": "widgets", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "label": { "type": "text" } }
+  })";
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(schemaJson));
+  conn->execute("INSERT INTO widgets (id, label) VALUES (1, 'a')", {});
+
+  // Simulates the Studio's "delete table" action: DROP TABLE without touching
+  // _salve_schema_versions.
+  conn->exec("DROP TABLE widgets");
+  REQUIRE(storedVersion(*conn, "widgets") == 1); // still stale
+
+  // Must not throw (previously fell through to ALTER TABLE on a table that
+  // no longer existed) and must fully recreate the table.
+  REQUIRE_NOTHROW(engine.registerSchema(MigrationEngine::parseSchemaJson(schemaJson)));
+
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "deletedAt"});
+  auto rows = conn->execute("SELECT COUNT(*) FROM widgets", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 0.0); // fresh table, old row is gone
+  REQUIRE(storedVersion(*conn, "widgets") == 1);
+
+  conn->execute("INSERT INTO widgets (id, label) VALUES (2, 'b')", {});
+  auto row = conn->execute("SELECT label FROM widgets WHERE id = 2", {});
+  REQUIRE(std::get<std::string>(row.rows[0][0]) == "b");
+}
+
 TEST_CASE("opening at version N with a schema at N+2 applies all pending columns at once", "[migration]") {
   auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("multijump"));
   MigrationEngine engine(conn);
