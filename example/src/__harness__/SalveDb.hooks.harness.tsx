@@ -129,6 +129,38 @@ describe('useQuery — real reactivity through the full native bridge', () => {
     await waitFor(() => expect(latest?.data).toEqual([row(2)]));
   });
 
+  it('a bare delete (no where()) on a schema without sync still notifies live queries (#63)', async () => {
+    const schema = {
+      name: uniqueName('hook_bare_delete_no_sync'),
+      version: 1,
+      primaryKey: 'id',
+      columns: { id: { type: 'integer' } },
+    } satisfies AnySchema;
+    const config = { name: uniqueName('e2e_bare_delete_no_sync') };
+
+    let latest: UseQueryResultOf<typeof schema> | undefined;
+
+    await render(
+      <SalveDbProvider config={config} schemas={[schema]}>
+        <QueryProbe schema={schema} onResult={(result) => { latest = result; }} />
+      </SalveDbProvider>
+    );
+
+    await waitFor(() => expect(latest?.data).toEqual([]));
+
+    Database.insert(schema).values({ id: 1 }).execute();
+    Database.insert(schema).values({ id: 2 }).execute();
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2)]));
+
+    // No `.where()` — this is the exact repro from #63: on a schema with no
+    // `sync` block, SQLite's truncate optimization used to skip the update
+    // hook entirely for a WHERE-less DELETE, so this write never reached
+    // the live query below.
+    Database.delete(schema).execute();
+
+    await waitFor(() => expect(latest?.data).toEqual([]));
+  });
+
   it('two components querying the same schema+deps both react to one write', async () => {
     const schema = {
       name: uniqueName('hook_shared'),
