@@ -70,6 +70,7 @@ private:
 
   void createSyncTriggers(const SchemaDef& schema);
   void dropSyncTriggers(const SchemaDef& schema);
+  void createChangeNotificationTrigger(const SchemaDef& schema);
 
   void createRelationIndexes(const SchemaDef& schema);
 };
