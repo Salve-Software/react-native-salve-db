@@ -28,6 +28,33 @@ function hasId(rows: unknown[] | null, id: number): boolean {
   return (rows ?? []).some((row) => (row as { id: number }).id === id);
 }
 
+// requestReadSync() is fire-and-forget (see src/sync/library/readSyncTrigger.ts):
+// mounting a probe returns before its triggered pull has actually finished
+// applying pages locally. Waiting for `latest` to merely go non-null races
+// that in-flight pull — a write made right after can still land inside it,
+// which would make a later "did the throttle block a second sync" check a
+// false negative. Poll until the row count holds steady to know the mount's
+// own pull has actually settled before moving on.
+async function waitForRowCountToSettle(getRows: () => unknown[] | null): Promise<void> {
+  const quietMs = 500;
+  const timeoutMs = 8000;
+  const pollMs = 100;
+  const deadline = Date.now() + timeoutMs;
+  let lastCount = -1;
+  let stableSince = Date.now();
+
+  while (Date.now() < deadline) {
+    const count = (getRows() ?? []).length;
+    if (count !== lastCount) {
+      lastCount = count;
+      stableSince = Date.now();
+    } else if (Date.now() - stableSince >= quietMs) {
+      return;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, pollMs));
+  }
+}
+
 // SyncOrchestrator requires a configured CredentialProvider to run any sync
 // session at all, even against a server that never checks auth — see
 // DatabaseManager::credentials() in cpp/database/DatabaseManager.hpp.
@@ -73,6 +100,10 @@ describe('Read-flow cache-first — useQuery triggers a background sync on read 
       </SalveDbProvider>
     );
     await waitFor(() => expect(latest).not.toBeNull(), 10000);
+    // The mount above only guarantees a read-triggered sync was *requested*,
+    // not that its fire-and-forget pull has applied all pages yet — settle
+    // first so the write below can't land inside that still-running sync.
+    await waitForRowCountToSettle(() => latest);
 
     // Write directly to the server right after the first read's sync already ran.
     const created = await createOnServer('Mara', `${uniqueName('mara')}@x.dev`);
