@@ -207,6 +207,14 @@ std::vector<std::string> MigrationEngine::existingColumns(const std::string& tab
   return cols;
 }
 
+bool MigrationEngine::tableExists(const std::string& tableName) {
+  auto result = _db->execute(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    { tableName }
+  );
+  return !result.rows.empty();
+}
+
 // ── CREATE TABLE ──────────────────────────────────────────────────────────────
 
 void MigrationEngine::createTable(const SchemaDef& schema) {
@@ -446,7 +454,7 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;
 
-  if (stored == 0) {
+  if (stored == 0 || !tableExists(schema.name)) {
     createTable(schema);
     columnsChanged = true;
   } else if (schema.version > stored) {
