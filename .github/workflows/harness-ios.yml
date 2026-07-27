@@ -53,7 +53,7 @@ jobs:
       - name: Build iOS app
         working-directory: example/ios
         run: |
-          set -o pipefail && xcodebuild             CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++             -derivedDataPath build -UseModernBuildSystem=YES             -workspace SalveDbExample.xcworkspace             -scheme SalveDbExample             -sdk iphonesimulator             -configuration Debug             build             CODE_SIGNING_ALLOWED=NO
+          set -o pipefail && xcodebuild             CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++             -derivedDataPath build -UseModernBuildSystem=YES             -workspace SalveDbExample.xcworkspace             -scheme SalveDbExample             -sdk iphonesimulator             -configuration Debug             build             CODE_SIGN_IDENTITY=-             CODE_SIGNING_REQUIRED=NO
 
       - name: Start salve-db-server (PGlite test mode)
         working-directory: packages/salve-db-server
