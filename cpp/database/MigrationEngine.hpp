@@ -67,9 +67,11 @@ private:
 
   std::string sqliteType(const std::string& colType) const;
   std::vector<std::string> existingColumns(const std::string& tableName);
+  bool tableExists(const std::string& tableName);
 
   void createSyncTriggers(const SchemaDef& schema);
   void dropSyncTriggers(const SchemaDef& schema);
+  void createChangeNotificationTrigger(const SchemaDef& schema);
 
   void createRelationIndexes(const SchemaDef& schema);
 };

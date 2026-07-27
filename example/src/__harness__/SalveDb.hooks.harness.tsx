@@ -7,12 +7,6 @@ function uniqueName(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
 }
 
-// deletedAt is a reserved column the engine adds to every table, so it comes
-// back on SELECT * alongside the schema's own columns.
-function row(id: number) {
-  return { id, deletedAt: null };
-}
-
 /** `useQuery`'s row type is inferred from the schema's literal `columns` shape — keep schema objects `satisfies AnySchema`, never `: AnySchema`, or that literal shape is lost. */
 type UseQueryResultOf<TSchema extends AnySchema> = ReturnType<typeof useQuery<TSchema>>;
 type UseInfiniteQueryResultOf<TSchema extends AnySchema> = ReturnType<typeof useInfiniteQuery<TSchema>>;
@@ -127,6 +121,38 @@ describe('useQuery — real reactivity through the full native bridge', () => {
 
     Database.delete(schema).where(eq('id', 1)).execute();
     await waitFor(() => expect(latest?.data).toEqual([row(2)]));
+  });
+
+  it('a bare delete (no where()) on a schema without sync still notifies live queries (#63)', async () => {
+    const schema = {
+      name: uniqueName('hook_bare_delete_no_sync'),
+      version: 1,
+      primaryKey: 'id',
+      columns: { id: { type: 'integer' } },
+    } satisfies AnySchema;
+    const config = { name: uniqueName('e2e_bare_delete_no_sync') };
+
+    let latest: UseQueryResultOf<typeof schema> | undefined;
+
+    await render(
+      <SalveDbProvider config={config} schemas={[schema]}>
+        <QueryProbe schema={schema} onResult={(result) => { latest = result; }} />
+      </SalveDbProvider>
+    );
+
+    await waitFor(() => expect(latest?.data).toEqual([]));
+
+    Database.insert(schema).values({ id: 1 }).execute();
+    Database.insert(schema).values({ id: 2 }).execute();
+    await waitFor(() => expect(latest?.data).toEqual([row(1), row(2)]));
+
+    // No `.where()` — this is the exact repro from #63: on a schema with no
+    // `sync` block, SQLite's truncate optimization used to skip the update
+    // hook entirely for a WHERE-less DELETE, so this write never reached
+    // the live query below.
+    Database.delete(schema).execute();
+
+    await waitFor(() => expect(latest?.data).toEqual([]));
   });
 
   it('two components querying the same schema+deps both react to one write', async () => {

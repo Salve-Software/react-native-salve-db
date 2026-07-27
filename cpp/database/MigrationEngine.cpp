@@ -207,6 +207,14 @@ std::vector<std::string> MigrationEngine::existingColumns(const std::string& tab
   return cols;
 }
 
+bool MigrationEngine::tableExists(const std::string& tableName) {
+  auto result = _db->execute(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    { tableName }
+  );
+  return !result.rows.empty();
+}
+
 // ── CREATE TABLE ──────────────────────────────────────────────────────────────
 
 void MigrationEngine::createTable(const SchemaDef& schema) {
@@ -369,6 +377,21 @@ void MigrationEngine::createSyncTriggers(const SchemaDef& schema) {
   _db->exec(deleteTrig.str());
 }
 
+// A no-op AFTER DELETE trigger. Its only purpose is presence: SQLite's
+// "truncate optimization" (a bare `DELETE FROM t` with no WHERE drops the
+// btree instead of visiting rows) skips sqlite3_update_hook entirely, and it's
+// only disabled by the table having a DELETE trigger. Schemas without
+// sync.enabled otherwise get no triggers at all, so table-change
+// notifications for their bare deletes were silently lost (#63).
+void MigrationEngine::createChangeNotificationTrigger(const SchemaDef& schema) {
+  const std::string& t = schema.name;
+  _db->exec(
+    "CREATE TRIGGER IF NOT EXISTS \"" + t + "_change_notify_delete\"\n"
+    "AFTER DELETE ON \"" + t + "\"\n"
+    "BEGIN SELECT 1; END;"
+  );
+}
+
 void MigrationEngine::createRelationIndexes(const SchemaDef& schema) {
   for (auto& rel : schema.relations) {
     _db->exec(
@@ -431,7 +454,7 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
   int stored = storedVersion(schema.name);
   bool columnsChanged = false;
 
-  if (stored == 0) {
+  if (stored == 0 || !tableExists(schema.name)) {
     createTable(schema);
     columnsChanged = true;
   } else if (schema.version > stored) {
@@ -440,6 +463,8 @@ void MigrationEngine::registerSchema(const SchemaDef& schema) {
     // Even at same version, ensure reserved columns exist (for library upgrades).
     columnsChanged = migrateTable(schema);
   }
+
+  createChangeNotificationTrigger(schema);
 
   if (schema.sync.enabled) {
     if (columnsChanged) {

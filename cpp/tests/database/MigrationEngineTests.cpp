@@ -3,6 +3,8 @@
 #include "../../database/SQLiteConnection.hpp"
 #include "../../platform/platform.hpp"
 #include <memory>
+#include <string>
+#include <vector>
 
 using namespace margelo::nitro::salvedb;
 
@@ -170,6 +172,36 @@ TEST_CASE("removing a column from the schema leaves it orphaned with data intact
   REQUIRE(storedVersion(*conn, "widgets") == 2);
 }
 
+TEST_CASE("registerSchema recreates a table dropped externally, even though _salve_schema_versions still has a stored version", "[migration]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("recreate_after_external_drop"));
+  MigrationEngine engine(conn);
+  std::string schemaJson = R"({
+    "name": "widgets", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "label": { "type": "text" } }
+  })";
+
+  engine.registerSchema(MigrationEngine::parseSchemaJson(schemaJson));
+  conn->execute("INSERT INTO widgets (id, label) VALUES (1, 'a')", {});
+
+  // Simulates the Studio's "delete table" action: DROP TABLE without touching
+  // _salve_schema_versions.
+  conn->exec("DROP TABLE widgets");
+  REQUIRE(storedVersion(*conn, "widgets") == 1); // still stale
+
+  // Must not throw (previously fell through to ALTER TABLE on a table that
+  // no longer existed) and must fully recreate the table.
+  REQUIRE_NOTHROW(engine.registerSchema(MigrationEngine::parseSchemaJson(schemaJson)));
+
+  REQUIRE(columnsOf(*conn, "widgets") == std::vector<std::string>{"id", "label", "deletedAt"});
+  auto rows = conn->execute("SELECT COUNT(*) FROM widgets", {});
+  REQUIRE(std::get<double>(rows.rows[0][0]) == 0.0); // fresh table, old row is gone
+  REQUIRE(storedVersion(*conn, "widgets") == 1);
+
+  conn->execute("INSERT INTO widgets (id, label) VALUES (2, 'b')", {});
+  auto row = conn->execute("SELECT label FROM widgets WHERE id = 2", {});
+  REQUIRE(std::get<std::string>(row.rows[0][0]) == "b");
+}
+
 TEST_CASE("opening at version N with a schema at N+2 applies all pending columns at once", "[migration]") {
   auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("multijump"));
   MigrationEngine engine(conn);
@@ -226,9 +258,21 @@ bool tableExists(SQLiteConnection& conn, const std::string& name) {
   return !r.rows.empty();
 }
 
+// Counts only the sync-queue triggers (name-prefixed "<table>_sync_..."),
+// excluding the always-on "<table>_change_notify_delete" trigger (#63) so
+// existing sync-trigger assertions don't need to know about it.
 int triggerCount(SQLiteConnection& conn, const std::string& tableName) {
-  auto r = conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = ?", { tableName });
+  auto r = conn.execute(
+    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = ? AND name LIKE ?",
+    { tableName, tableName + "_sync_%" });
   return static_cast<int>(std::get<double>(r.rows[0][0]));
+}
+
+bool changeNotifyTriggerExists(SQLiteConnection& conn, const std::string& tableName) {
+  auto r = conn.execute(
+    "SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+    { tableName + "_change_notify_delete" });
+  return !r.rows.empty();
 }
 
 std::string triggerSql(SQLiteConnection& conn, const std::string& name) {
@@ -282,7 +326,7 @@ TEST_CASE("sync.enabled: true creates 3 triggers matching schema.columns", "[mig
   REQUIRE(deleteSql.find("'name'") == std::string::npos); // delete payload is PK-only
 }
 
-TEST_CASE("sync.enabled: false or absent creates no triggers", "[migration][sync]") {
+TEST_CASE("sync.enabled: false or absent creates no sync triggers, but keeps the change-notification trigger", "[migration][sync]") {
   auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("sync_disabled"));
   MigrationEngine engine(conn);
 
@@ -291,6 +335,7 @@ TEST_CASE("sync.enabled: false or absent creates no triggers", "[migration][sync
     "columns": { "id": { "type": "integer" } }
   })"));
   REQUIRE(triggerCount(*conn, "no_sync_field") == 0);
+  REQUIRE(changeNotifyTriggerExists(*conn, "no_sync_field"));
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "sync_off", "version": 1, "primaryKey": "id",
@@ -298,6 +343,7 @@ TEST_CASE("sync.enabled: false or absent creates no triggers", "[migration][sync
     "sync": { "enabled": false }
   })"));
   REQUIRE(triggerCount(*conn, "sync_off") == 0);
+  REQUIRE(changeNotifyTriggerExists(*conn, "sync_off"));
 }
 
 TEST_CASE("enabling sync.enabled with no column change still creates triggers", "[migration][sync]") {
@@ -389,4 +435,31 @@ TEST_CASE("sync.enabled: true without a datetime 'updatedAt' column throws", "[m
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
+}
+
+TEST_CASE("a bare DELETE FROM with no WHERE on a schema without sync still notifies subscribers (#63)", "[migration][notify]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("bare_delete_no_sync"));
+  MigrationEngine engine(conn);
+
+  // No "sync" field at all — the case from the issue repro.
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "items", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "title": { "type": "text" } }
+  })"));
+
+  conn->execute("INSERT INTO items (id, title) VALUES (1, 'a')", {});
+  conn->execute("INSERT INTO items (id, title) VALUES (2, 'b')", {});
+
+  std::vector<std::vector<std::string>> received;
+  conn->subscribe([&](std::vector<std::string> tables) { received.push_back(tables); });
+
+  // Without the always-on change-notification trigger, SQLite's truncate
+  // optimization would skip sqlite3_update_hook entirely for this statement.
+  conn->execute("DELETE FROM items", {});
+
+  auto countRows = conn->execute("SELECT COUNT(*) FROM items", {});
+  REQUIRE(std::get<double>(countRows.rows[0][0]) == 0.0);
+
+  REQUIRE(received.size() == 1);
+  REQUIRE(received[0] == std::vector<std::string>{"items"});
 }
