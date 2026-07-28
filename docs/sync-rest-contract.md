@@ -1,6 +1,6 @@
 # Sync REST Contract (implementado no motor nativo e no example/)
 
-> **Status:** o motor nativo (`cpp/sync/`), o contrato declarativo TS (`src/types/sync/`) e a migração de estado persistido descritos neste doc estão **implementados** (issue #84). `example/` já sincroniza contra o `packages/salve-db-server` real (`UserSchema`/`ProductSchema`, `SyncTestScreen`) — `mock-sync-server/` e os schemas de teste antigos foram removidos. A cobertura `react-native-harness` ainda fica para uma rodada separada. Ver "Decisões fechadas na implementação" no fim deste doc para os pontos que a rodada de discussão original deixou em aberto.
+> **Status:** o motor nativo (`cpp/sync/`), o contrato declarativo TS (`src/types/sync/`) e a migração de estado persistido descritos neste doc estão **implementados** (issue #84). `example/` já sincroniza contra o `packages/salve-db-server` real (`UserSchema`/`ProductSchema`, `SyncTestScreen`) — `mock-sync-server/` e os schemas de teste antigos foram removidos. A cobertura `react-native-harness` também está implementada (`example/src/__harness__/SalveDb.syncPush/syncPull/syncRelations/syncCredentials.harness.ts`). Ver "Decisões fechadas na implementação" no fim deste doc para os pontos que a rodada de discussão original deixou em aberto.
 >
 > **Referência viva:** [`packages/salve-db-server`](../packages/salve-db-server) implementa exatamente este contrato — um backend REST de referência que qualquer adotante da lib pode ler como "essa é a forma que minha API precisa ter". O README de lá cobre o contrato do ponto de vista do backend; este doc cobre o mesmo contrato do ponto de vista do motor de sync nativo que o consome.
 
@@ -388,7 +388,7 @@ A rodada de discussão original deixou algumas questões em aberto "avaliar ao i
 
 # Rastreamento
 
-Todo o trabalho descrito neste doc é rastreado na issue **#84** (motor nativo + contrato TS + migração de estado — concluído) e na issue **#85** (read-flow cache-first / gatilho de sync por leitura — concluído antes da #84, na mesma branch, e ortogonal ao protocolo de wire). `example/` completo + testes `react-native-harness` ficam para uma issue de follow-up.
+Todo o trabalho descrito neste doc é rastreado na issue **#84** (motor nativo + contrato TS + migração de estado — concluído) e na issue **#85** (read-flow cache-first / gatilho de sync por leitura — concluído antes da #84, na mesma branch, e ortogonal ao protocolo de wire). `example/` completo + testes `react-native-harness` também estão concluídos.
 
 A epic #74 e a issue #77 foram fechadas — o modelo de Replace Transaction via array `ack` que elas construíram foi substituído pelo mecanismo por-item deste doc. #75 e #76 continuam válidas e mergeadas (fundação de metadata e cascade de FK foram reaproveitadas sem mudança, ver "O que já reaproveita sem mudança" acima).
 
