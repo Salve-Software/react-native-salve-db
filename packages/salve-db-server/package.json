@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --env-file-if-exists=.env dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/rest/tests/*.test.ts src/users/tests/*.test.ts src/products/tests/*.test.ts src/tests/*.test.ts",
+    "test": "tsx --test src/rest/tests/*.test.ts src/users/tests/*.test.ts src/products/tests/*.test.ts src/auth/tests/*.test.ts src/tests/*.test.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
   },
