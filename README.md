@@ -34,7 +34,7 @@ In the foreground you get a Drizzle-style typed query builder plus `useQuery` / 
 
 ## Architecture
 
-```
+```text
 ┌───────────────────────────────┐        JSI (Nitro Modules)        ┌────────────────────────────────────┐
 │      TypeScript (DX layer)      │ ─────────────────────────────────▶ │        Native Core (C++)            │
 │                                 │                                    │                                      │
@@ -308,8 +308,8 @@ npm run ios     # or: npm run android
 |---|---|---|
 | Native core | `npm run test:native` | C++ engine end-to-end through a real Hermes JSI runtime (Catch2, ~1s, no simulator) |
 | TypeScript unit | `npm test` | Query builders, condition compiler, cache, hooks, provider (Jest) |
-| On-device harness | `npm run test:harness:ios` / `test:harness:android` | Full JSI stack on a simulator/emulator via `react-native-harness`, including real sync against `salve-db-server` |
-| Platform native unit | `npm run test:native:ios` / `test:native:android` | Swift (`swift test`) and Kotlin (Gradle/JUnit) unit tests |
+| On-device harness | `npm run test:harness:ios` / `npm run test:harness:android` | Full JSI stack on a simulator/emulator via `react-native-harness`, including real sync against `salve-db-server` |
+| Platform native unit | `npm run test:native:ios` / `npm run test:native:android` | Swift (`swift test`) and Kotlin (Gradle/JUnit) unit tests |
 
 ## Contributing
 
