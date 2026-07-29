@@ -13,10 +13,10 @@ For **Chromium (CDP)**: requires a Chromium/CDP app already available — an Ele
 
 ### Android: reverse port for Metro
 
-Android emulators and physical devices do not resolve the host's `localhost` by default. Before the RN app can reach Metro, forward port 8081 (or whichever port Metro is on) from the device back to the host:
+Android emulators and physical devices do not resolve the host's `localhost` by default. Before the RN app can reach Metro, forward Metro's port (default `8081`; use the resolved `metro_port` from `argent-environment-inspector` if the project configures a different one) from the device back to the host:
 
 ```bash
-adb -s <serial> reverse tcp:8081 tcp:8081
+adb -s <serial> reverse tcp:<metro_port> tcp:<metro_port>
 ```
 
 `<serial>` is the Android `serial` from `list-devices`. Once reversed, the app on the device connects to Metro just like an iOS simulator does, and all `debugger-*` / `network-*` / `react-profiler-*` tools work unchanged. If the device restarts or adb drops, re-run the command. A failing Metro connection on Android almost always means `adb reverse` has not been done or has been lost.
