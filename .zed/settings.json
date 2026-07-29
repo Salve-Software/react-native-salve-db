@@ -1,0 +1,19 @@
+{
+  "context_servers": {
+    "argent": {
+      "source": "custom",
+      "command": "argent",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "ARGENT_MCP_LOG": "/Users/gabrielpereira/.argent/mcp-calls.log"
+      }
+    }
+  },
+  "agent": {
+    "tool_permissions": {
+      "default": "allow"
+    }
+  }
+}

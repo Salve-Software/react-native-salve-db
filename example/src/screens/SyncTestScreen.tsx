@@ -69,6 +69,7 @@ interface EntityPanelProps {
   renderItemLabel: (item: Record<string, unknown>) => string;
   renderItemMeta: (item: Record<string, unknown>) => string;
   sampleServerPayload: () => Record<string, unknown>;
+  accessToken: string;
 }
 
 function emptyValues(fields: FieldConfig[]): Record<string, string> {
@@ -81,7 +82,7 @@ function emptyValues(fields: FieldConfig[]): Record<string, string> {
  * status breakdown — parameterized so the two schemas below don't duplicate
  * ~150 lines of identical list/composer/sync wiring.
  */
-function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderItemMeta, sampleServerPayload }: EntityPanelProps): React.JSX.Element {
+function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderItemMeta, sampleServerPayload, accessToken }: EntityPanelProps): React.JSX.Element {
   const { data: items, error: itemsError } = useQuery({
     schema,
     queryFn: (q) => q.orderBy('updatedAt', 'desc').limit(50),
@@ -146,7 +147,7 @@ function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderI
     try {
       const response = await fetch(`${SYNC_SERVER_BASE_URL}${basePath}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: accessToken },
         body: JSON.stringify(sampleServerPayload()),
       });
       if (!response.ok) throw new Error(`${basePath} responded ${response.status}`);
@@ -243,18 +244,41 @@ function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderI
   );
 }
 
+interface SyncTestScreenProps {
+  accessToken: string;
+}
+
+async function fetchRefreshCount(): Promise<number | null> {
+  try {
+    const response = await fetch(`${SYNC_SERVER_BASE_URL}/auth/_debug/refreshCount`);
+    if (!response.ok) return null;
+    const body = (await response.json()) as { refreshCount: number };
+    return body.refreshCount;
+  } catch {
+    return null;
+  }
+}
+
 /** Manual test surface for the sync engine against packages/salve-db-server's real REST API — Users and Products, each with independently-named sinceParam/limitParam. */
-export function SyncTestScreen(): React.JSX.Element {
+export function SyncTestScreen({ accessToken }: SyncTestScreenProps): React.JSX.Element {
   const { isReady, isLoading, error } = useDatabaseReady();
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [refreshCount, setRefreshCount] = useState<number | null>(null);
 
   async function syncAll() {
     setBusy(true);
     setLastResult(null);
     try {
+      const before = await fetchRefreshCount();
       const results = await Database.syncAll();
-      setLastResult(`syncAll() ok — ${results.length} schema(s) synced`);
+      const after = await fetchRefreshCount();
+      setRefreshCount(after);
+      const delta = before !== null && after !== null ? after - before : null;
+      setLastResult(
+        `syncAll() ok — ${results.length} schema(s) synced` +
+          (delta !== null ? ` — native refresh fired ${delta}x during this sync` : '')
+      );
     } catch (err) {
       setLastResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -271,6 +295,9 @@ export function SyncTestScreen(): React.JSX.Element {
         <Text style={styles.screenSubtitle}>
           {isReady ? 'Users + Products against salve-db-server' : 'Starting database…'}
         </Text>
+        {refreshCount !== null ? (
+          <Text style={styles.screenSubtitle}>server-side native refresh count: {refreshCount}</Text>
+        ) : null}
       </View>
 
       {!isReady ? (
@@ -308,6 +335,7 @@ export function SyncTestScreen(): React.JSX.Element {
                 name: `Server User ${new Date().toLocaleTimeString()}`,
                 email: `server-${Date.now()}@example.com`,
               })}
+              accessToken={accessToken}
             />
 
             <EntityPanel
@@ -324,12 +352,15 @@ export function SyncTestScreen(): React.JSX.Element {
                 name: `Server Product ${new Date().toLocaleTimeString()}`,
                 price: Math.round(Math.random() * 10000) / 100,
               })}
+              accessToken={accessToken}
             />
           </ScrollView>
 
           <Text style={styles.hint}>
             "Write directly on server" POSTs straight to salve-db-server, bypassing SQLite — proves the pull path when
-            you tap "Sync this entity" afterwards.
+            you tap "Sync this entity" afterwards. It sends the login-time access token directly, so once that token
+            expires (see ACCESS_TOKEN_TTL_MS) this button starts getting 401 even though "Sync All" keeps working —
+            the native engine refreshes its own copy, this screen never sees the new one.
           </Text>
         </KeyboardAvoidingView>
       )}

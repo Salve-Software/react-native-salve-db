@@ -13,6 +13,7 @@ import { ExpensesScreen } from './src/screens/ExpensesScreen';
 import { InfiniteQueryScreen } from './src/screens/InfiniteQueryScreen';
 import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
 import { SyncTestScreen } from './src/screens/SyncTestScreen';
+import { LoginScreen, type LoginTokens } from './src/screens/LoginScreen';
 import { SYNC_SERVER_BASE_URL } from './src/library/syncServer';
 
 if (__DEV__) {
@@ -30,7 +31,11 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key'];
 
-function AppTabs(): React.JSX.Element {
+interface AppTabsProps {
+  accessToken: string;
+}
+
+function AppTabs({ accessToken }: AppTabsProps): React.JSX.Element {
   const [tab, setTab] = useState<TabKey>('expenses');
 
   return (
@@ -39,7 +44,7 @@ function AppTabs(): React.JSX.Element {
         {tab === 'expenses' ? <ExpensesScreen /> : null}
         {tab === 'infinite' ? <InfiniteQueryScreen /> : null}
         {tab === 'benchmark' ? <BenchmarkScreen /> : null}
-        {tab === 'sync' ? <SyncTestScreen /> : null}
+        {tab === 'sync' ? <SyncTestScreen accessToken={accessToken} /> : null}
       </View>
 
       <SafeAreaView style={styles.tabBar} edges={['bottom']}>
@@ -55,6 +60,16 @@ function AppTabs(): React.JSX.Element {
 }
 
 function App(): React.JSX.Element {
+  const [tokens, setTokens] = useState<LoginTokens | null>(null);
+
+  if (tokens === null) {
+    return (
+      <SafeAreaProvider>
+        <LoginScreen onLoginSuccess={setTokens} />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <SalveDbProvider
@@ -64,7 +79,7 @@ function App(): React.JSX.Element {
           network: { timeout: 5000 },
           credentials: {
             provider: 'oauth2',
-            tokens: { accessToken: 'mock-access-token', refreshToken: 'mock-refresh-token' },
+            tokens,
             refresh: {
               endpoint: '/auth/refresh',
               response: { accessToken: '$.accessToken', refreshToken: '$.refreshToken' },
@@ -81,7 +96,7 @@ function App(): React.JSX.Element {
           ProductSchema,
         ]}
       >
-        <AppTabs />
+        <AppTabs accessToken={tokens.accessToken} />
       </SalveDbProvider>
     </SafeAreaProvider>
   );
