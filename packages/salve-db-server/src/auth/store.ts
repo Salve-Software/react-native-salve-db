@@ -24,6 +24,9 @@ const accessTokens = new Map<string, AccessTokenRecord>();
 // can't be replayed, which also exercises the native engine re-persisting
 // both tokens, not just the access token.
 const refreshTokens = new Map<string, string>();
+// email -> currently active pair, so re-authenticating revokes the previous
+// pair instead of leaking it — keeps both Maps bounded by active session count.
+const activeTokensByEmail = new Map<string, { accessToken: string; refreshToken: string }>();
 
 let refreshCount = 0;
 
@@ -34,11 +37,18 @@ export interface TokenPair {
 }
 
 function issueTokenPair(email: string): TokenPair {
+  const previous = activeTokensByEmail.get(email);
+  if (previous) {
+    accessTokens.delete(previous.accessToken);
+    refreshTokens.delete(previous.refreshToken);
+  }
+
   const accessToken = randomUUID();
   const refreshToken = randomUUID();
   const expiresIn = accessTokenTtlMs();
   accessTokens.set(accessToken, { email, expiresAt: Date.now() + expiresIn });
   refreshTokens.set(refreshToken, email);
+  activeTokensByEmail.set(email, { accessToken, refreshToken });
   return { accessToken, refreshToken, expiresIn };
 }
 
