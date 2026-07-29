@@ -47,6 +47,8 @@ Before **every** tap, you MUST call a discovery tool and extract coordinates fro
 
 Whenever something changed YOU MUST first call `describe`, or another appropriate discovery tool so you do not hallucinate element positions. Do not guess coordinates if you can use discovery tool. Do not tap if you have not called a discovery tool in the current step. Screenshots alone are never sufficient for coordinates.
 
+This also applies inside `run-sequence`: every tap step's coordinates must come from a discovery call against the exact screen state that step will hit. Only batch taps whose target coordinates are already known-stable (e.g. a fixed toolbar/tab bar) across the batched steps — never chain taps through screens you have not yet discovered, since `run-sequence` does not let you inspect the screen between steps.
+
 If a **tap fails twice** at the same coordinates, **stop retrying**. Re-run the discovery tool.
 
 If `describe` fails, **read the exact error before reacting**, follow the recovery guidance in `argent-device-interact` to choose the correct next action.
@@ -70,8 +72,8 @@ Decision order:
 
 <general_rules>
 
-- All simulator/emulator interactions go through argent MCP tools — never use `xcrun simctl`,
-  raw `curl` to simulator ports, or the simulator-server binary directly.
+- All UI interactions (tap, swipe, type, screenshot, describe, launch/restart app) go through argent MCP tools — never use `xcrun simctl`,
+  raw `curl` to simulator ports, or the simulator-server binary directly for these.
 - Before calling any gesture tool for the first time, use ToolSearch to load its schema.
 - Interaction tools (`gesture-tap`, `gesture-swipe`, `gesture-pinch`, `gesture-rotate`, `gesture-custom`, `launch-app`, etc.) return a screenshot automatically.
   Call `screenshot` separately only for a baseline before any action or after a delay.
@@ -79,7 +81,7 @@ Decision order:
 - Always use `run-sequence` when performing multiple sequential device actions where you don't need to observe the screen between steps. More in `argent-device-interact` skill.
 - When the session ends or the user says they are done: call `stop-all-simulator-servers`.
   If the user started Metro separately, ask whether to call `stop-metro` (specify the port if not 8081).
-- If tools provided by mcp-server are not sufficient and action can be done using `xcrun`, `adb`, or other commands, use the command. Examples: changing device options, performing a device action such as lock, shake, etc.
+- Raw `xcrun`/`adb`/other CLI commands are reserved for setup, configuration, and diagnostics that argent MCP tools don't cover — e.g. changing device options, lock/shake, or other device-state actions with no MCP equivalent. Never use them as a substitute for the MCP UI-interaction tools above.
 - When waiting for an action, do not call `screenshot` repeatedly without a proper wait mechanism. Use the `await-ui-element` tool to block until the UI settles (e.g. wait for an element to become `visible`/`hidden`, or to contain expected `text`) instead of polling.
   </general_rules>
 
