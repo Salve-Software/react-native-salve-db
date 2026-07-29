@@ -1,6 +1,13 @@
 name: Release
 
 on:
+  push:
+    branches:
+      # 'main' is deliberately left out until v0.1.0 / salve-db-studio@0.0.1 are tagged on
+      # main post-merge — without those tags, the first automated run has no baseline and
+      # would treat this as a first release (semantic-release defaults that to 1.0.0),
+      # clobbering the versions already published manually. Add 'main' back once tagged.
+      - next
   workflow_dispatch:
 
 permissions:
@@ -8,11 +15,34 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Releases push commits/tags via @semantic-release/git — cancelling one mid-push could
+  # leave a package published without a matching tag, corrupting the next run's version
+  # calculation. Queue instead of cancelling.
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Release
+  detect-changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      studio: ${{ steps.filter.outputs.studio }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # push (not pull_request): base must be explicit or it falls back to the
+          # default branch, which is a no-op diff when pushing to that same branch.
+          base: ${{ github.ref }}
+          filters: |
+            studio:
+              - 'packages/salve-db-studio/**'
+
+  release-core:
+    name: Release core (react-native-salve-db)
+    needs: detect-changes
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -24,32 +54,106 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Setup Bun.js
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - name: Cache bun dependencies
-        id: bun-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
 
-      - name: Install npm dependencies (bun)
-        run: bun install
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
 
-      - name: Build lib
-        run: bun run build
+      # Trusted Publishing (OIDC) needs npm >= 11.5.1 — pin to latest rather than trust
+      # whatever ships with the Node version above.
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Test native (C++/Hermes)
+        run: npm run test:native
+
+      - name: Build
+        run: npm run build
 
       - name: Release
         env:
+          # No NPM_TOKEN: publish auth is Trusted Publishing (OIDC) via `id-token: write`
+          # above — the npm CLI exchanges the job's OIDC token for a short-lived publish
+          # token itself. Provenance is automatic under trusted publishing, no flag needed.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
           GIT_AUTHOR_NAME: ${{ github.actor }}
           GIT_AUTHOR_EMAIL: '${{ github.actor }}@users.noreply.github.com'
           GIT_COMMITTER_NAME: ${{ github.actor }}
           GIT_COMMITTER_EMAIL: '${{ github.actor }}@users.noreply.github.com'
-        run: bun release
+        run: npx semantic-release
+
+  release-studio:
+    name: Release studio (salve-db-studio)
+    needs: [detect-changes, release-core]
+    if: needs.detect-changes.outputs.studio == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # release-core (above) may have just pushed its own version-bump commit/tag to
+          # this same branch — check out the branch tip, not the pinned triggering sha,
+          # so this job's own @semantic-release/git push doesn't diverge from origin.
+          ref: ${{ github.ref_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      # Trusted Publishing (OIDC) needs npm >= 11.5.1 — pin to latest rather than trust
+      # whatever ships with the Node version above.
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        working-directory: packages/salve-db-studio
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: packages/salve-db-studio
+        run: npm test
+
+      - name: Build
+        working-directory: packages/salve-db-studio
+        run: npm run build
+
+      - name: Verify package contents
+        working-directory: packages/salve-db-studio
+        run: npm pack --dry-run
+
+      - name: Release
+        working-directory: packages/salve-db-studio
+        env:
+          # No NPM_TOKEN: publish auth is Trusted Publishing (OIDC) via `id-token: write`
+          # above — the npm CLI exchanges the job's OIDC token for a short-lived publish
+          # token itself. Provenance is automatic under trusted publishing, no flag needed.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: ${{ github.actor }}
+          GIT_AUTHOR_EMAIL: '${{ github.actor }}@users.noreply.github.com'
+          GIT_COMMITTER_NAME: ${{ github.actor }}
+          GIT_COMMITTER_EMAIL: '${{ github.actor }}@users.noreply.github.com'
+        run: npx semantic-release
