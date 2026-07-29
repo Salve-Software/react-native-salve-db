@@ -7,7 +7,7 @@ See [fix-reference.md](fix-reference.md) for concrete fix patterns per finding.
 
 ### Memoization
 
-Check every exported function component: is it rendered in a list, a frequently-updating parent, or a context consumer? If yes and props are stable, wrap in `React.memo`. Check context providers for unstable `value` props. Skip `React.memo` if React Compiler is active.
+Check every exported function component: is it rendered in a list, a frequently-updating parent, or a context consumer? If yes and props are stable, wrap in `React.memo` — but only when the React Compiler is inactive, or a confirmed compiler bail-out (no `useMemoCache` in `react-profiler-fiber-tree`) makes manual memoization necessary. Otherwise skip it. Check context providers for unstable `value` props.
 
 ### List rendering
 
