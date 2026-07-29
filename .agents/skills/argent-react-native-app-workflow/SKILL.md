@@ -52,14 +52,14 @@ npx react-native run-ios --simulator="<name>"        # iOS (or --udid <UDID>)
 npx react-native run-android --deviceId=<adb-serial> # Android
 ```
 
-**Android only**: after install, run `adb -s <serial> reverse tcp:8081 tcp:8081` so the emulator/device can reach Metro on your host. Repeat if the device restarts or adb drops.
+**Android only**: after install, run `adb -s <serial> reverse tcp:<metro_port> tcp:<metro_port>` (default `8081`; use the resolved `metro_port` from `argent-environment-inspector` if different) so the emulator/device can reach Metro on your host. Repeat if the device restarts or adb drops.
 
 **Agent checklist:**
 
 - [ ] Metro is already running and shows "ready"
 - [ ] Command run from project root
 - [ ] If the device isn't booted yet: use `boot-device` with the iOS `udid` or Android `avdName`. Refer to the `argent-ios-simulator-setup` / `argent-android-emulator-setup` skill.
-- [ ] Android: `adb -s <serial> reverse tcp:8081 tcp:8081` done.
+- [ ] Android: `adb -s <serial> reverse tcp:<metro_port> tcp:<metro_port>` done.
 
 ---
 
@@ -111,7 +111,7 @@ After code or config changes, the app must load the new bundle:
 **Order of operations (simplest first):**
 
 1. Clean build folder, then retry the build command
-2. Clear caches and reinstall dependencies: reset Metro cache, `watchman watch-del-all`, remove `node_modules` + lockfile, `npm install`, then `cd ios && rm -rf build Pods Podfile.lock && pod install --repo-update`
+2. Clear caches and reinstall dependencies: reset Metro cache, `watchman watch-del-all`, `npm install` (no lockfile changes). Ask the user before deleting `node_modules` + the lockfile or running `pod install --repo-update` — both can change resolved dependency versions.
 3. CocoaPods issues: `pod deintegrate` then `pod install --repo-update`
 4. Open `ios/*.xcworkspace` in Xcode for detailed errors in the Report navigator
 

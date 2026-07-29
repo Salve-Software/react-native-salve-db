@@ -1,7 +1,7 @@
 # Phase 1: Lint Rules
 
 Run once at the project root. Catches mechanical issues deterministically.
-Install missing plugins before running: `npm install --save-dev eslint-plugin-react-perf`.
+If `eslint-plugin-react-perf` is missing, ask the user before installing it — `npm install --save-dev eslint-plugin-react-perf` mutates their dependency tree and lockfile.
 
 ## Rules
 
@@ -51,5 +51,5 @@ Install missing plugins before running: `npm install --save-dev eslint-plugin-re
 1. Check if the project has an existing ESLint config.
    2a. If yes, extend it with missing rules from above.
    2b. If no config, create a temporary `.eslintrc.json` with all rules above.
-2. Run: `npx eslint --format json <src_dir>` — replace `<src_dir>` with the project's JS/TS source root (check `package.json` scripts or look for `src/`, `app/`, `lib/`)
+2. Run the project's locally installed ESLint (`npm exec eslint -- --format json <src_dir>` / `npx --no-install eslint --format json <src_dir>`) — replace `<src_dir>` with the project's JS/TS source root (check `package.json` scripts or look for `src/`, `app/`, `lib/`). Only if no local install exists, ask the user before falling back to a version-pinned `npx eslint@<version> --format json <src_dir>`.
 3. Parse output into: `file:line -> rule -> message`.
