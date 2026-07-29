@@ -97,7 +97,11 @@ jobs:
   release-studio:
     name: Release studio (salve-db-studio)
     needs: [detect-changes, release-core]
-    if: needs.detect-changes.outputs.studio == 'true'
+    # paths-filter can't diff a workflow_dispatch run against a meaningful baseline (no
+    # 'before' SHA outside push events — it falls back to comparing the branch tip against
+    # itself), so studio would always read false there. Manual runs skip the filter outright;
+    # semantic-release's own commit analysis is still the real gate for whether it releases.
+    if: github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.studio == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
