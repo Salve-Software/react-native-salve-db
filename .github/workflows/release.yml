@@ -3,10 +3,7 @@ name: Release
 on:
   push:
     branches:
-      # 'main' is deliberately left out until v0.1.0 / salve-db-studio@0.0.1 are tagged on
-      # main post-merge — without those tags, the first automated run has no baseline and
-      # would treat this as a first release (semantic-release defaults that to 1.0.0),
-      # clobbering the versions already published manually. Add 'main' back once tagged.
+      - main
       - next
   workflow_dispatch:
 
