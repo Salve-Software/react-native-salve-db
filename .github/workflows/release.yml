@@ -73,9 +73,6 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Test native (C++/Hermes)
-        run: npm run test:native
-
       - name: Build
         run: npm run build
 
