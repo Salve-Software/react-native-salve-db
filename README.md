@@ -269,6 +269,8 @@ npm run db:studio
 
 This starts the Studio server ([`packages/salve-db-studio`](packages/salve-db-studio)) — an Express + WebSocket relay on **port 7377** serving a React UI — and opens it in your browser.
 
+Outside this monorepo, run it with `npx salve-db-studio` — no install needed.
+
 ### Connecting your app
 
 No extra setup needed on your end: when your app calls `Database.configure(...)` in `__DEV__`, it auto-connects to `ws://localhost:7377` and streams live `change` events as you use the app. Multiple running devices/simulators each show up as a separate entry in the device selector, so you can pick which one to inspect.

@@ -50,7 +50,8 @@
   "workspaces": [
     "example",
     "packages/salve-db-server",
-    "packages/salve-db-studio"
+    "packages/salve-db-studio",
+    "packages/salve-db-studio-launcher"
   ],
   "repository": "https://github.com/Salve-Software/react-native-salve-db.git",
   "author": "Salve-Software",

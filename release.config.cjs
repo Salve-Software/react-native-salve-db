@@ -1,21 +1,11 @@
-const rules = [
-  { type: 'feat', release: 'minor', title: '✨ Features' },
-  { type: 'fix', release: 'patch', title: '🐛 Bug Fixes' },
-  { type: 'perf', release: 'patch', title: '💨 Performance Improvements' },
-  { type: 'refactor', release: 'patch', title: '🔄 Code Refactors' },
-  { type: 'docs', release: 'patch', title: '📚 Documentation' },
-  { type: 'chore', release: 'patch', title: '🛠️ Other changes' },
-]
-
-const sortMap = Object.fromEntries(
-  rules.map((rule, index) => [rule.title, index])
-)
+const { rules, sortMap } = require('./release.rules.cjs')
 
 /**
  * @type {import('semantic-release').GlobalConfig}
  */
 module.exports = {
   branches: ['main', { name: 'next', prerelease: 'next' }],
+  tagFormat: 'v${version}',
   plugins: [
     [
       '@semantic-release/commit-analyzer',
@@ -24,7 +14,20 @@ module.exports = {
         releaseRules: [
           { breaking: true, release: 'major' },
           { revert: true, release: 'patch' },
-        ].concat(rules.map(({ type, release }) => ({ type, release }))),
+        ]
+          .concat(rules.map(({ type, release }) => ({ type, release })))
+          // Commits scoped studio/studio-* (e.g. studio, studio-ui, studio-server) only
+          // version packages/salve-db-studio (see its own release.config.cjs). This rule
+          // must be LAST: @semantic-release/commit-analyzer resolves a single commit's
+          // release type by letting the last matching rule in array order win, so putting
+          // the exclusion after the type rules is what makes it override them for a
+          // studio-scoped commit. KNOWN LIMITATION: this does not cover a studio-scoped
+          // BREAKING CHANGE — the unscoped `breaking: true` rule above still fires and,
+          // once it sets 'major', analysis stops before reaching this rule at all. A
+          // breaking change confined to packages/salve-db-studio will therefore still
+          // major-bump this package; it will be visible in the generated release notes
+          // (referencing the studio-scoped commit) for manual review.
+          .concat([{ scope: 'studio*', release: false }]),
       },
     ],
     [

@@ -1,0 +1,33 @@
+{
+  "name": "salve-db-studio",
+  "version": "1.0.0",
+  "description": "npx launcher for @salve-software/salve-db-studio — run `npx salve-db-studio` to start the Studio.",
+  "keywords": [
+    "salve-db",
+    "react-native",
+    "sqlite",
+    "studio",
+    "database-gui",
+    "offline-first",
+    "cli"
+  ],
+  "license": "MIT",
+  "bin": "bin.js",
+  "files": [
+    "bin.js"
+  ],
+  "repository": "https://github.com/Salve-Software/react-native-salve-db.git",
+  "author": "Salve-Software",
+  "bugs": "https://github.com/Salve-Software/react-native-salve-db/issues",
+  "homepage": "https://github.com/Salve-Software/react-native-salve-db#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@salve-software/salve-db-studio": "*"
+  },
+  "engines": {
+    "node": ">= 22.11.0"
+  }
+}

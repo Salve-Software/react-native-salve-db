@@ -4,14 +4,16 @@ The `quality_control` field in the output JSON must follow this structure:
 
 ```json
 {
-  "linting": { "eslint": bool, "eslint_config": "path", "run_command": "cmd", "fix_command": "cmd" },
-  "formatting": { "prettier": bool, "prettier_config": "path", "run_command": "cmd" },
-  "type_checking": { "typescript": bool, "strict_mode": bool, "run_command": "cmd" },
-  "unit_tests": { "jest": bool, "jest_config": "path", "run_command": "cmd", "watch_command": "cmd", "coverage_command": "cmd" },
+  "linting": { "eslint": bool, "eslint_config": "path" | null, "run_command": "cmd" | null, "fix_command": "cmd" | null },
+  "formatting": { "prettier": bool, "prettier_config": "path" | null, "run_command": "cmd" | null },
+  "type_checking": { "typescript": bool, "strict_mode": bool, "run_command": "cmd" | null },
+  "unit_tests": { "jest": bool, "jest_config": "path" | null, "run_command": "cmd" | null, "watch_command": "cmd" | null, "coverage_command": "cmd" | null },
   "e2e_tests": { "detox": bool, "maestro": bool, "xctest": bool, "flutter_integration_test": bool },
   "feedback_loop_tools": { "metro_hot_reload": bool, "flutter_hot_reload": bool, "react_devtools": bool, "flipper": bool, "storybook": bool, "notes": "string" }
 }
 ```
+
+Use `null` (not an empty string) for any config path or command that does not apply to this project — e.g. `eslint_config` when `eslint` is `false`, or `run_command` when no such tool is configured.
 
 Look for these beyond the obvious lint/test configs, regardless of project type:
 
