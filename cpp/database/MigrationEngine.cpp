@@ -2,6 +2,7 @@
 #include "json_parser.hpp"
 #include "SchemaRegistry.hpp"
 #include "SalveMetadataManager.hpp"
+#include "../sync/SyncContract.hpp"
 #include "../sync/SyncDefinitionStore.hpp"
 #include "../sync/SyncCursorStore.hpp"
 
@@ -585,14 +586,37 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
     schema.sync.definition = syncObj;
 
     if (schema.sync.enabled) {
-      auto updatedAt = schema.columns.find("updatedAt");
-      bool valid = updatedAt != schema.columns.end()
-        && updatedAt->second.type == "datetime"
-        && !updatedAt->second.nullable;
-      if (!valid) {
+      std::string conflictStrategy = "lastWriteWins";
+      std::string conflictField = "updatedAt";
+      bool conflictFieldExplicit = false;
+      auto conflictVal = syncObj.get("conflict");
+      if (conflictVal && conflictVal->get().isObject()) {
+        conflictStrategy = conflictVal->get().getString("strategy", "lastWriteWins");
+        conflictFieldExplicit = conflictVal->get().has("field");
+        conflictField = conflictVal->get().getString("field", "updatedAt");
+      }
+
+      if (!isValidConflictStrategy(conflictStrategy)) {
         throw std::runtime_error(
-          "registerSchema: sync.enabled requires a NOT NULL 'datetime' column named 'updatedAt' (used for lastWriteWins)"
+          "registerSchema: sync.conflict.strategy '" + conflictStrategy + "' is not supported"
         );
+      }
+
+      if (conflictStrategy == "lastWriteWins") {
+        auto field = schema.columns.find(conflictField);
+        bool valid = field != schema.columns.end()
+          && field->second.type == "datetime"
+          && !field->second.nullable;
+        if (!valid) {
+          std::string hint = conflictFieldExplicit
+            ? "" // the developer already chose this name — nothing more to suggest
+            : " ('" + conflictField + "' is the default when sync.conflict.field is not set — "
+              "pass a different sync.conflict.field to use another column instead)";
+          throw std::runtime_error(
+            "registerSchema: sync.conflict.strategy 'lastWriteWins' requires a NOT NULL 'datetime' column named '" +
+            conflictField + "'" + hint
+          );
+        }
       }
     }
   }

@@ -17,6 +17,15 @@ export interface IEndpointDefinition {
   /** Query-param name carrying the page size, e.g. `"limit"`. */
   limitParam: string;
 
+  /**
+   * Field name (in each pulled row's JSON) carrying that row's timestamp —
+   * read from the last row of a page to advance the incremental-pull
+   * cursor. Required regardless of `sync.conflict.strategy`: pagination
+   * needs it independent of how conflicts get resolved.
+   * @default "updatedAt"
+   */
+  cursorField?: string;
+
   /** Extra headers merged into every request for this entity. */
   headers?: Record<string, string>;
 }
