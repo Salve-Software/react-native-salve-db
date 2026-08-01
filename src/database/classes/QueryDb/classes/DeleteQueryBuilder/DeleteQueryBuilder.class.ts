@@ -5,6 +5,7 @@ import type { SqlValue } from '../../../../../specs/types';
 import type { AnySchema } from '../../../../../types';
 import type { IDeleteQueryBuilder } from '../../types';
 import { assertIndexedColumns, collectConditionColumns, compileCondition } from '../../library';
+import { requestWriteSync } from '../../../../../sync';
 
 export class DeleteQueryBuilder<TSchema extends AnySchema>
   implements IDeleteQueryBuilder<TSchema>
@@ -34,5 +35,9 @@ export class DeleteQueryBuilder<TSchema extends AnySchema>
     }
 
     this._bridge.execute(sql, params);
+
+    if (this._schema.sync?.enabled === true) {
+      requestWriteSync(this._schema.name);
+    }
   }
 }

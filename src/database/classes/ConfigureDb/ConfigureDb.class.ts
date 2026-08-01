@@ -2,7 +2,7 @@ import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { IConfigureProps, IRegisterProps } from './types';
 import { registerAppOpenSync } from './library/registerAppOpenSync';
 import { mapCredentials } from './library/mapCredentials';
-import { registerReadSyncBridge } from '../../../sync';
+import { registerSyncBridge } from '../../../sync';
 import { StudioAgent } from '../../../studio';
 
 export class ConfigureDb {
@@ -37,7 +37,7 @@ export class ConfigureDb {
     ConfigureDb._configured = true;
     ConfigureDb._syncOnAppOpen = syncOnAppOpen;
     registerAppOpenSync(this._bridge, () => ConfigureDb._syncOnAppOpen);
-    registerReadSyncBridge(this._bridge);
+    registerSyncBridge(this._bridge);
 
     if (__DEV__) {
       this._studioAgent.start(undefined, props.name);

@@ -1,1 +1,1 @@
-export { registerReadSyncBridge, requestReadSync } from './readSyncTrigger';
+export { registerSyncBridge, requestReadSync, requestWriteSync } from './syncTrigger';

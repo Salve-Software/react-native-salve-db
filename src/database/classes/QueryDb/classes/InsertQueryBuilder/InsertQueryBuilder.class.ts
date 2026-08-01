@@ -4,6 +4,7 @@ import type { AnySchema } from '../../../../../types';
 import type { IInsertQueryBuilder } from '../../types';
 import type { InferInsertModel } from './types';
 import { MAX_BATCH_INSERT_ROWS, SQLITE_MAX_BOUND_PARAMS } from '../../constants';
+import { requestWriteSync } from '../../../../../sync';
 
 export class InsertQueryBuilder<TSchema extends AnySchema>
   implements IInsertQueryBuilder<TSchema>
@@ -78,5 +79,9 @@ export class InsertQueryBuilder<TSchema extends AnySchema>
     }
 
     this._bridge.execute(sql, params)
+
+    if (this._schema.sync?.enabled === true) {
+      requestWriteSync(this._schema.name)
+    }
   }
 }

@@ -3,6 +3,9 @@ import { eq, and, gt } from '../../../../../../utils';
 import type { SalveDatabase } from '../../../../../../specs/SalveDatabase.nitro';
 import type { AnySchema } from '../../../../../../types';
 
+jest.mock('../../../../../../sync', () => ({ requestWriteSync: jest.fn() }));
+const { requestWriteSync } = require('../../../../../../sync') as { requestWriteSync: jest.Mock };
+
 const schema: AnySchema = {
   name: 'users',
   version: 1,
@@ -16,6 +19,24 @@ const schema: AnySchema = {
     { name: 'idx_age', columns: ['age'] },
     { name: 'idx_name', columns: ['name'] },
   ],
+};
+
+const syncEnabledSchema: AnySchema = {
+  ...schema,
+  name: 'orders',
+  sync: {
+    enabled: true,
+    direction: 'bidirectional',
+    conflict: 'lastWriteWins',
+    transport: 'rest',
+    endpoint: { basePath: '/orders', sinceParam: 'updatedAfter', limitParam: 'limit' },
+  },
+};
+
+const syncDisabledSchema: AnySchema = {
+  ...syncEnabledSchema,
+  name: 'orders-disabled',
+  sync: { ...syncEnabledSchema.sync!, enabled: false },
 };
 
 function makeBridge() {
@@ -33,6 +54,7 @@ const NOW = 1_700_000_000_000;
 describe('DeleteQueryBuilder', () => {
   beforeEach(() => {
     jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    requestWriteSync.mockClear();
   });
 
   afterEach(() => {
@@ -67,9 +89,53 @@ describe('DeleteQueryBuilder', () => {
 
   test('throws when where() targets a non-indexed, non-primary-key column', () => {
     const bridge = makeBridge();
-    const noIndexSchema: AnySchema = { ...schema, indexes: [] };
+    const noIndexSchema: AnySchema = { ...syncEnabledSchema, indexes: [] };
     expect(() =>
       new DeleteQueryBuilder(noIndexSchema, bridge).where(eq('age', 60)).execute()
     ).toThrow(/index/i);
+    expect(requestWriteSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('DeleteQueryBuilder — write-triggered sync', () => {
+  beforeEach(() => {
+    jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    requestWriteSync.mockClear();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('a sync-enabled schema requests a write-triggered sync after a successful soft-delete', () => {
+    const bridge = makeBridge();
+    new DeleteQueryBuilder(syncEnabledSchema, bridge).execute();
+
+    expect(requestWriteSync).toHaveBeenCalledWith('orders');
+    expect(requestWriteSync).toHaveBeenCalledTimes(1);
+  });
+
+  test('a schema with no sync block never requests a write-triggered sync', () => {
+    const bridge = makeBridge();
+    new DeleteQueryBuilder(schema, bridge).execute();
+
+    expect(requestWriteSync).not.toHaveBeenCalled();
+  });
+
+  test('a schema with sync.enabled: false never requests a write-triggered sync', () => {
+    const bridge = makeBridge();
+    new DeleteQueryBuilder(syncDisabledSchema, bridge).execute();
+
+    expect(requestWriteSync).not.toHaveBeenCalled();
+  });
+
+  test('repeated execute() calls each ask for a write-triggered sync once', () => {
+    const bridge = makeBridge();
+    new DeleteQueryBuilder(syncEnabledSchema, bridge).where(eq('id', 1)).execute();
+    new DeleteQueryBuilder(syncEnabledSchema, bridge).where(eq('id', 2)).execute();
+
+    expect(requestWriteSync).toHaveBeenCalledTimes(2);
+    expect(requestWriteSync).toHaveBeenNthCalledWith(1, 'orders');
+    expect(requestWriteSync).toHaveBeenNthCalledWith(2, 'orders');
   });
 });
