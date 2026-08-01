@@ -50,7 +50,7 @@ function makeSyncSchema(name: string): AnySchema {
     sync: {
       enabled: true,
       direction: 'bidirectional',
-      conflict: 'lastWriteWins',
+      conflict: { strategy: 'lastWriteWins' },
       transport: 'rest',
       endpoint: { basePath: `/${name}`, sinceParam: 'updatedAfter', limitParam: 'limit' },
     },

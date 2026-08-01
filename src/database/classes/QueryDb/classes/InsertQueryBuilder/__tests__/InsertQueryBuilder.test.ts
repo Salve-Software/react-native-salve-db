@@ -22,7 +22,7 @@ const syncEnabledSchema: AnySchema = {
   sync: {
     enabled: true,
     direction: 'bidirectional',
-    conflict: 'lastWriteWins',
+    conflict: { strategy: 'lastWriteWins' },
     transport: 'rest',
     endpoint: { basePath: '/orders', sinceParam: 'updatedAfter', limitParam: 'limit' },
   },

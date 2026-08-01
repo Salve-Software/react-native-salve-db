@@ -278,7 +278,7 @@ describe('sync_queue side effects from real writes', () => {
       sync: {
         enabled: true,
         direction: 'bidirectional',
-        conflict: 'lastWriteWins',
+        conflict: { strategy: 'lastWriteWins' },
         transport: 'rest',
         endpoint: { basePath: '/customers', sinceParam: 'updatedAfter', limitParam: 'limit' },
         pagination: { pageSize: 20, maxPagesPerSession: 20 },

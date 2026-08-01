@@ -42,7 +42,7 @@ function makeSyncSchema(name: string, enabled: boolean): AnySchema {
     sync: {
       enabled,
       direction: 'bidirectional',
-      conflict: 'lastWriteWins',
+      conflict: { strategy: 'lastWriteWins' },
       transport: 'rest',
       endpoint: { basePath: `/${name}`, sinceParam: 'updatedAfter', limitParam: 'limit' },
     },
