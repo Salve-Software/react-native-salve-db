@@ -93,9 +93,11 @@ describe('SelectQueryBuilder — SQL generation', () => {
 });
 
 describe('SelectQueryBuilder — sync execution guardrails', () => {
-  test('throws when limit() was never called', () => {
+  test('defaults to MAX_SYNC_PAGE_SIZE when limit() was never called', () => {
     const bridge = makeBridge();
-    expect(() => new SelectQueryBuilder(schema, bridge).execute()).toThrow(/limit/i);
+    new SelectQueryBuilder(schema, bridge).execute();
+    const [sql] = executedWith(bridge);
+    expect(sql).toBe(`SELECT * FROM "users" WHERE "deletedAt" IS NULL LIMIT ${MAX_SYNC_PAGE_SIZE}`);
   });
 
   test('throws when limit() exceeds MAX_SYNC_PAGE_SIZE', () => {
@@ -110,6 +112,27 @@ describe('SelectQueryBuilder — sync execution guardrails', () => {
     expect(() =>
       new SelectQueryBuilder(schema, bridge).limit(MAX_SYNC_PAGE_SIZE).execute()
     ).not.toThrow();
+  });
+
+  test('throws when limit() is negative', () => {
+    const bridge = makeBridge();
+    expect(() =>
+      new SelectQueryBuilder(schema, bridge).limit(-1).execute()
+    ).toThrow(/non-negative integer/);
+  });
+
+  test('throws when limit() is fractional', () => {
+    const bridge = makeBridge();
+    expect(() =>
+      new SelectQueryBuilder(schema, bridge).limit(1.5).execute()
+    ).toThrow(/non-negative integer/);
+  });
+
+  test('throws when limit() is NaN', () => {
+    const bridge = makeBridge();
+    expect(() =>
+      new SelectQueryBuilder(schema, bridge).limit(NaN).execute()
+    ).toThrow(/non-negative integer/);
   });
 
   test('throws when orderBy() targets a non-indexed, non-primary-key column', () => {
