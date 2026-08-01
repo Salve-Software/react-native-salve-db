@@ -93,9 +93,11 @@ describe('SelectQueryBuilder — SQL generation', () => {
 });
 
 describe('SelectQueryBuilder — sync execution guardrails', () => {
-  test('throws when limit() was never called', () => {
+  test('defaults to MAX_SYNC_PAGE_SIZE when limit() was never called', () => {
     const bridge = makeBridge();
-    expect(() => new SelectQueryBuilder(schema, bridge).execute()).toThrow(/limit/i);
+    new SelectQueryBuilder(schema, bridge).execute();
+    const [sql] = executedWith(bridge);
+    expect(sql).toBe(`SELECT * FROM "users" WHERE "deletedAt" IS NULL LIMIT ${MAX_SYNC_PAGE_SIZE}`);
   });
 
   test('throws when limit() exceeds MAX_SYNC_PAGE_SIZE', () => {

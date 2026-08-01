@@ -44,11 +44,9 @@ export class SelectQueryBuilder<TSchema extends AnySchema>
   }
 
   execute(): InferSelectModel<TSchema>[] {
-    if (this._limit === undefined) {
-      throw new Error('execute() requires .limit() to be set (max MAX_SYNC_PAGE_SIZE) before calling.');
-    }
-    if (this._limit > MAX_SYNC_PAGE_SIZE) {
-      throw new Error(`execute() limit (${this._limit}) exceeds MAX_SYNC_PAGE_SIZE (${MAX_SYNC_PAGE_SIZE}).`);
+    const limit = this._limit === undefined ? MAX_SYNC_PAGE_SIZE : this._limit;
+    if (limit > MAX_SYNC_PAGE_SIZE) {
+      throw new Error(`execute() limit (${limit}) exceeds MAX_SYNC_PAGE_SIZE (${MAX_SYNC_PAGE_SIZE}).`);
     }
 
     const columnsNeedingIndex: string[] = [];
@@ -66,7 +64,7 @@ export class SelectQueryBuilder<TSchema extends AnySchema>
       sql += ` ORDER BY "${this._orderByColumn}" ${this._orderByDir.toUpperCase()}`;
     }
 
-    sql += ` LIMIT ${this._limit}`;
+    sql += ` LIMIT ${limit}`;
 
     if (this._offset !== undefined) {
       sql += ` OFFSET ${this._offset}`;
