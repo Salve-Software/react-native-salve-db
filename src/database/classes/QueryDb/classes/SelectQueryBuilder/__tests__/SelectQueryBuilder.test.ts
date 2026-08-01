@@ -114,6 +114,27 @@ describe('SelectQueryBuilder — sync execution guardrails', () => {
     ).not.toThrow();
   });
 
+  test('throws when limit() is negative', () => {
+    const bridge = makeBridge();
+    expect(() =>
+      new SelectQueryBuilder(schema, bridge).limit(-1).execute()
+    ).toThrow(/non-negative integer/);
+  });
+
+  test('throws when limit() is fractional', () => {
+    const bridge = makeBridge();
+    expect(() =>
+      new SelectQueryBuilder(schema, bridge).limit(1.5).execute()
+    ).toThrow(/non-negative integer/);
+  });
+
+  test('throws when limit() is NaN', () => {
+    const bridge = makeBridge();
+    expect(() =>
+      new SelectQueryBuilder(schema, bridge).limit(NaN).execute()
+    ).toThrow(/non-negative integer/);
+  });
+
   test('throws when orderBy() targets a non-indexed, non-primary-key column', () => {
     const bridge = makeBridge();
     expect(() =>

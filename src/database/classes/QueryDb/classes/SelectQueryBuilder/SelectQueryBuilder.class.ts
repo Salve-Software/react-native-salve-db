@@ -45,6 +45,9 @@ export class SelectQueryBuilder<TSchema extends AnySchema>
 
   execute(): InferSelectModel<TSchema>[] {
     const limit = this._limit === undefined ? MAX_SYNC_PAGE_SIZE : this._limit;
+    if (!Number.isInteger(limit) || limit < 0) {
+      throw new Error(`execute() limit (${limit}) must be a non-negative integer.`);
+    }
     if (limit > MAX_SYNC_PAGE_SIZE) {
       throw new Error(`execute() limit (${limit}) exceeds MAX_SYNC_PAGE_SIZE (${MAX_SYNC_PAGE_SIZE}).`);
     }
