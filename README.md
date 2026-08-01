@@ -171,6 +171,7 @@ export default function App() {
         baseUrl: 'https://api.myapp.com',
         credentials: {
           provider: 'oauth2',
+          // accessToken.headerName/scheme default to "Authorization"/"Bearer" — override for custom APIs.
           tokens: { accessToken, refreshToken },
           refresh: {
             endpoint: '/auth/refresh',
