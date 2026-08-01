@@ -34,7 +34,7 @@ void openSyncFixture(const std::string& testName) {
   })"));
 
   DatabaseManager::shared().configureCredentials(
-    "oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken",
+    "oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken",
     InitialCredentialTokens{"access-1", "refresh-1"}
   );
   DatabaseManager::shared().configureNetwork("https://api.company.com", 5000.0);

@@ -48,7 +48,7 @@ std::shared_ptr<SQLiteConnection> openOrchestratorFixture(
   })"));
 
   DatabaseManager::shared().configureCredentials(
-    "oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken",
+    "oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken",
     InitialCredentialTokens{"access-1", "refresh-1"}
   );
   DatabaseManager::shared().configureNetwork("https://api.company.com", 5000.0);
@@ -941,7 +941,7 @@ TEST_CASE("a pre-#84 opaque cursor is reset on registration; the first pull star
   })"));
 
   DatabaseManager::shared().configureCredentials(
-    "oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken",
+    "oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken",
     InitialCredentialTokens{"access-1", "refresh-1"}
   );
   DatabaseManager::shared().configureNetwork("https://api.company.com", 5000.0);

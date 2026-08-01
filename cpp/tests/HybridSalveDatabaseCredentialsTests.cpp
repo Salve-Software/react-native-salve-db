@@ -38,6 +38,7 @@ TEST_CASE("configure() with credentials.tokens seeds the CredentialProvider", "[
     credentials: {
       provider: 'oauth2',
       accessTokenHeaderName: 'Authorization',
+      accessTokenScheme: 'Bearer',
       tokens: { accessToken: 'seeded-access', refreshToken: 'seeded-refresh' },
       refresh: {
         endpoint: '/auth/refresh',
@@ -52,5 +53,5 @@ TEST_CASE("configure() with credentials.tokens seeds the CredentialProvider", "[
 
   auto [headerName, headerValue] = credentials.getAuthHeader();
   REQUIRE(headerName == "Authorization");
-  REQUIRE(headerValue == "seeded-access");
+  REQUIRE(headerValue == "Bearer seeded-access");
 }
