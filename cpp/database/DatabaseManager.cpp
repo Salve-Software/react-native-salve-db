@@ -16,13 +16,14 @@ void DatabaseManager::open(const std::string& dbName, bool walMode) {
 void DatabaseManager::configureCredentials(
   const std::string& provider,
   const std::string& accessTokenHeaderName,
+  const std::string& accessTokenScheme,
   const std::string& refreshEndpoint,
   const std::string& responseAccessTokenPath,
   const std::string& responseRefreshTokenPath,
   const std::optional<InitialCredentialTokens>& initialTokens
 ) {
   _credentials = std::make_unique<CredentialProvider>(
-    provider, accessTokenHeaderName, refreshEndpoint, responseAccessTokenPath, responseRefreshTokenPath
+    provider, accessTokenHeaderName, accessTokenScheme, refreshEndpoint, responseAccessTokenPath, responseRefreshTokenPath
   );
   if (initialTokens.has_value()) {
     _credentials->seedInitialTokens(initialTokens->accessToken, initialTokens->refreshToken);
@@ -54,6 +55,7 @@ bool DatabaseManager::reopenFromPersistedConfigIfNeeded() {
     configureCredentials(
       creds.provider,
       creds.accessTokenHeaderName,
+      creds.accessTokenScheme,
       creds.refreshEndpoint,
       creds.responseAccessTokenPath,
       creds.responseRefreshTokenPath,

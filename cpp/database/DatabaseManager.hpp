@@ -54,6 +54,7 @@ public:
   void configureCredentials(
     const std::string& provider,
     const std::string& accessTokenHeaderName,
+    const std::string& accessTokenScheme,
     const std::string& refreshEndpoint,
     const std::string& responseAccessTokenPath,
     const std::string& responseRefreshTokenPath,

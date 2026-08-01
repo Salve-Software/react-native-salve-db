@@ -9,6 +9,7 @@ namespace margelo::nitro::salvedb {
 struct PersistedCredentialConfig {
   std::string provider;
   std::string accessTokenHeaderName;
+  std::string accessTokenScheme;
   std::string refreshEndpoint;
   std::string responseAccessTokenPath;
   std::string responseRefreshTokenPath;

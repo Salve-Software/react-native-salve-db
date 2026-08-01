@@ -35,6 +35,8 @@ interface CredentialsParams {
   provider: string;
   /** Header used to send the access token in sync requests (e.g. `"Authorization"`). */
   accessTokenHeaderName: string;
+  /** Scheme prefix applied to the token in the header value (e.g. `"Bearer"`). Empty string means no prefix. */
+  accessTokenScheme: string;
   /**
    * Initial token pair obtained by the app's own login flow. Seeded into
    * Keychain/Keystore once at configure() time; omitted on later configure()

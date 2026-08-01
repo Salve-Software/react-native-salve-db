@@ -18,6 +18,7 @@ json::Object serializeCredentials(const PersistedCredentialConfig& creds) {
   json::Object obj;
   obj["provider"] = json::Value(creds.provider);
   obj["accessTokenHeaderName"] = json::Value(creds.accessTokenHeaderName);
+  obj["accessTokenScheme"] = json::Value(creds.accessTokenScheme);
   obj["refreshEndpoint"] = json::Value(creds.refreshEndpoint);
   obj["responseAccessTokenPath"] = json::Value(creds.responseAccessTokenPath);
   obj["responseRefreshTokenPath"] = json::Value(creds.responseRefreshTokenPath);
@@ -39,6 +40,7 @@ std::optional<PersistedCredentialConfig> parseCredentials(const json::Value& roo
   return PersistedCredentialConfig{
     obj.getString("provider"),
     obj.getString("accessTokenHeaderName"),
+    obj.getString("accessTokenScheme", "Bearer"),
     obj.getString("refreshEndpoint"),
     obj.getString("responseAccessTokenPath"),
     obj.getString("responseRefreshTokenPath"),

@@ -44,6 +44,7 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
       DatabaseManager::shared().configureCredentials(
         creds.provider,
         creds.accessTokenHeaderName,
+        creds.accessTokenScheme,
         creds.refresh.endpoint,
         creds.refresh.responseAccessTokenPath,
         creds.refresh.responseRefreshTokenPath,
@@ -66,6 +67,7 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
     persisted.credentials = PersistedCredentialConfig{
       creds.provider,
       creds.accessTokenHeaderName,
+      creds.accessTokenScheme,
       creds.refresh.endpoint,
       creds.refresh.responseAccessTokenPath,
       creds.refresh.responseRefreshTokenPath
