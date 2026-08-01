@@ -6,6 +6,7 @@ import type { IUpdateQueryBuilder } from '../../types';
 import type { AnySchema } from '../../../../../types';
 import type { InferInsertModel } from '../InsertQueryBuilder';
 import { assertIndexedColumns, collectConditionColumns, compileCondition } from '../../library';
+import { requestWriteSync } from '../../../../../sync';
 
 export class UpdateQueryBuilder<TSchema extends AnySchema>
   implements IUpdateQueryBuilder<TSchema>
@@ -52,5 +53,9 @@ export class UpdateQueryBuilder<TSchema extends AnySchema>
     }
 
     this._bridge.execute(sql, params);
+
+    if (this._schema.sync?.enabled === true) {
+      requestWriteSync(this._schema.name);
+    }
   }
 }
