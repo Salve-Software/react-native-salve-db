@@ -11,11 +11,13 @@
 namespace margelo::nitro::salvedb {
 
 HybridSalveDatabase::~HybridSalveDatabase() {
-  if (!DatabaseManager::shared().isOpen()) return;
-  auto conn = DatabaseManager::shared().connection();
-  for (int id : _ownedSubscriptionIds) {
-    try { conn->unsubscribe(id); } catch (...) {}
-  }
+  try {
+    if (!DatabaseManager::shared().isOpen()) return;
+    auto conn = DatabaseManager::shared().connection();
+    for (int id : _ownedSubscriptionIds) {
+      try { conn->unsubscribe(id); } catch (...) {}
+    }
+  } catch (...) {}
 }
 
 void HybridSalveDatabase::configure(const ConfigureParams& params) {
