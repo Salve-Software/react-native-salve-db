@@ -38,6 +38,11 @@ void CredentialProvider::seedInitialTokens(const std::string& accessToken, const
   platform::setSecureValue(kRefreshTokenKey, refreshToken);
 }
 
+void CredentialProvider::clearStoredTokens() {
+  platform::deleteSecureValue(kAccessTokenKey);
+  platform::deleteSecureValue(kRefreshTokenKey);
+}
+
 std::optional<std::string> CredentialProvider::getAccessToken() const {
   return platform::getSecureValue(kAccessTokenKey);
 }
