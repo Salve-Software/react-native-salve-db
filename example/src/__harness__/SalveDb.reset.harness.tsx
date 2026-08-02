@@ -47,7 +47,7 @@ describe('Database.reset — wipes local data, connection stays usable', () => {
       sync: {
         enabled: true,
         direction: 'bidirectional',
-        conflict: 'lastWriteWins',
+        conflict: { strategy: 'lastWriteWins' },
         transport: 'rest',
         endpoint: { basePath: '/reset_sync_probe', sinceParam: 'updatedAfter', limitParam: 'limit' },
         pagination: { pageSize: 20, maxPagesPerSession: 20 },
