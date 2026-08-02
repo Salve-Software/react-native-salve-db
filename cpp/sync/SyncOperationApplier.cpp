@@ -46,8 +46,8 @@ int64_t nowMillis() {
 
 } // namespace
 
-SyncOperationApplier::SyncOperationApplier(std::shared_ptr<SQLiteConnection> conn)
-  : _conn(std::move(conn)) {}
+SyncOperationApplier::SyncOperationApplier(std::shared_ptr<SQLiteConnection> conn, SyncConflict conflict)
+  : _conn(std::move(conn)), _conflict(std::move(conflict)) {}
 
 const SyncOperationApplier::TableColumns& SyncOperationApplier::columnsFor(const std::string& table) {
   auto it = _columnsCache.find(table);
@@ -88,19 +88,32 @@ ApplyStats SyncOperationApplier::apply(const std::string& expectedEntity, const 
     std::string pkValue = jsonScalarToString(pkRef->get());
 
     auto deletedAt = readOptionalNumber(row, "deletedAt");
-    auto updatedAt = readOptionalNumber(row, "updatedAt");
+    auto updatedAt = readOptionalNumber(row, _conflict.field);
     double remoteTimestamp = deletedAt.value_or(updatedAt.value_or(0));
 
-    auto existing = _conn->execute(
-      "SELECT updatedAt FROM \"" + expectedEntity + "\" WHERE \"" + pkCol + "\" = ?",
-      { pkValue }
-    );
-    std::optional<double> localUpdatedAt;
-    if (!existing.rows.empty()) localUpdatedAt = std::get<double>(existing.rows[0][0]);
+    bool exists;
+    std::optional<double> localTimestamp; // only meaningful for lastWriteWins
+    if (_conflict.strategy == "lastWriteWins") {
+      auto existing = _conn->execute(
+        "SELECT \"" + _conflict.field + "\" FROM \"" + expectedEntity + "\" WHERE \"" + pkCol + "\" = ?",
+        { pkValue }
+      );
+      exists = !existing.rows.empty();
+      if (exists) localTimestamp = std::get<double>(existing.rows[0][0]);
+    } else {
+      auto existing = _conn->execute(
+        "SELECT 1 FROM \"" + expectedEntity + "\" WHERE \"" + pkCol + "\" = ?",
+        { pkValue }
+      );
+      exists = !existing.rows.empty();
+    }
 
-    // Tombstone: soft-delete locally if the row exists and isn't newer than the server's delete.
+    // Tombstone: soft-delete locally per the configured conflict strategy.
     if (deletedAt.has_value()) {
-      if (localUpdatedAt.has_value() && remoteTimestamp > *localUpdatedAt) {
+      bool shouldDelete = _conflict.strategy == "serverWins" ? exists
+        : _conflict.strategy == "clientWins" ? false
+        : exists && remoteTimestamp > *localTimestamp; // lastWriteWins
+      if (shouldDelete) {
         _conn->execute(
           "UPDATE \"" + expectedEntity + "\" SET \"deletedAt\" = ? WHERE \"" + pkCol + "\" = ?",
           { *deletedAt, pkValue }
@@ -111,8 +124,10 @@ ApplyStats SyncOperationApplier::apply(const std::string& expectedEntity, const 
       continue;
     }
 
-    // lastWriteWins: skip if the incoming write is not newer than local.
-    if (localUpdatedAt.has_value() && remoteTimestamp <= *localUpdatedAt) continue;
+    bool shouldApply = _conflict.strategy == "serverWins" ? true
+      : _conflict.strategy == "clientWins" ? !exists
+      : !exists || remoteTimestamp > *localTimestamp; // lastWriteWins
+    if (!shouldApply) continue;
 
     std::vector<std::string> columns;
     std::vector<SqlValue> values;
@@ -124,7 +139,7 @@ ApplyStats SyncOperationApplier::apply(const std::string& expectedEntity, const 
     }
 
     std::ostringstream sql;
-    if (!localUpdatedAt.has_value()) {
+    if (!exists) {
       sql << "INSERT INTO \"" << expectedEntity << "\" (";
       for (size_t i = 0; i < columns.size(); ++i) { if (i) sql << ", "; sql << "\"" << columns[i] << "\""; }
       sql << ") VALUES (";
@@ -199,17 +214,22 @@ void SyncOperationApplier::rewriteLocalRow(const std::string& expectedEntity, co
     );
   }
 
-  // The other columns are data: a concurrent local edit during this request's round-trip must win (lastWriteWins, mirroring apply()'s pull-side rule).
+  // The other columns are data: a concurrent local edit during this request's round-trip must win (lastWriteWins, mirroring apply()'s pull-side rule) — always, regardless of the schema's overall conflict strategy.
   if (!columns.empty()) {
-    auto responseUpdatedAt = readOptionalNumber(responseEntity, "updatedAt");
-    bool shouldApplyData = true;
-    if (responseUpdatedAt.has_value()) {
-      auto current = _conn->execute(
-        "SELECT updatedAt FROM \"" + expectedEntity + "\" WHERE \"" + cols.primaryKey + "\" = ?",
-        { identity.resolvedEntityId }
-      );
-      if (!current.rows.empty()) {
-        shouldApplyData = std::get<double>(current.rows[0][0]) <= *responseUpdatedAt;
+    bool shouldApplyData;
+    if (cols.all.count(_conflict.field) == 0) {
+      shouldApplyData = false;
+    } else {
+      shouldApplyData = true;
+      auto responseUpdatedAt = readOptionalNumber(responseEntity, _conflict.field);
+      if (responseUpdatedAt.has_value()) {
+        auto current = _conn->execute(
+          "SELECT \"" + _conflict.field + "\" FROM \"" + expectedEntity + "\" WHERE \"" + cols.primaryKey + "\" = ?",
+          { identity.resolvedEntityId }
+        );
+        if (!current.rows.empty()) {
+          shouldApplyData = std::get<double>(current.rows[0][0]) <= *responseUpdatedAt;
+        }
       }
     }
     if (shouldApplyData) {

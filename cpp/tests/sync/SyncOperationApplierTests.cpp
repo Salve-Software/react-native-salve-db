@@ -30,6 +30,18 @@ std::shared_ptr<SQLiteConnection> openWithCustomers(const std::string& testName)
   return conn;
 }
 
+// serverWins/clientWins require no timestamp column at all.
+std::shared_ptr<SQLiteConnection> openWithCustomersNoTimestamp(const std::string& testName, const std::string& strategy) {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath(testName));
+  MigrationEngine engine(conn);
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "text" }, "name": { "type": "text" } },
+    "sync": { "enabled": true, "conflict": { "strategy": ")" + strategy + R"(" } }
+  })"));
+  return conn;
+}
+
 std::optional<std::string> nameOf(SQLiteConnection& conn, const std::string& id) {
   auto rows = conn.execute("SELECT name FROM customers WHERE id = ?", { id });
   if (rows.rows.empty()) return std::nullopt;
@@ -438,4 +450,124 @@ TEST_CASE("a real edit after replace updates the same frozen localId row instead
   auto meta = conn->execute("SELECT localId, status FROM _salve_sync_metadata WHERE tableName = 'customers'", {});
   REQUIRE(std::get<std::string>(meta.rows[0][0]) == "temp-1");
   REQUIRE(std::get<std::string>(meta.rows[0][1]) == "PENDING");
+}
+
+TEST_CASE("apply with a custom lastWriteWins field compares that column, not 'updatedAt'", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("applier_custom_field"));
+  MigrationEngine engine(conn);
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "modifiedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" } }
+  })"));
+  conn->execute("INSERT INTO customers (id, name, modifiedAt) VALUES ('1', 'old-name', 100)", {});
+  SyncOperationApplier applier(conn, SyncConflict{"lastWriteWins", "modifiedAt"});
+
+  // Newer remote wins.
+  auto newer = json::parse(R"([{ "id": "1", "name": "new-name", "modifiedAt": 200 }])").asArray();
+  applier.apply("customers", newer);
+  REQUIRE(nameOf(*conn, "1") == "new-name");
+
+  // Stale remote is skipped.
+  auto stale = json::parse(R"([{ "id": "1", "name": "stale-name", "modifiedAt": 150 }])").asArray();
+  applier.apply("customers", stale);
+  REQUIRE(nameOf(*conn, "1") == "new-name");
+}
+
+TEST_CASE("apply with serverWins always overwrites, even when the remote has no newer timestamp", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_server_wins_update", "serverWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('1', 'local-name')", {});
+  SyncOperationApplier applier(conn, SyncConflict{"serverWins", "updatedAt"});
+
+  auto rows = json::parse(R"([{ "id": "1", "name": "server-name" }])").asArray();
+  auto stats = applier.apply("customers", rows);
+
+  REQUIRE(stats.updated == 1);
+  REQUIRE(nameOf(*conn, "1") == "server-name");
+}
+
+TEST_CASE("apply with serverWins always applies a tombstone for an existing row", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_server_wins_delete", "serverWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('1', 'local-name')", {});
+  SyncOperationApplier applier(conn, SyncConflict{"serverWins", "updatedAt"});
+
+  auto rows = json::parse(R"([{ "id": "1", "deletedAt": 100 }])").asArray();
+  auto stats = applier.apply("customers", rows);
+
+  REQUIRE(stats.deleted == 1);
+}
+
+TEST_CASE("apply with clientWins never overwrites an existing local row", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_client_wins_update", "clientWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('1', 'local-name')", {});
+  SyncOperationApplier applier(conn, SyncConflict{"clientWins", "updatedAt"});
+
+  auto rows = json::parse(R"([{ "id": "1", "name": "server-name" }])").asArray();
+  auto stats = applier.apply("customers", rows);
+
+  REQUIRE(stats.updated == 0);
+  REQUIRE(nameOf(*conn, "1") == "local-name");
+}
+
+TEST_CASE("apply with clientWins never applies a tombstone for an existing local row", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_client_wins_delete", "clientWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('1', 'local-name')", {});
+  SyncOperationApplier applier(conn, SyncConflict{"clientWins", "updatedAt"});
+
+  auto rows = json::parse(R"([{ "id": "1", "deletedAt": 100 }])").asArray();
+  auto stats = applier.apply("customers", rows);
+
+  REQUIRE(stats.deleted == 0);
+  REQUIRE_FALSE(deletedAtOf(*conn, "1").has_value());
+}
+
+TEST_CASE("apply with clientWins still inserts a row that doesn't exist locally", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_client_wins_insert", "clientWins");
+  SyncOperationApplier applier(conn, SyncConflict{"clientWins", "updatedAt"});
+
+  auto rows = json::parse(R"([{ "id": "1", "name": "server-name" }])").asArray();
+  auto stats = applier.apply("customers", rows);
+
+  REQUIRE(stats.inserted == 1);
+  REQUIRE(nameOf(*conn, "1") == "server-name");
+}
+
+TEST_CASE("rewriteLocalRow under clientWins with no comparable field never overwrites a concurrent local edit", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_client_wins_no_field_replace", "clientWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('temp-1', 'alice')", {});
+  SyncOperationApplier applier(conn, SyncConflict{"clientWins", "updatedAt"});
+
+  // Response reflects the state of the row when the POST was sent.
+  auto response = json::parse(R"({ "id": "srv-1", "name": "alice" })");
+
+  // A local edit lands after the request body was built but before the
+  // response is applied — with no "updatedAt" column to compare against, the
+  // old (pre-fix) behavior applied the stale response unconditionally,
+  // silently discarding this edit even under clientWins.
+  conn->execute("UPDATE customers SET name = 'alice-v2' WHERE id = 'temp-1'", {});
+
+  SyncApplyGuard(conn).applyWithBypass([&] {
+    applyReplace(applier, "customers", "temp-1", response);
+  });
+
+  // PK rewrite (identity) still applies — only the data columns are protected.
+  REQUIRE_FALSE(nameOf(*conn, "temp-1").has_value());
+  REQUIRE(nameOf(*conn, "srv-1") == "alice-v2");
+}
+
+TEST_CASE("rewriteLocalRow under serverWins with no comparable field also skips the stale data merge", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_server_wins_no_field_replace", "serverWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('temp-1', 'alice')", {});
+  SyncOperationApplier applier(conn, SyncConflict{"serverWins", "updatedAt"});
+
+  auto response = json::parse(R"({ "id": "srv-1", "name": "alice" })");
+  conn->execute("UPDATE customers SET name = 'alice-v2' WHERE id = 'temp-1'", {});
+
+  SyncApplyGuard(conn).applyWithBypass([&] {
+    applyReplace(applier, "customers", "temp-1", response);
+  });
+
+  // Deferred to the next pull session (which always overwrites under
+  // serverWins) rather than risking a stale mid-flight echo here.
+  REQUIRE(nameOf(*conn, "srv-1") == "alice-v2");
 }

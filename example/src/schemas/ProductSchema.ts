@@ -26,7 +26,7 @@ export const ProductSchema = {
   sync: {
     enabled: true,
     direction: 'bidirectional',
-    conflict: 'lastWriteWins',
+    conflict: { strategy: 'lastWriteWins' },
     transport: 'rest',
     endpoint: { basePath: '/products', sinceParam: 'modified_since', limitParam: 'page_size' },
     pagination: { pageSize: 25, maxPagesPerSession: 20 },

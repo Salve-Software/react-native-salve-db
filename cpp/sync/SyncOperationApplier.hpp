@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SyncContract.hpp"
 #include "../database/SQLiteConnection.hpp"
 #include "../database/json_parser.hpp"
 #include <memory>
@@ -16,12 +17,12 @@ struct ApplyStats {
 };
 
 // Plain C++ collaborator (not a HybridObject) — applies REST sync results to
-// SQLite, resolving conflicts via lastWriteWins on `updatedAt`. Must run
-// inside SyncApplyGuard's bypass transaction so it never re-enqueues into
-// sync_queue.
+// SQLite, resolving pull conflicts per the schema's configured strategy
+// (lastWriteWins/serverWins/clientWins). Must run inside SyncApplyGuard's
+// bypass transaction so it never re-enqueues into sync_queue.
 class SyncOperationApplier {
 public:
-  explicit SyncOperationApplier(std::shared_ptr<SQLiteConnection> conn);
+  explicit SyncOperationApplier(std::shared_ptr<SQLiteConnection> conn, SyncConflict conflict = {});
 
   // Pull: applies a page of bare entities. deletedAt != null is a tombstone
   // (soft-deletes locally); everything else infers insert vs update by
@@ -56,6 +57,7 @@ private:
 
   std::shared_ptr<SQLiteConnection> _conn;
   std::unordered_map<std::string, TableColumns> _columnsCache;
+  SyncConflict _conflict;
 };
 
 } // namespace margelo::nitro::salvedb
