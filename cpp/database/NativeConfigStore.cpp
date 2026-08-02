@@ -134,4 +134,8 @@ std::optional<PersistedConfig> NativeConfigStore::load() {
   return config;
 }
 
+void NativeConfigStore::remove() {
+  std::remove(configFilePath().c_str());
+}
+
 } // namespace margelo::nitro::salvedb
