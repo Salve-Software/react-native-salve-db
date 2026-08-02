@@ -26,6 +26,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/MigrationEngine.cpp
 		../cpp/database/SalveMetadataManager.cpp
 	../cpp/database/SchemaRegistry.cpp
+	../cpp/database/DatabaseResetter.cpp
 	../cpp/query/QueryExecutor.cpp
 	../cpp/sync/SyncOrchestrator.cpp
 	../cpp/sync/SyncNativeEntryPoint.cpp

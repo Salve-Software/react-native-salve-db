@@ -3,6 +3,7 @@
 #include "HybridSalveDatabaseSpec.hpp"
 #include "query/QueryExecutor.hpp"
 #include "sync/SyncOrchestrator.hpp"
+#include <vector>
 
 namespace margelo::nitro::salvedb {
 
@@ -15,10 +16,12 @@ namespace margelo::nitro::salvedb {
 class HybridSalveDatabase: public HybridSalveDatabaseSpec {
 public:
   HybridSalveDatabase(): HybridObject(TAG) {}
+  ~HybridSalveDatabase() override;
 
 public:
   void configure(const ConfigureParams& params) override;
   std::shared_ptr<Promise<void>> registerSchema(const std::string& schemaJson) override;
+  std::shared_ptr<Promise<void>> reset() override;
   QueryResult execute(const std::string& sql, const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) override;
   void beginTransaction() override;
   void commit() override;
@@ -32,6 +35,7 @@ public:
 private:
   QueryExecutor _queryExecutor;
   SyncOrchestrator _syncOrchestrator;
+  std::vector<int> _ownedSubscriptionIds;
 };
 
 } // namespace margelo::nitro::salvedb
