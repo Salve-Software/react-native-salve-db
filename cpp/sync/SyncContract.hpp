@@ -24,6 +24,7 @@ struct SyncEndpoint {
 struct SyncConflict {
   std::string strategy = "lastWriteWins";
   std::string field = "updatedAt";
+  bool fieldExplicit = false;
 };
 
 // Typed, validated view of a schema's declarative `sync` block (REST contract, #84).
@@ -40,5 +41,7 @@ struct SyncContract {
 // shared by SyncContract's own parsing and MigrationEngine::registerSchema's
 // eager validation, so the two never drift apart.
 bool isValidConflictStrategy(const std::string& strategy);
+
+SyncConflict readConflictDefaults(const json::Value& syncDefinition);
 
 } // namespace margelo::nitro::salvedb

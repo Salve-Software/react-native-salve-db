@@ -25,20 +25,11 @@ HttpHeaders parseExtraHeaders(const json::Value& endpoint) {
   return headers;
 }
 
-// Absent, or not an object (a pre-#103-style `conflict: "lastWriteWins"`
-// string persisted by a version of the library predating this struct) —
-// both fall back to the pre-existing hardcoded behavior instead of failing
-// a cold-start reopen on stale persisted config.
 SyncConflict parseConflict(const json::Value& definition) {
-  SyncConflict conflict;
-  auto raw = definition.get("conflict");
-  if (!raw || !raw->get().isObject()) return conflict;
-
-  conflict.strategy = raw->get().getString("strategy", "lastWriteWins");
+  SyncConflict conflict = readConflictDefaults(definition);
   if (!isValidConflictStrategy(conflict.strategy)) {
     throw std::runtime_error("SyncContract: sync.conflict.strategy '" + conflict.strategy + "' is not supported");
   }
-  conflict.field = raw->get().getString("field", "updatedAt");
   return conflict;
 }
 
@@ -49,6 +40,17 @@ bool isValidConflictStrategy(const std::string& strategy) {
     "lastWriteWins", "serverWins", "clientWins"
   };
   return kValidConflictStrategies.count(strategy) > 0;
+}
+
+SyncConflict readConflictDefaults(const json::Value& definition) {
+  SyncConflict conflict;
+  auto raw = definition.get("conflict");
+  if (!raw || !raw->get().isObject()) return conflict;
+
+  conflict.strategy = raw->get().getString("strategy", "lastWriteWins");
+  conflict.fieldExplicit = raw->get().has("field");
+  conflict.field = raw->get().getString("field", "updatedAt");
+  return conflict;
 }
 
 SyncContract SyncContract::fromDefinition(const json::Value& definition) {

@@ -586,35 +586,27 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
     schema.sync.definition = syncObj;
 
     if (schema.sync.enabled) {
-      std::string conflictStrategy = "lastWriteWins";
-      std::string conflictField = "updatedAt";
-      bool conflictFieldExplicit = false;
-      auto conflictVal = syncObj.get("conflict");
-      if (conflictVal && conflictVal->get().isObject()) {
-        conflictStrategy = conflictVal->get().getString("strategy", "lastWriteWins");
-        conflictFieldExplicit = conflictVal->get().has("field");
-        conflictField = conflictVal->get().getString("field", "updatedAt");
-      }
+      SyncConflict conflict = readConflictDefaults(syncObj);
 
-      if (!isValidConflictStrategy(conflictStrategy)) {
+      if (!isValidConflictStrategy(conflict.strategy)) {
         throw std::runtime_error(
-          "registerSchema: sync.conflict.strategy '" + conflictStrategy + "' is not supported"
+          "registerSchema: sync.conflict.strategy '" + conflict.strategy + "' is not supported"
         );
       }
 
-      if (conflictStrategy == "lastWriteWins") {
-        auto field = schema.columns.find(conflictField);
+      if (conflict.strategy == "lastWriteWins") {
+        auto field = schema.columns.find(conflict.field);
         bool valid = field != schema.columns.end()
           && field->second.type == "datetime"
           && !field->second.nullable;
         if (!valid) {
-          std::string hint = conflictFieldExplicit
+          std::string hint = conflict.fieldExplicit
             ? "" // the developer already chose this name — nothing more to suggest
-            : " ('" + conflictField + "' is the default when sync.conflict.field is not set — "
+            : " ('" + conflict.field + "' is the default when sync.conflict.field is not set — "
               "pass a different sync.conflict.field to use another column instead)";
           throw std::runtime_error(
             "registerSchema: sync.conflict.strategy 'lastWriteWins' requires a NOT NULL 'datetime' column named '" +
-            conflictField + "'" + hint
+            conflict.field + "'" + hint
           );
         }
       }
