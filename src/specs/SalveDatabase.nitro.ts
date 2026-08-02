@@ -14,6 +14,9 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
    */
   registerSchema(schemaJson: string): Promise<void>;
 
+  /** Wipes all local data and credentials in place; call `configure()` again, then `register()` per schema. */
+  reset(): Promise<void>;
+
   // ── Query ──────────────────────────────────────────────────────────────────
 
   /**
