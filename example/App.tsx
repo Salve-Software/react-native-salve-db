@@ -14,6 +14,7 @@ import { InfiniteQueryScreen } from './src/screens/InfiniteQueryScreen';
 import { BenchmarkScreen } from './src/screens/BenchmarkScreen';
 import { SyncTestScreen } from './src/screens/SyncTestScreen';
 import { LoginScreen, type LoginTokens } from './src/screens/LoginScreen';
+import { ResetControls } from './src/components/ResetControls';
 import { SYNC_SERVER_BASE_URL } from './src/library/syncServer';
 
 if (__DEV__) {
@@ -31,20 +32,49 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key'];
 
-interface AppTabsProps {
-  accessToken: string;
+const SCHEMAS = [
+  ExpenseSchema,
+  BudgetSchema,
+  BenchmarkSchema,
+  FeedItemSchema,
+  UserSchema,
+  ProductSchema,
+];
+
+/** Shared by the initial SalveDbProvider mount and ResetControls' "reconfigure" button — same db name both times, so the connection (and its subscriptions) survives a reset(). */
+function buildDbConfig(tokens: LoginTokens) {
+  return {
+    name: 'salve-db-example',
+    baseUrl: SYNC_SERVER_BASE_URL,
+    network: { timeout: 5000 },
+    credentials: {
+      provider: 'oauth2' as const,
+      tokens,
+      refresh: {
+        endpoint: '/auth/refresh',
+        response: { accessToken: '$.accessToken', refreshToken: '$.refreshToken' },
+      },
+    },
+    background: { minimumInterval: 15 * 60 * 1000, requiresNetwork: false },
+  };
 }
 
-function AppTabs({ accessToken }: AppTabsProps): React.JSX.Element {
+interface AppTabsProps {
+  tokens: LoginTokens;
+}
+
+function AppTabs({ tokens }: AppTabsProps): React.JSX.Element {
   const [tab, setTab] = useState<TabKey>('expenses');
 
   return (
     <View style={styles.flex}>
+      <ResetControls schemas={SCHEMAS} buildConfig={() => buildDbConfig(tokens)} />
+
       <View style={styles.flex}>
         {tab === 'expenses' ? <ExpensesScreen /> : null}
         {tab === 'infinite' ? <InfiniteQueryScreen /> : null}
         {tab === 'benchmark' ? <BenchmarkScreen /> : null}
-        {tab === 'sync' ? <SyncTestScreen accessToken={accessToken} /> : null}
+        {tab === 'sync' ? <SyncTestScreen accessToken={tokens.accessToken} /> : null}
       </View>
 
       <SafeAreaView style={styles.tabBar} edges={['bottom']}>
@@ -72,31 +102,8 @@ function App(): React.JSX.Element {
 
   return (
     <SafeAreaProvider>
-      <SalveDbProvider
-        config={{
-          name: 'salve-db-example',
-          baseUrl: SYNC_SERVER_BASE_URL,
-          network: { timeout: 5000 },
-          credentials: {
-            provider: 'oauth2',
-            tokens,
-            refresh: {
-              endpoint: '/auth/refresh',
-              response: { accessToken: '$.accessToken', refreshToken: '$.refreshToken' },
-            },
-          },
-          background: { minimumInterval: 15 * 60 * 1000, requiresNetwork: false },
-        }}
-        schemas={[
-          ExpenseSchema,
-          BudgetSchema,
-          BenchmarkSchema,
-          FeedItemSchema,
-          UserSchema,
-          ProductSchema,
-        ]}
-      >
-        <AppTabs accessToken={tokens.accessToken} />
+      <SalveDbProvider config={buildDbConfig(tokens)} schemas={SCHEMAS}>
+        <AppTabs tokens={tokens} />
       </SalveDbProvider>
     </SafeAreaProvider>
   );
