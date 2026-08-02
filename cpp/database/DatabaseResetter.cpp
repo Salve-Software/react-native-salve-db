@@ -86,7 +86,9 @@ void DatabaseResetter::reset() {
   auto& manager = DatabaseManager::shared();
 
   if (!manager.isOpen()) {
+    SchemaRegistry::shared().clear();
     CredentialProvider::clearStoredTokens();
+    manager.resetConfig();
     NativeConfigStore::remove();
     return;
   }
