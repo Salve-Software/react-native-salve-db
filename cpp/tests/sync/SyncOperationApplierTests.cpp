@@ -531,3 +531,43 @@ TEST_CASE("apply with clientWins still inserts a row that doesn't exist locally"
   REQUIRE(stats.inserted == 1);
   REQUIRE(nameOf(*conn, "1") == "server-name");
 }
+
+TEST_CASE("rewriteLocalRow under clientWins with no comparable field never overwrites a concurrent local edit", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_client_wins_no_field_replace", "clientWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('temp-1', 'alice')", {});
+  SyncOperationApplier applier(conn, SyncConflict{"clientWins", "updatedAt"});
+
+  // Response reflects the state of the row when the POST was sent.
+  auto response = json::parse(R"({ "id": "srv-1", "name": "alice" })");
+
+  // A local edit lands after the request body was built but before the
+  // response is applied — with no "updatedAt" column to compare against, the
+  // old (pre-fix) behavior applied the stale response unconditionally,
+  // silently discarding this edit even under clientWins.
+  conn->execute("UPDATE customers SET name = 'alice-v2' WHERE id = 'temp-1'", {});
+
+  SyncApplyGuard(conn).applyWithBypass([&] {
+    applyReplace(applier, "customers", "temp-1", response);
+  });
+
+  // PK rewrite (identity) still applies — only the data columns are protected.
+  REQUIRE_FALSE(nameOf(*conn, "temp-1").has_value());
+  REQUIRE(nameOf(*conn, "srv-1") == "alice-v2");
+}
+
+TEST_CASE("rewriteLocalRow under serverWins with no comparable field also skips the stale data merge", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomersNoTimestamp("applier_server_wins_no_field_replace", "serverWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('temp-1', 'alice')", {});
+  SyncOperationApplier applier(conn, SyncConflict{"serverWins", "updatedAt"});
+
+  auto response = json::parse(R"({ "id": "srv-1", "name": "alice" })");
+  conn->execute("UPDATE customers SET name = 'alice-v2' WHERE id = 'temp-1'", {});
+
+  SyncApplyGuard(conn).applyWithBypass([&] {
+    applyReplace(applier, "customers", "temp-1", response);
+  });
+
+  // Deferred to the next pull session (which always overwrites under
+  // serverWins) rather than risking a stale mid-flight echo here.
+  REQUIRE(nameOf(*conn, "srv-1") == "alice-v2");
+}

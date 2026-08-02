@@ -216,19 +216,20 @@ void SyncOperationApplier::rewriteLocalRow(const std::string& expectedEntity, co
 
   // The other columns are data: a concurrent local edit during this request's round-trip must win (lastWriteWins, mirroring apply()'s pull-side rule) — always, regardless of the schema's overall conflict strategy.
   if (!columns.empty()) {
-    // A serverWins/clientWins schema isn't required to declare `_conflict.field` as a
-    // column — skip the guard entirely rather than SELECTing a column that may not exist.
-    auto responseUpdatedAt = cols.all.count(_conflict.field) > 0
-      ? readOptionalNumber(responseEntity, _conflict.field)
-      : std::nullopt;
-    bool shouldApplyData = true;
-    if (responseUpdatedAt.has_value()) {
-      auto current = _conn->execute(
-        "SELECT \"" + _conflict.field + "\" FROM \"" + expectedEntity + "\" WHERE \"" + cols.primaryKey + "\" = ?",
-        { identity.resolvedEntityId }
-      );
-      if (!current.rows.empty()) {
-        shouldApplyData = std::get<double>(current.rows[0][0]) <= *responseUpdatedAt;
+    bool shouldApplyData;
+    if (cols.all.count(_conflict.field) == 0) {
+      shouldApplyData = false;
+    } else {
+      shouldApplyData = true;
+      auto responseUpdatedAt = readOptionalNumber(responseEntity, _conflict.field);
+      if (responseUpdatedAt.has_value()) {
+        auto current = _conn->execute(
+          "SELECT \"" + _conflict.field + "\" FROM \"" + expectedEntity + "\" WHERE \"" + cols.primaryKey + "\" = ?",
+          { identity.resolvedEntityId }
+        );
+        if (!current.rows.empty()) {
+          shouldApplyData = std::get<double>(current.rows[0][0]) <= *responseUpdatedAt;
+        }
       }
     }
     if (shouldApplyData) {
