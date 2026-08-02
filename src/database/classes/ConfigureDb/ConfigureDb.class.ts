@@ -64,6 +64,11 @@ export class ConfigureDb {
     return this._bridge.registerSchema(JSON.stringify(schema));
   }
 
+  /** Wipes all local data and credentials; call `configure()` again, then `register()` per schema. */
+  reset(): Promise<void> {
+    return this._bridge.reset();
+  }
+
   static isConfigured(): boolean {
     return ConfigureDb._configured;
   }
