@@ -16,6 +16,7 @@ namespace margelo::nitro::salvedb {
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridMethod("configure", &HybridSalveDatabaseSpec::configure);
       prototype.registerHybridMethod("registerSchema", &HybridSalveDatabaseSpec::registerSchema);
+      prototype.registerHybridMethod("reset", &HybridSalveDatabaseSpec::reset);
       prototype.registerHybridMethod("execute", &HybridSalveDatabaseSpec::execute);
       prototype.registerHybridMethod("beginTransaction", &HybridSalveDatabaseSpec::beginTransaction);
       prototype.registerHybridMethod("commit", &HybridSalveDatabaseSpec::commit);

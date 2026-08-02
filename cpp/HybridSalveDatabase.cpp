@@ -1,12 +1,24 @@
 #include "HybridSalveDatabase.hpp"
 #include "database/DatabaseManager.hpp"
+#include "database/DatabaseResetter.hpp"
 #include "database/MigrationEngine.hpp"
 #include "database/NativeConfigStore.hpp"
 #include "platform/platform.hpp"
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
+
+HybridSalveDatabase::~HybridSalveDatabase() {
+  try {
+    if (!DatabaseManager::shared().isOpen()) return;
+    auto conn = DatabaseManager::shared().connection();
+    for (int id : _ownedSubscriptionIds) {
+      try { conn->unsubscribe(id); } catch (...) {}
+    }
+  } catch (...) {}
+}
 
 void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.name.empty())
@@ -90,6 +102,17 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::st
   });
 }
 
+std::shared_ptr<Promise<void>> HybridSalveDatabase::reset() {
+  return Promise<void>::async([]() {
+    {
+      auto lock = DatabaseManager::shared().lockSync();
+      DatabaseResetter::reset();
+    }
+    // Outside the lock, like configure() — scheduleBackgroundSync() re-locks synchronously and would self-deadlock otherwise.
+    platform::scheduleBackgroundSync();
+  });
+}
+
 QueryResult HybridSalveDatabase::execute(
   const std::string& sql,
   const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params
@@ -125,11 +148,15 @@ double HybridSalveDatabase::subscribeToChanges(const std::function<void(const st
   int id = DatabaseManager::shared().connection()->subscribe(
     [callback](std::vector<std::string> tables) { callback(tables); }
   );
+  _ownedSubscriptionIds.push_back(id);
   return static_cast<double>(id);
 }
 
 void HybridSalveDatabase::unsubscribeFromChanges(double id) {
-  DatabaseManager::shared().connection()->unsubscribe(static_cast<int>(id));
+  int intId = static_cast<int>(id);
+  DatabaseManager::shared().connection()->unsubscribe(intId);
+  auto it = std::find(_ownedSubscriptionIds.begin(), _ownedSubscriptionIds.end(), intId);
+  if (it != _ownedSubscriptionIds.end()) _ownedSubscriptionIds.erase(it);
 }
 
 double HybridSalveDatabase::debugPreparedStatementCount() {

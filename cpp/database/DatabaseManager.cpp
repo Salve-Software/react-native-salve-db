@@ -8,8 +8,15 @@ namespace margelo::nitro::salvedb {
 void DatabaseManager::open(const std::string& dbName, bool walMode) {
   std::string dir  = platform::getDocumentsDirectory();
   std::string path = dir + "/" + dbName + ".db";
+
+  if (_db && path == _dbPath && walMode == _dbWalMode) {
+    return; // same file already open — keep the connection (and its subscriptions) alive
+  }
+
   _db = std::make_shared<SQLiteConnection>(path, walMode);
-  // Keyed by schema name, not db file — avoid stale leaks across opens.
+  _dbPath = path;
+  _dbWalMode = walMode;
+  // Keyed by schema name, not db file — avoid stale leaks across a genuine file change.
   SchemaRegistry::shared().clear();
 }
 

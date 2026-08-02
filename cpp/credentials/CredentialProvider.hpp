@@ -38,6 +38,9 @@ public:
   // later app launch) — never overwrites a token natively refreshed since.
   void seedInitialTokens(const std::string& accessToken, const std::string& refreshToken);
 
+  // Deletes both stored tokens, so a later seedInitialTokens() isn't blocked by its already-seeded guard.
+  static void clearStoredTokens();
+
   // Current access token, or nullopt if none was ever seeded/refreshed.
   std::optional<std::string> getAccessToken() const;
 

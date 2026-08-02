@@ -34,6 +34,7 @@ public:
     return instance;
   }
 
+  // Caller must hold lockSync().
   void open(const std::string& dbName, bool walMode = true);
 
   std::shared_ptr<SQLiteConnection> connection() const {
@@ -98,6 +99,12 @@ public:
   void closeForTesting() {
     auto lock = lockSync();
     _db.reset();
+    _dbPath.clear();
+    resetConfig();
+  }
+
+  // _dbPath/_dbWalMode intentionally untouched here — resetConfig() keeps `_db` alive, so the identity it describes is still accurate.
+  void resetConfig() {
     _credentials.reset();
     _network.reset();
     _background.reset();
@@ -108,6 +115,8 @@ public:
 private:
   DatabaseManager() = default;
   std::shared_ptr<SQLiteConnection> _db;
+  std::string _dbPath;
+  bool _dbWalMode = true;
   std::unique_ptr<CredentialProvider> _credentials;
   std::optional<NetworkConfig> _network;
   std::optional<BackgroundConfig> _background;

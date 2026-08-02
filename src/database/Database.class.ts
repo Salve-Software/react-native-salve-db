@@ -36,6 +36,11 @@ export class Database {
     return this.configureDb.register(props)
   }
 
+  /** Wipes all local data and credentials — full sign-out; `register` per schema resumes local use, `configure` again is only needed to restore sync. */
+  static reset = () => {
+    return this.configureDb.reset()
+  }
+
   /** Starts a `SELECT` against `schema`'s table. Call `.execute()` on the returned builder to run it. */
   static select = <TSchema extends AnySchema>(schema: TSchema) => {
     return this.queryDb.select(schema);

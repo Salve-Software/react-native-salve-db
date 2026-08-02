@@ -1,6 +1,7 @@
 #include "NativeConfigStore.hpp"
 #include "json_parser.hpp"
 #include "../platform/platform.hpp"
+#include <cerrno>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -132,6 +133,13 @@ std::optional<PersistedConfig> NativeConfigStore::load() {
   config.background = parseBackground(root);
 
   return config;
+}
+
+void NativeConfigStore::remove() {
+  std::string path = configFilePath();
+  if (std::remove(path.c_str()) != 0 && errno != ENOENT) {
+    platform::logError("SalveDb", "NativeConfigStore: failed to remove " + path);
+  }
 }
 
 } // namespace margelo::nitro::salvedb
