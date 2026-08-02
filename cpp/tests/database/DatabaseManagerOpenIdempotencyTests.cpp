@@ -31,12 +31,14 @@ TEST_CASE("open() with the same name and walMode reuses the existing connection"
 TEST_CASE("open() with a different walMode for the same name recreates the connection", "[database][DatabaseManager][open]") {
   auto name = uniqueDbName("idempotent_walmode");
   DatabaseManager::shared().open(name, true);
-  auto before = DatabaseManager::shared().connection();
-  REQUIRE(journalMode(*before) == "wal");
+  auto* beforeRaw = DatabaseManager::shared().connection().get();
+  REQUIRE(journalMode(*DatabaseManager::shared().connection()) == "wal");
 
+  // journal_mode=DELETE needs exclusive access — don't hold our own reference to the WAL
+  // connection while opening the replacement, on top of whatever DatabaseManager itself holds.
   DatabaseManager::shared().open(name, false);
 
-  REQUIRE(DatabaseManager::shared().connection() != before);
+  REQUIRE(DatabaseManager::shared().connection().get() != beforeRaw);
   REQUIRE(journalMode(*DatabaseManager::shared().connection()) == "delete");
 }
 
