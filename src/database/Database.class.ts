@@ -36,7 +36,7 @@ export class Database {
     return this.configureDb.register(props)
   }
 
-  /** Wipes all local data and credentials — full sign-out; call `configure` again, then `register` per schema. */
+  /** Wipes all local data and credentials — full sign-out; `register` per schema resumes local use, `configure` again is only needed to restore sync. */
   static reset = () => {
     return this.configureDb.reset()
   }
