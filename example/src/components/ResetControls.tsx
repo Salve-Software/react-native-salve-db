@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { AnySchema } from '@salve-software/react-native-salve-db';
 import { Database } from '@salve-software/react-native-salve-db';
 
@@ -60,7 +61,7 @@ export function ResetControls({ schemas, buildConfig }: ResetControlsProps): Rea
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.buttonRow}>
         <Pressable style={[styles.button, busy && styles.buttonDisabled]} disabled={busy} onPress={resetLocal}>
           <Text style={styles.buttonText}>Reset (local)</Text>
@@ -75,7 +76,7 @@ export function ResetControls({ schemas, buildConfig }: ResetControlsProps): Rea
           {lastResult}
         </Text>
       ) : null}
-    </View>
+    </SafeAreaView>
   );
 }
 
