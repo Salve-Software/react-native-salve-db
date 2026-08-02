@@ -22,9 +22,7 @@ public:
   void registerBooleanColumns(const std::string& table, std::unordered_set<std::string> columns);
   bool isBoolean(const std::string& table, const std::string& column) const;
 
-  // Discards all registrations. Must run whenever the underlying SQLite connection
-  // changes (DatabaseManager::open()) — entries are keyed by table name only, not by
-  // db file, so stale entries from a previously-open database would otherwise leak in.
+  // Discards all registrations. Must run whenever the underlying database file changes (DatabaseManager::open(), when reopening a different db) — entries are keyed by table name only, not by db file.
   void clear();
 
 private:
