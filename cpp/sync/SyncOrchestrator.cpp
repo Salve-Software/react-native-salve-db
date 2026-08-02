@@ -53,7 +53,7 @@ NativeSyncResult SyncOrchestrator::runSyncSession(const std::string& schemaName)
   SyncQueueStore queue(conn);
   SyncApplyGuard guard(conn);
   SyncCursorStore cursors(conn);
-  SyncOperationApplier applier(conn);
+  SyncOperationApplier applier(conn, contract.conflict);
 
   double start = nowMillis();
 

@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "../../database/MigrationEngine.hpp"
 #include "../../database/SQLiteConnection.hpp"
 #include "../../platform/platform.hpp"
@@ -7,6 +8,7 @@
 #include <vector>
 
 using namespace margelo::nitro::salvedb;
+using Catch::Matchers::ContainsSubstring;
 
 namespace {
 
@@ -435,6 +437,65 @@ TEST_CASE("sync.enabled: true without a datetime 'updatedAt' column throws", "[m
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": { "enabled": true }
   })"));
+}
+
+TEST_CASE("sync.conflict.strategy 'lastWriteWins' with a custom field requires that column, not 'updatedAt'", "[migration][sync]") {
+  // Custom field declared, but the actual column is still named "updatedAt" — must throw.
+  CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" } }
+  })"), std::runtime_error);
+
+  CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "modifiedAt": { "type": "datetime", "nullable": false } },
+    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" } }
+  })"));
+}
+
+TEST_CASE("the missing-column error explains 'updatedAt' is only the default, when 'field' was never set", "[migration][sync]") {
+  REQUIRE_THROWS_WITH(
+    MigrationEngine::parseSchemaJson(R"({
+      "name": "customers", "version": 1, "primaryKey": "id",
+      "columns": { "id": { "type": "integer" } },
+      "sync": { "enabled": true }
+    })"),
+    ContainsSubstring("is the default when sync.conflict.field is not set")
+  );
+}
+
+TEST_CASE("the missing-column error does not suggest a default when 'field' was explicitly set", "[migration][sync]") {
+  REQUIRE_THROWS_WITH(
+    MigrationEngine::parseSchemaJson(R"({
+      "name": "customers", "version": 1, "primaryKey": "id",
+      "columns": { "id": { "type": "integer" } },
+      "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" } }
+    })"),
+    !ContainsSubstring("is the default when sync.conflict.field is not set")
+  );
+}
+
+TEST_CASE("sync.conflict.strategy 'serverWins'/'clientWins' require no timestamp column at all", "[migration][sync]") {
+  CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "sync": { "enabled": true, "conflict": { "strategy": "serverWins" } }
+  })"));
+
+  CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
+    "sync": { "enabled": true, "conflict": { "strategy": "clientWins" } }
+  })"));
+}
+
+TEST_CASE("sync.conflict.strategy with an unsupported value throws", "[migration][sync]") {
+  CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "integer" } },
+    "sync": { "enabled": true, "conflict": { "strategy": "yoloWins" } }
+  })"), std::runtime_error);
 }
 
 TEST_CASE("a bare DELETE FROM with no WHERE on a schema without sync still notifies subscribers (#63)", "[migration][notify]") {

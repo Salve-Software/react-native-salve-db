@@ -18,15 +18,15 @@ int64_t parseCursor(const std::optional<std::string>& stored) {
   }
 }
 
-// (last row's deletedAt ?? updatedAt) - 1ms — since is exclusive server-side, so the 1ms overlap gets re-delivered (a no-op via lastWriteWins) instead of skipped.
-int64_t candidateCursorFor(const json::Value& lastRow) {
+// (last row's deletedAt ?? endpoint.cursorField) - 1ms — since is exclusive server-side, so the 1ms overlap gets re-delivered (a no-op via lastWriteWins) instead of skipped.
+int64_t candidateCursorFor(const json::Value& lastRow, const std::string& cursorField) {
   auto deletedAt = lastRow.get("deletedAt");
   bool hasDeletedAt = deletedAt && deletedAt->get().isNumber();
-  auto updatedAt = lastRow.get("updatedAt");
+  auto updatedAt = lastRow.get(cursorField);
   bool hasUpdatedAt = updatedAt && updatedAt->get().isNumber();
   if (!hasDeletedAt && !hasUpdatedAt) {
     throw std::runtime_error(
-      "SyncPullPhase: last row of a pulled page has no numeric updatedAt or deletedAt — cannot advance the cursor"
+      "SyncPullPhase: last row of a pulled page has no numeric '" + cursorField + "' or deletedAt — cannot advance the cursor"
     );
   }
   double lastTimestamp = hasDeletedAt ? deletedAt->get().asNumber() : updatedAt->get().asNumber();
@@ -71,7 +71,7 @@ PullPhaseResult runPullPhase(const std::string& entity, const SyncContract& cont
       result.pagesFetched++;
       if (rows.empty()) break;
 
-      candidateCursor = candidateCursorFor(rows.back());
+      candidateCursor = candidateCursorFor(rows.back(), contract.endpoint.cursorField);
       bool wasFull = static_cast<int>(rows.size()) == limit;
       if (candidateCursor > sinceMs || !wasFull) break;
 

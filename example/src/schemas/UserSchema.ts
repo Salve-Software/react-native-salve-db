@@ -26,7 +26,7 @@ export const UserSchema = {
   sync: {
     enabled: true,
     direction: 'bidirectional',
-    conflict: 'lastWriteWins',
+    conflict: { strategy: 'lastWriteWins' },
     transport: 'rest',
     endpoint: { basePath: '/users', sinceParam: 'updatedAfter', limitParam: 'limit' },
     pagination: { pageSize: 50, maxPagesPerSession: 20 },

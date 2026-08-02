@@ -1,5 +1,6 @@
 #include "SyncContract.hpp"
 #include <stdexcept>
+#include <unordered_set>
 
 namespace margelo::nitro::salvedb {
 
@@ -24,7 +25,33 @@ HttpHeaders parseExtraHeaders(const json::Value& endpoint) {
   return headers;
 }
 
+SyncConflict parseConflict(const json::Value& definition) {
+  SyncConflict conflict = readConflictDefaults(definition);
+  if (!isValidConflictStrategy(conflict.strategy)) {
+    throw std::runtime_error("SyncContract: sync.conflict.strategy '" + conflict.strategy + "' is not supported");
+  }
+  return conflict;
+}
+
 } // namespace
+
+bool isValidConflictStrategy(const std::string& strategy) {
+  static const std::unordered_set<std::string> kValidConflictStrategies = {
+    "lastWriteWins", "serverWins", "clientWins"
+  };
+  return kValidConflictStrategies.count(strategy) > 0;
+}
+
+SyncConflict readConflictDefaults(const json::Value& definition) {
+  SyncConflict conflict;
+  auto raw = definition.get("conflict");
+  if (!raw || !raw->get().isObject()) return conflict;
+
+  conflict.strategy = raw->get().getString("strategy", "lastWriteWins");
+  conflict.fieldExplicit = raw->get().has("field");
+  conflict.field = raw->get().getString("field", "updatedAt");
+  return conflict;
+}
 
 SyncContract SyncContract::fromDefinition(const json::Value& definition) {
   auto endpointVal = definition.get("endpoint");
@@ -38,6 +65,8 @@ SyncContract SyncContract::fromDefinition(const json::Value& definition) {
   contract.endpoint.sinceParam = requireString(endpoint, "sinceParam");
   contract.endpoint.limitParam = requireString(endpoint, "limitParam");
   contract.endpoint.extraHeaders = parseExtraHeaders(endpoint);
+  contract.endpoint.cursorField = endpoint.getString("cursorField", "updatedAt");
+  contract.conflict = parseConflict(definition);
 
   auto pagination = definition.get("pagination");
   if (pagination) {

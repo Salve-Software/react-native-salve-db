@@ -50,7 +50,9 @@ function makeSyncSchema(name: string): AnySchema {
     sync: {
       enabled: true,
       direction: 'bidirectional',
-      conflict: 'lastWriteWins',
+      // serverWins — this file tests write-triggered dispatch, not conflict
+      // resolution, so it needs no NOT NULL datetime column on the schema.
+      conflict: { strategy: 'serverWins' },
       transport: 'rest',
       endpoint: { basePath: `/${name}`, sinceParam: 'updatedAfter', limitParam: 'limit' },
     },
