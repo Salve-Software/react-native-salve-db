@@ -1,8 +1,9 @@
 /** Pagination config */
 export interface IPaginationDefinition {
   /**
-   * Items per pull page (`<limitParam>`). Push has no batching concept —
-   * each queued item is its own HTTP call, regardless of this value.
+   * Items per pull page (rendered into `listQueryTemplate`'s `{limit}`
+   * token). Push has no batching concept — each queued item is its own
+   * HTTP call, regardless of this value.
    */
   pageSize: number;
 
