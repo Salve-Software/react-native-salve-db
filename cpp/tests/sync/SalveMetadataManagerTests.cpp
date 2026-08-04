@@ -24,7 +24,7 @@ std::shared_ptr<SQLiteConnection> openWithCustomers(const std::string& testName)
       "name": { "type": "text" },
       "updatedAt": { "type": "datetime", "nullable": false }
     },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
   return conn;
 }
@@ -94,7 +94,7 @@ TEST_CASE("backfillSyncedRows writes entityId equal to the primary key", "[sync]
       "name": { "type": "text" },
       "updatedAt": { "type": "datetime", "nullable": false }
     },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   SalveMetadataManager metadata(conn);

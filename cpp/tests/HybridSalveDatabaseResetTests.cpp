@@ -35,7 +35,7 @@ std::string customersSchemaJson() {
     columns: { id: { type: "text" }, name: { type: "text" }, updatedAt: { type: "datetime", nullable: false } },
     sync: {
       enabled: true,
-      endpoint: { basePath: "/customers", sinceParam: "updatedAfter", limitParam: "limit" },
+      endpoint: { basePath: "/customers", listQueryTemplate: "updatedAfter={since}&limit={limit}" },
       pagination: { pageSize: 20, maxPagesPerSession: 20 }
     }
   })";

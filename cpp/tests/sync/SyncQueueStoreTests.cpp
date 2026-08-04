@@ -19,7 +19,7 @@ void registerSyncEnabledCustomers(MigrationEngine& engine) {
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 }
 
@@ -97,7 +97,7 @@ TEST_CASE("readPending filters by entity", "[sync][SyncQueueStore]") {
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "orders", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/orders", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
   conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
   conn->execute("INSERT INTO orders (id, updatedAt) VALUES (100, 100)", {});
@@ -232,7 +232,7 @@ TEST_CASE("rewriteEntityId updates pending snapshots and never touches another e
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "orders", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/orders", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
   conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES (1, 'a', 100)", {});
   conn->execute("INSERT INTO orders (id, updatedAt) VALUES ('1', 100)", {});

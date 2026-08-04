@@ -27,10 +27,10 @@ std::shared_ptr<SQLiteConnection> openWithDefinitionTable(const std::string& tes
 }
 
 json::Value contract(const std::string& basePath, bool includePagination) {
-  std::string json = R"({"enabled": true, "endpoint": {"basePath": ")" + basePath + R"(", "sinceParam": "updatedAfter", "limitParam": "limit"}})";
+  std::string json = R"({"enabled": true, "endpoint": {"basePath": ")" + basePath + R"(", "listQueryTemplate": "updatedAfter={since}&limit={limit}"}})";
   if (includePagination) {
     json = R"({"enabled": true, "endpoint": {"basePath": ")" + basePath +
-           R"(", "sinceParam": "updatedAfter", "limitParam": "limit"}, "pagination": {"pageSize": 10}})";
+           R"(", "listQueryTemplate": "updatedAfter={since}&limit={limit}"}, "pagination": {"pageSize": 10}})";
   }
   return json::parse(json);
 }
@@ -111,7 +111,7 @@ TEST_CASE("MigrationEngine::registerSchema captures the full sync contract", "[s
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/sync/customers", "sinceParam": "updatedAfter", "limitParam": "limit" },
+      "endpoint": { "basePath": "/sync/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" },
       "pagination": { "pageSize": 50 }
     }
   })"));
@@ -131,7 +131,7 @@ TEST_CASE("MigrationEngine::registerSchema removes the definition when sync.enab
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
   SyncDefinitionStore store(conn);
   REQUIRE(store.definitionFor("customers").has_value());
