@@ -312,7 +312,7 @@ TEST_CASE("sync.enabled: true creates 3 triggers matching schema.columns", "[mig
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   REQUIRE(triggerCount(*conn, "customers") == 3);
@@ -362,7 +362,7 @@ TEST_CASE("enabling sync.enabled with no column change still creates triggers", 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 2, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   REQUIRE(triggerCount(*conn, "customers") == 3);
@@ -379,13 +379,13 @@ TEST_CASE("migrating a sync-enabled schema with a new column regenerates trigger
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 2, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" }, "phone": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   REQUIRE(triggerCount(*conn, "customers") == 3);
@@ -400,7 +400,7 @@ TEST_CASE("turning sync.enabled off across versions drops orphaned triggers", "[
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
   REQUIRE(triggerCount(*conn, "customers") == 3);
 
@@ -416,26 +416,26 @@ TEST_CASE("sync.enabled: true without a datetime 'updatedAt' column throws", "[m
   CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"), std::runtime_error);
 
   CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "integer" } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"), std::runtime_error);
 
   // datetime type but nullable (default), no explicit "nullable": false
   CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime" } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"), std::runtime_error);
 
   CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 }
 
@@ -444,13 +444,13 @@ TEST_CASE("sync.conflict.strategy 'lastWriteWins' with a custom field requires t
   CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "updatedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" } }
+    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"), std::runtime_error);
 
   CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "modifiedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" } }
+    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 }
 
@@ -459,7 +459,7 @@ TEST_CASE("the missing-column error explains 'updatedAt' is only the default, wh
     MigrationEngine::parseSchemaJson(R"({
       "name": "customers", "version": 1, "primaryKey": "id",
       "columns": { "id": { "type": "integer" } },
-      "sync": { "enabled": true }
+      "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
     })"),
     ContainsSubstring("is the default when sync.conflict.field is not set")
   );
@@ -470,7 +470,7 @@ TEST_CASE("the missing-column error does not suggest a default when 'field' was 
     MigrationEngine::parseSchemaJson(R"({
       "name": "customers", "version": 1, "primaryKey": "id",
       "columns": { "id": { "type": "integer" } },
-      "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" } }
+      "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
     })"),
     !ContainsSubstring("is the default when sync.conflict.field is not set")
   );
@@ -480,13 +480,13 @@ TEST_CASE("sync.conflict.strategy 'serverWins'/'clientWins' require no timestamp
   CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
-    "sync": { "enabled": true, "conflict": { "strategy": "serverWins" } }
+    "sync": { "enabled": true, "conflict": { "strategy": "serverWins" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   CHECK_NOTHROW(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" }, "name": { "type": "text" } },
-    "sync": { "enabled": true, "conflict": { "strategy": "clientWins" } }
+    "sync": { "enabled": true, "conflict": { "strategy": "clientWins" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 }
 
@@ -494,8 +494,30 @@ TEST_CASE("sync.conflict.strategy with an unsupported value throws", "[migration
   CHECK_THROWS_AS(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "integer" } },
-    "sync": { "enabled": true, "conflict": { "strategy": "yoloWins" } }
+    "sync": { "enabled": true, "conflict": { "strategy": "yoloWins" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"), std::runtime_error);
+}
+
+TEST_CASE("register() rejects a sync-enabled schema with no endpoint at all — consolidation with SyncContract::fromDefinition (#115)", "[migration][sync]") {
+  REQUIRE_THROWS_WITH(
+    MigrationEngine::parseSchemaJson(R"({
+      "name": "customers", "version": 1, "primaryKey": "id",
+      "columns": { "id": { "type": "integer" } },
+      "sync": { "enabled": true }
+    })"),
+    ContainsSubstring("sync.endpoint is required")
+  );
+}
+
+TEST_CASE("register() rejects a sync-enabled schema whose listQueryTemplate is malformed", "[migration][sync]") {
+  REQUIRE_THROWS_WITH(
+    MigrationEngine::parseSchemaJson(R"({
+      "name": "customers", "version": 1, "primaryKey": "id",
+      "columns": { "id": { "type": "integer" } },
+      "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "id={id}" } }
+    })"),
+    ContainsSubstring("references unknown token")
+  );
 }
 
 TEST_CASE("a bare DELETE FROM with no WHERE on a schema without sync still notifies subscribers (#63)", "[migration][notify]") {

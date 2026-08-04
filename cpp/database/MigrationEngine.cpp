@@ -586,27 +586,21 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
     schema.sync.definition = syncObj;
 
     if (schema.sync.enabled) {
-      SyncConflict conflict = readConflictDefaults(syncObj);
+      SyncContract contract = SyncContract::fromDefinition(syncObj);
 
-      if (!isValidConflictStrategy(conflict.strategy)) {
-        throw std::runtime_error(
-          "registerSchema: sync.conflict.strategy '" + conflict.strategy + "' is not supported"
-        );
-      }
-
-      if (conflict.strategy == "lastWriteWins") {
-        auto field = schema.columns.find(conflict.field);
+      if (contract.conflict.strategy == "lastWriteWins") {
+        auto field = schema.columns.find(contract.conflict.field);
         bool valid = field != schema.columns.end()
           && field->second.type == "datetime"
           && !field->second.nullable;
         if (!valid) {
-          std::string hint = conflict.fieldExplicit
+          std::string hint = contract.conflict.fieldExplicit
             ? "" // the developer already chose this name — nothing more to suggest
-            : " ('" + conflict.field + "' is the default when sync.conflict.field is not set — "
+            : " ('" + contract.conflict.field + "' is the default when sync.conflict.field is not set — "
               "pass a different sync.conflict.field to use another column instead)";
           throw std::runtime_error(
             "registerSchema: sync.conflict.strategy 'lastWriteWins' requires a NOT NULL 'datetime' column named '" +
-            conflict.field + "'" + hint
+            contract.conflict.field + "'" + hint
           );
         }
       }
