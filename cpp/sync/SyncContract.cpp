@@ -25,15 +25,17 @@ HttpHeaders parseExtraHeaders(const json::Value& endpoint) {
   return headers;
 }
 
-SyncConflict parseConflict(const json::Value& definition) {
-  SyncConflict conflict = readConflictDefaults(definition);
-  if (!isValidConflictStrategy(conflict.strategy)) {
-    throw std::runtime_error("SyncContract: sync.conflict.strategy '" + conflict.strategy + "' is not supported");
+// Only ever reached via the legacy fallback below — no other caller needs
+// two loose query-param names anymore (#115 replaced them with
+// listQueryTemplate). Kept as a tiny helper purely to name the intent.
+std::string legacyListQueryTemplate(const json::Value& endpoint) {
+  std::string legacySince = endpoint.getString("sinceParam");
+  std::string legacyLimit = endpoint.getString("limitParam");
+  if (legacySince.empty() || legacyLimit.empty()) {
+    throw std::runtime_error("SyncContract: sync.endpoint.listQueryTemplate is required");
   }
-  return conflict;
+  return legacySince + "={since}&" + legacyLimit + "={limit}";
 }
-
-} // namespace
 
 bool isValidConflictStrategy(const std::string& strategy) {
   static const std::unordered_set<std::string> kValidConflictStrategies = {
@@ -53,6 +55,16 @@ SyncConflict readConflictDefaults(const json::Value& definition) {
   return conflict;
 }
 
+SyncConflict parseConflict(const json::Value& definition) {
+  SyncConflict conflict = readConflictDefaults(definition);
+  if (!isValidConflictStrategy(conflict.strategy)) {
+    throw std::runtime_error("SyncContract: sync.conflict.strategy '" + conflict.strategy + "' is not supported");
+  }
+  return conflict;
+}
+
+} // namespace
+
 SyncContract SyncContract::fromDefinition(const json::Value& definition) {
   auto endpointVal = definition.get("endpoint");
   if (!endpointVal) {
@@ -62,8 +74,37 @@ SyncContract SyncContract::fromDefinition(const json::Value& definition) {
 
   SyncContract contract;
   contract.endpoint.basePath = requireString(endpoint, "basePath");
-  contract.endpoint.sinceParam = requireString(endpoint, "sinceParam");
-  contract.endpoint.limitParam = requireString(endpoint, "limitParam");
+
+  std::string itemPathRaw = endpoint.has("itemPathTemplate")
+    ? requireString(endpoint, "itemPathTemplate")
+    : "{basePath}/{id}";
+  contract.endpoint.itemPathTemplate =
+    UrlTemplate::parse(itemPathRaw, UrlTemplateContext::Item, "sync.endpoint.itemPathTemplate");
+  if (!contract.endpoint.itemPathTemplate.references("id")) {
+    throw std::runtime_error(
+      "SyncContract: sync.endpoint.itemPathTemplate must reference {id} — PATCH/DELETE address a single row"
+    );
+  }
+
+  // A pre-#115 `_salve_sync_definitions` row (sinceParam/limitParam, no
+  // listQueryTemplate) reaches here from the headless background-wake path
+  // (SyncNativeEntryPoint::wakeBackgroundSyncFromNative), which runs before
+  // JS ever gets a chance to re-register the schema and rewrite the row in
+  // the new format. Falling back instead of throwing keeps background sync
+  // alive across the upgrade — same treatment #84 gave a legacy plain-string
+  // `conflict`.
+  std::string listQueryRaw = endpoint.getString("listQueryTemplate");
+  if (listQueryRaw.empty()) {
+    listQueryRaw = legacyListQueryTemplate(endpoint);
+  }
+  contract.endpoint.listQueryTemplate =
+    UrlTemplate::parse(listQueryRaw, UrlTemplateContext::ListQuery, "sync.endpoint.listQueryTemplate");
+  if (!contract.endpoint.listQueryTemplate.references("since") ||
+      !contract.endpoint.listQueryTemplate.references("limit")) {
+    throw std::runtime_error(
+      "SyncContract: sync.endpoint.listQueryTemplate must reference both {since} and {limit}"
+    );
+  }
   contract.endpoint.extraHeaders = parseExtraHeaders(endpoint);
   contract.endpoint.cursorField = endpoint.getString("cursorField", "updatedAt");
   contract.conflict = parseConflict(definition);

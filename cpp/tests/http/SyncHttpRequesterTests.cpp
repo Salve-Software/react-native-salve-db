@@ -20,7 +20,9 @@ CredentialProvider testCredentials() {
 }
 
 SyncEndpoint testEndpoint() {
-  return SyncEndpoint{"/customers", "updatedAfter", "limit", {}};
+  return SyncContract::fromDefinition(json::parse(R"({
+    "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
+  })")).endpoint;
 }
 
 NetworkConfig testNetwork() {

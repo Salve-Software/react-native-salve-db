@@ -2,14 +2,17 @@
 
 #include "../database/json_parser.hpp"
 #include "../http/HttpTypes.hpp"
+#include "../http/UrlTemplate.hpp"
 #include <string>
 
 namespace margelo::nitro::salvedb {
 
 struct SyncEndpoint {
   std::string basePath;
-  std::string sinceParam;
-  std::string limitParam;
+  // Fallback when the schema omits `itemPathTemplate`: `{basePath}/{id}`,
+  // matching the pre-#115 hardcoded behavior exactly.
+  UrlTemplate itemPathTemplate;
+  UrlTemplate listQueryTemplate;
   HttpHeaders extraHeaders;
   // Per-row JSON field carrying that row's timestamp, read from the last row
   // of a pulled page to advance the incremental-pull cursor. Required
@@ -36,12 +39,5 @@ struct SyncContract {
 
   static SyncContract fromDefinition(const json::Value& definition);
 };
-
-// Single source of truth for the supported `sync.conflict.strategy` values —
-// shared by SyncContract's own parsing and MigrationEngine::registerSchema's
-// eager validation, so the two never drift apart.
-bool isValidConflictStrategy(const std::string& strategy);
-
-SyncConflict readConflictDefaults(const json::Value& syncDefinition);
 
 } // namespace margelo::nitro::salvedb
