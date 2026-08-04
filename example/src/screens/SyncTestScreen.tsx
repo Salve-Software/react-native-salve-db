@@ -259,7 +259,7 @@ async function fetchRefreshCount(): Promise<number | null> {
   }
 }
 
-/** Manual test surface for the sync engine against packages/salve-db-server's real REST API — Users and Products, each with independently-named sinceParam/limitParam. */
+/** Manual test surface for the sync engine against packages/salve-db-server's real REST API — Users and Products, each with independently-shaped listQueryTemplate. */
 export function SyncTestScreen({ accessToken }: SyncTestScreenProps): React.JSX.Element {
   const { isReady, isLoading, error } = useDatabaseReady();
   const [busy, setBusy] = useState(false);

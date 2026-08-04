@@ -8,8 +8,10 @@ export interface Product {
 }
 
 // Mirrors packages/salve-db-server's IProduct — deliberately different
-// sinceParam/limitParam names than UserSchema, proving per-module query
-// param naming is real, exercised configuration (see salve-db-server's README).
+// query-param names than UserSchema (modified_since/page_size vs
+// updatedAfter/limit), proving listQueryTemplate is real, exercised
+// per-module configuration, not a hardcoded convention (see
+// salve-db-server's README).
 export const ProductSchema = {
   name: 'products',
   version: 1,
@@ -28,7 +30,7 @@ export const ProductSchema = {
     direction: 'bidirectional',
     conflict: { strategy: 'lastWriteWins' },
     transport: 'rest',
-    endpoint: { basePath: '/products', sinceParam: 'modified_since', limitParam: 'page_size' },
+    endpoint: { basePath: '/products', listQueryTemplate: 'modified_since={since}&page_size={limit}' },
     pagination: { pageSize: 25, maxPagesPerSession: 20 },
   },
 } satisfies ISchemaDefinition<Product>;
