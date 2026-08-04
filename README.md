@@ -149,7 +149,7 @@ export const UserSchema = {
     direction: 'bidirectional',
     conflict: 'lastWriteWins',
     transport: 'rest',
-    endpoint: { basePath: '/users', sinceParam: 'updatedAfter', limitParam: 'limit' },
+    endpoint: { basePath: '/users', listQueryTemplate: 'updatedAfter={since}&limit={limit}' },
     pagination: { pageSize: 50, maxPagesPerSession: 20 },
   },
 } satisfies ISchemaDefinition<User>;
@@ -250,7 +250,7 @@ await Database.sync('users');   // one schema
 await Database.syncAll();       // every sync-enabled schema
 ```
 
-Push drains the local `sync_queue` against `POST/PATCH/DELETE <basePath>[/:id]`; pull pages through `GET <basePath>?<sinceParam>=<cursor>&<limitParam>=<pageSize>` until a short page signals the end. See [`docs/sync-rest-contract.md`](docs/sync-rest-contract.md) for the full wire contract, and [`packages/salve-db-server`](packages/salve-db-server) for a reference implementation of it.
+Push drains the local `sync_queue` against `POST/PATCH/DELETE <basePath>[/:id]` (or a custom `itemPathTemplate`); pull pages through `GET <basePath>?<listQueryTemplate rendered>` until a short page signals the end. See [`docs/sync-rest-contract.md`](docs/sync-rest-contract.md) for the full wire contract, and [`packages/salve-db-server`](packages/salve-db-server) for a reference implementation of it.
 
 ## Studio
 
