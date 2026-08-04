@@ -33,9 +33,8 @@ TEST_CASE("collapses multiple trailing slashes on baseUrl", "[http][HttpUrlBuild
   REQUIRE(HttpUrlBuilder::build("https://api.company.com///", "customers") == "https://api.company.com/customers");
 }
 
-TEST_CASE("appends query params in order", "[http][HttpUrlBuilder]") {
-  HttpUrlBuilder::QueryParams query{{"updatedAfter", "1700"}, {"limit", "50"}};
-  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", query)
+TEST_CASE("appends a pre-rendered query string verbatim after '?'", "[http][HttpUrlBuilder]") {
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", "updatedAfter=1700&limit=50")
     == "https://api.company.com/customers?updatedAfter=1700&limit=50");
 }
 
@@ -51,8 +50,16 @@ TEST_CASE("encodeSegment percent-encodes reserved and unsafe characters", "[http
   REQUIRE(HttpUrlBuilder::encodeSegment("a/b c") == "a%2Fb%20c");
 }
 
-TEST_CASE("query param names and values are both percent-encoded", "[http][HttpUrlBuilder]") {
-  HttpUrlBuilder::QueryParams query{{"since after", "a/b"}};
-  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", query)
+TEST_CASE("does not re-encode a rendered query string", "[http][HttpUrlBuilder]") {
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", "since%20after=a%2Fb")
     == "https://api.company.com/customers?since%20after=a%2Fb");
+}
+
+TEST_CASE("strips a leading question mark from renderedQuery instead of emitting a double one", "[http][HttpUrlBuilder]") {
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", "?updatedAfter=1700&limit=50")
+    == "https://api.company.com/customers?updatedAfter=1700&limit=50");
+}
+
+TEST_CASE("a renderedQuery of only '?' produces no query string at all", "[http][HttpUrlBuilder]") {
+  REQUIRE(HttpUrlBuilder::build("https://api.company.com", "/customers", "?") == "https://api.company.com/customers");
 }
