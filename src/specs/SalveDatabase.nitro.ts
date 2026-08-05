@@ -17,6 +17,15 @@ export interface SalveDatabase extends HybridObject<{ ios: "c++"; android: "c++"
   /** Wipes all local data and credentials in place; `register()` per schema resumes local use, `configure()` again is only needed to restore sync. */
   reset(): Promise<void>;
 
+  /**
+   * Clears only the stored credential tokens (Keychain/Keystore), leaving
+   * local data, schemas, and config untouched. Use for a normal sign-out:
+   * the next `configure()` call with fresh tokens (e.g. after a new login)
+   * seeds them cleanly instead of being silently ignored by the
+   * already-seeded guard.
+   */
+  logout(): void;
+
   // ── Query ──────────────────────────────────────────────────────────────────
 
   /**
