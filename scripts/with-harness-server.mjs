@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const command = process.argv.slice(2).join(' ');
 if (!command) {
@@ -10,6 +12,12 @@ if (!command) {
 const READY_URL = 'http://localhost:4000/users';
 const READY_TIMEOUT_MS = 30000;
 const STOP_TIMEOUT_MS = 5000;
+
+// Locked devDependency (package.json/package-lock.json) so a clean local run
+// doesn't need registry access just to resolve the readiness tool — resolve
+// its bin from this repo's own node_modules instead of `npx`.
+const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const waitOnBin = path.join(rootDir, 'node_modules', '.bin', 'wait-on');
 
 // `detached: true` puts the spawned `sh -c "npm run ..."` in its own process
 // group. Stopping via that whole group (negative PID) also reaches the
@@ -24,26 +32,41 @@ const server = spawn('npm', ['run', 'start:pglite', '-w', 'salve-db-server'], {
   shell: true,
   detached: true,
 });
-// A ChildProcess that fails to spawn (npm missing, EAGAIN, ...) emits 'error'
-// asynchronously; with no listener that becomes an uncaught exception the
-// surrounding try/catch below can never see, skipping cleanup entirely.
-server.on('error', (error) => {
-  console.error(`salve-db-server failed to start: ${error.message}`);
-});
 
-// Track the inner harness command so a programmatic `kill -TERM <this pid>`
-// (not just an interactive Ctrl-C, which the child already receives directly
-// via the shared foreground process group) also stops it, instead of leaving
-// the harness runner and the simulator session it drives orphaned.
+// A ChildProcess that fails to spawn, or exits before ever becoming ready,
+// must fail the run — otherwise, if some other process already answers
+// READY_URL (a stale server from an earlier crashed run, say), waitForServer
+// can report success while the harness ends up testing against the wrong
+// server entirely.
+let startupFailure;
+const startupFailed = new Promise((_resolve, reject) => {
+  startupFailure = reject;
+});
+server.on('error', (error) => {
+  startupFailure(new Error(`salve-db-server failed to start: ${error.message}`));
+});
+server.once('exit', (code) => {
+  if (!ready) startupFailure(new Error(`salve-db-server exited (code ${code}) before becoming ready`));
+});
+let ready = false;
+
+// Track the readiness subprocess and the inner harness command so a signal
+// arriving mid-wait or mid-run stops them too, not just the server — a
+// programmatic `kill -TERM <this pid>` only reaches this process directly
+// (unlike interactive Ctrl-C, which the whole foreground process group gets),
+// so anything spawned without `detached: true` needs explicit cleanup here.
+let waiter;
 let child;
 
 let stopped = false;
 async function stopServer() {
-  if (stopped || server.exitCode !== null || server.pid === undefined) return;
+  if (stopped) return;
   stopped = true;
 
+  waiter?.kill('SIGTERM');
   child?.kill('SIGTERM');
 
+  if (server.exitCode !== null || server.pid === undefined) return;
   const exited = new Promise((resolve) => server.once('exit', resolve));
   try {
     process.kill(-server.pid, 'SIGTERM');
@@ -72,10 +95,7 @@ async function stopServer() {
 // for salve-db-server to be ready", not two that can silently drift apart.
 async function waitForServer(url, timeoutMs) {
   const exitCode = await new Promise((resolve, reject) => {
-    const waiter = spawn('npx', ['--yes', 'wait-on', url, '-t', String(timeoutMs)], {
-      stdio: 'inherit',
-      shell: true,
-    });
+    waiter = spawn(waitOnBin, [url, '-t', String(timeoutMs)], { stdio: 'inherit' });
     waiter.on('error', reject);
     waiter.on('exit', (code) => resolve(code ?? 1));
   });
@@ -94,7 +114,8 @@ process.on('SIGTERM', async () => {
 });
 
 try {
-  await waitForServer(READY_URL, READY_TIMEOUT_MS);
+  await Promise.race([waitForServer(READY_URL, READY_TIMEOUT_MS), startupFailed]);
+  ready = true;
 
   child = spawn(command, { stdio: 'inherit', shell: true });
   const exitCode = await new Promise((resolve, reject) => {
