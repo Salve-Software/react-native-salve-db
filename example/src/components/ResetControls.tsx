@@ -12,6 +12,8 @@ type ConfigureProps = Parameters<typeof Database.configure>[0];
 interface ResetControlsProps {
   schemas: AnySchema[];
   buildConfig: () => ConfigureProps;
+  /** Called after a successful `Database.logout()`, so the caller can drop its held tokens and show the login screen again. */
+  onLogout: () => void;
 }
 
 /**
@@ -21,7 +23,7 @@ interface ResetControlsProps {
  * useQuery subscription mounted anywhere in the tab tree) survives instead of
  * silently going stale.
  */
-export function ResetControls({ schemas, buildConfig }: ResetControlsProps): React.JSX.Element {
+export function ResetControls({ schemas, buildConfig, onLogout }: ResetControlsProps): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
@@ -60,6 +62,19 @@ export function ResetControls({ schemas, buildConfig }: ResetControlsProps): Rea
     }
   }
 
+  async function logout() {
+    setBusy(true);
+    setLastResult(null);
+    try {
+      Database.logout();
+      onLogout();
+    } catch (err) {
+      setLastResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.buttonRow}>
@@ -68,6 +83,9 @@ export function ResetControls({ schemas, buildConfig }: ResetControlsProps): Rea
         </Pressable>
         <Pressable style={[styles.button, styles.buttonDanger, busy && styles.buttonDisabled]} disabled={busy} onPress={resetAndReconfigure}>
           <Text style={styles.buttonDangerText}>Reset + Reconfigure</Text>
+        </Pressable>
+        <Pressable style={[styles.button, busy && styles.buttonDisabled]} disabled={busy} onPress={logout}>
+          <Text style={styles.buttonText}>Logout</Text>
         </Pressable>
       </View>
       {busy ? <ActivityIndicator color={ACCENT} style={styles.spinner} /> : null}

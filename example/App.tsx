@@ -61,14 +61,15 @@ function buildDbConfig(tokens: LoginTokens) {
 
 interface AppTabsProps {
   tokens: LoginTokens;
+  onLogout: () => void;
 }
 
-function AppTabs({ tokens }: AppTabsProps): React.JSX.Element {
+function AppTabs({ tokens, onLogout }: AppTabsProps): React.JSX.Element {
   const [tab, setTab] = useState<TabKey>('expenses');
 
   return (
     <View style={styles.flex}>
-      <ResetControls schemas={SCHEMAS} buildConfig={() => buildDbConfig(tokens)} />
+      <ResetControls schemas={SCHEMAS} buildConfig={() => buildDbConfig(tokens)} onLogout={onLogout} />
 
       <View style={styles.flex}>
         {tab === 'expenses' ? <ExpensesScreen /> : null}
@@ -103,7 +104,7 @@ function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <SalveDbProvider config={buildDbConfig(tokens)} schemas={SCHEMAS}>
-        <AppTabs tokens={tokens} />
+        <AppTabs tokens={tokens} onLogout={() => setTokens(null)} />
       </SalveDbProvider>
     </SafeAreaProvider>
   );
