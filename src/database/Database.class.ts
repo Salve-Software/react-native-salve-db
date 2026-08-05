@@ -41,6 +41,11 @@ export class Database {
     return this.configureDb.reset()
   }
 
+  /** Clears only the stored credential tokens; local data, schemas, and config are untouched. Use for a normal sign-out. */
+  static logout = () => {
+    return this.configureDb.logout()
+  }
+
   /** Starts a `SELECT` against `schema`'s table. Call `.execute()` on the returned builder to run it. */
   static select = <TSchema extends AnySchema>(schema: TSchema) => {
     return this.queryDb.select(schema);

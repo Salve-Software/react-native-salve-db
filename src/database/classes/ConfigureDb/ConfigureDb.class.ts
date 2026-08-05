@@ -69,6 +69,11 @@ export class ConfigureDb {
     return this._bridge.reset();
   }
 
+  /** Clears only the stored credential tokens; local data, schemas, and config are untouched. Use for a normal sign-out. */
+  logout(): void {
+    this._bridge.logout();
+  }
+
   static isConfigured(): boolean {
     return ConfigureDb._configured;
   }
