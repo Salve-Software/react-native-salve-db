@@ -209,20 +209,45 @@ TEST_CASE("fromDefinition falls back to defaults when conflict is a legacy plain
   REQUIRE(contract.conflict.field == "updatedAt");
 }
 
-// The headless background-wake path (SyncNativeEntryPoint::wakeBackgroundSyncFromNative)
-// reads `_salve_sync_definitions` before JS ever gets a chance to re-register a schema
-// and rewrite a pre-#115 row — this must synthesize a template instead of throwing, same
-// treatment as the legacy plain-string `conflict` case above.
-TEST_CASE("fromDefinition synthesizes listQueryTemplate from legacy sinceParam/limitParam", "[sync][SyncContract]") {
+// The headless background-wake path (SyncNativeEntryPoint::wakeBackgroundSyncFromNative,
+// via SyncOrchestrator::runSyncSession) reads `_salve_sync_definitions` before JS ever
+// gets a chance to re-register a schema and rewrite a pre-#115 row — that path passes
+// allowLegacyEndpointFallback=true, and must synthesize a template instead of throwing,
+// same treatment as the legacy plain-string `conflict` case above.
+TEST_CASE("fromDefinition(allowLegacyEndpointFallback=true) synthesizes listQueryTemplate from legacy sinceParam/limitParam", "[sync][SyncContract]") {
   auto contract = SyncContract::fromDefinition(json::parse(R"({
     "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" }
-  })"));
+  })"), /*allowLegacyEndpointFallback*/ true);
 
   REQUIRE(
     contract.endpoint.listQueryTemplate.render({{"since", "1700"}, {"limit", "50"}, {"cursorField", "updatedAt"}}) ==
     "updatedAfter=1700&limit=50"
   );
 }
+
+// register() (MigrationEngine::parseSchemaJson) always calls fromDefinition with the
+// strict default — #115 is a breaking change, a freshly authored schema still using
+// sinceParam/limitParam must be rejected, not silently accepted.
+TEST_CASE("fromDefinition (strict default) rejects legacy sinceParam/limitParam even when both are present", "[sync][SyncContract]") {
+  REQUIRE_THROWS_WITH(
+    SyncContract::fromDefinition(json::parse(R"({
+      "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" }
+    })")),
+    Equals("SyncContract: sync.endpoint.listQueryTemplate is required")
+  );
+}
+
+TEST_CASE("fromDefinition(allowLegacyEndpointFallback=true) percent-encodes legacy param names", "[sync][SyncContract]") {
+  auto contract = SyncContract::fromDefinition(json::parse(R"({
+    "endpoint": { "basePath": "/customers", "sinceParam": "changed&tenant", "limitParam": "limit" }
+  })"), /*allowLegacyEndpointFallback*/ true);
+
+  REQUIRE(
+    contract.endpoint.listQueryTemplate.render({{"since", "1700"}, {"limit", "50"}, {"cursorField", "updatedAt"}}) ==
+    "changed%26tenant=1700&limit=50"
+  );
+}
+
 
 TEST_CASE("fromDefinition throws when neither listQueryTemplate nor legacy sinceParam/limitParam are present", "[sync][SyncContract]") {
   REQUIRE_THROWS_WITH(

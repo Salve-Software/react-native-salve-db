@@ -37,7 +37,15 @@ struct SyncContract {
   int pageSize = 20;
   int maxPagesPerSession = 20;
 
-  static SyncContract fromDefinition(const json::Value& definition);
+  // `allowLegacyEndpointFallback`: when true, a missing `listQueryTemplate`
+  // is synthesized from legacy `sinceParam`/`limitParam` instead of throwing.
+  // Only `SyncOrchestrator` (reading a possibly pre-#115 persisted
+  // `_salve_sync_definitions` row from the headless background-wake path)
+  // passes true. `MigrationEngine::parseSchemaJson` (register(), always
+  // fresh JS-authored schema JSON) uses the strict default — the #115
+  // breaking change requires listQueryTemplate explicitly there, no
+  // silent legacy acceptance.
+  static SyncContract fromDefinition(const json::Value& definition, bool allowLegacyEndpointFallback = false);
 };
 
 } // namespace margelo::nitro::salvedb

@@ -130,3 +130,29 @@ TEST_CASE("rejects a raw non-ASCII byte in literal text — a URL is ASCII-only"
     )
   );
 }
+
+TEST_CASE("accepts a well-formed %HH percent escape in literal text", "[http][UrlTemplate]") {
+  auto tpl = UrlTemplate::parse("status=%2Bactive&since={since}", UrlTemplateContext::ListQuery, "sync.endpoint.listQueryTemplate");
+  REQUIRE(tpl.render({{"since", "1700"}, {"limit", "50"}, {"cursorField", "updatedAt"}}) == "status=%2Bactive&since=1700");
+}
+
+TEST_CASE("rejects a trailing '%' with no escape digits", "[http][UrlTemplate]") {
+  REQUIRE_THROWS_WITH(
+    UrlTemplate::parse("since={since}%", UrlTemplateContext::ListQuery, "sync.endpoint.listQueryTemplate"),
+    Equals("UrlTemplate: sync.endpoint.listQueryTemplate contains an incomplete or invalid percent-escape '%' in its literal text")
+  );
+}
+
+TEST_CASE("rejects a percent escape with non-hex digits", "[http][UrlTemplate]") {
+  REQUIRE_THROWS_WITH(
+    UrlTemplate::parse("status=%GG&since={since}", UrlTemplateContext::ListQuery, "sync.endpoint.listQueryTemplate"),
+    Equals("UrlTemplate: sync.endpoint.listQueryTemplate contains an incomplete or invalid percent-escape '%' in its literal text")
+  );
+}
+
+TEST_CASE("rejects a percent escape with only one hex digit", "[http][UrlTemplate]") {
+  REQUIRE_THROWS_WITH(
+    UrlTemplate::parse("status=%0G&since={since}", UrlTemplateContext::ListQuery, "sync.endpoint.listQueryTemplate"),
+    Equals("UrlTemplate: sync.endpoint.listQueryTemplate contains an incomplete or invalid percent-escape '%' in its literal text")
+  );
+}

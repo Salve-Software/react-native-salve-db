@@ -43,6 +43,10 @@ bool isIllegalRawChar(char c) {
   return c == '"' || c == '<' || c == '>' || c == '`' || c == '#' || u < 0x20 || u >= 0x7F;
 }
 
+bool isHexDigit(char c) {
+  return std::isxdigit(static_cast<unsigned char>(c)) != 0;
+}
+
 } // namespace
 
 UrlTemplate UrlTemplate::parse(const std::string& raw, UrlTemplateContext context, const std::string& fieldName) {
@@ -102,6 +106,15 @@ UrlTemplate UrlTemplate::parse(const std::string& raw, UrlTemplateContext contex
       throw std::runtime_error(
         "UrlTemplate: " + fieldName + " contains an illegal raw character '" + std::string(1, c) +
         "' in its literal text — percent-encode it manually"
+      );
+    }
+
+    // A literal '%' must start a complete, valid percent escape — a
+    // dangling '%' or a non-hex pair (e.g. "%GG") reaches HttpUrlBuilder
+    // as-is and produces a URL the platform HTTP layer can't parse.
+    if (c == '%' && (i + 2 >= raw.size() || !isHexDigit(raw[i + 1]) || !isHexDigit(raw[i + 2]))) {
+      throw std::runtime_error(
+        "UrlTemplate: " + fieldName + " contains an incomplete or invalid percent-escape '%' in its literal text"
       );
     }
 

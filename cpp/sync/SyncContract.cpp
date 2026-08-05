@@ -1,4 +1,5 @@
 #include "SyncContract.hpp"
+#include "../http/HttpUrlBuilder.hpp"
 #include <stdexcept>
 #include <unordered_set>
 
@@ -34,7 +35,11 @@ std::string legacyListQueryTemplate(const json::Value& endpoint) {
   if (legacySince.empty() || legacyLimit.empty()) {
     throw std::runtime_error("SyncContract: sync.endpoint.listQueryTemplate is required");
   }
-  return legacySince + "={since}&" + legacyLimit + "={limit}";
+  // The persisted param name becomes literal template text below — encode it
+  // (a pathological legacy name containing '&' or '=' would otherwise
+  // corrupt the synthesized query's structure).
+  return HttpUrlBuilder::encodeSegment(legacySince) + "={since}&" +
+         HttpUrlBuilder::encodeSegment(legacyLimit) + "={limit}";
 }
 
 bool isValidConflictStrategy(const std::string& strategy) {
@@ -65,7 +70,7 @@ SyncConflict parseConflict(const json::Value& definition) {
 
 } // namespace
 
-SyncContract SyncContract::fromDefinition(const json::Value& definition) {
+SyncContract SyncContract::fromDefinition(const json::Value& definition, bool allowLegacyEndpointFallback) {
   auto endpointVal = definition.get("endpoint");
   if (!endpointVal) {
     throw std::runtime_error("SyncContract: sync.endpoint is required");
@@ -88,14 +93,20 @@ SyncContract SyncContract::fromDefinition(const json::Value& definition) {
 
   // A pre-#115 `_salve_sync_definitions` row (sinceParam/limitParam, no
   // listQueryTemplate) reaches here from the headless background-wake path
-  // (SyncNativeEntryPoint::wakeBackgroundSyncFromNative), which runs before
-  // JS ever gets a chance to re-register the schema and rewrite the row in
-  // the new format. Falling back instead of throwing keeps background sync
-  // alive across the upgrade — same treatment #84 gave a legacy plain-string
-  // `conflict`.
+  // (SyncNativeEntryPoint::wakeBackgroundSyncFromNative via SyncOrchestrator,
+  // the only caller that passes allowLegacyEndpointFallback=true), which
+  // runs before JS ever gets a chance to re-register the schema and rewrite
+  // the row in the new format. Falling back instead of throwing keeps
+  // background sync alive across the upgrade — same treatment #84 gave a
+  // legacy plain-string `conflict`. register() (MigrationEngine, the
+  // strict/default caller) must NOT accept this: #115 is a breaking change,
+  // a freshly authored schema without listQueryTemplate is a real error.
   std::string listQueryRaw = endpoint.getString("listQueryTemplate");
-  if (listQueryRaw.empty()) {
+  if (listQueryRaw.empty() && allowLegacyEndpointFallback) {
     listQueryRaw = legacyListQueryTemplate(endpoint);
+  }
+  if (listQueryRaw.empty()) {
+    throw std::runtime_error("SyncContract: sync.endpoint.listQueryTemplate is required");
   }
   contract.endpoint.listQueryTemplate =
     UrlTemplate::parse(listQueryRaw, UrlTemplateContext::ListQuery, "sync.endpoint.listQueryTemplate");

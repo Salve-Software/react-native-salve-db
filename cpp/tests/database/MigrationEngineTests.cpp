@@ -520,6 +520,17 @@ TEST_CASE("register() rejects a sync-enabled schema whose listQueryTemplate is m
   );
 }
 
+TEST_CASE("register() rejects legacy sinceParam/limitParam — the fallback is only for persisted background-wake reads, not fresh schema registration", "[migration][sync]") {
+  REQUIRE_THROWS_WITH(
+    MigrationEngine::parseSchemaJson(R"({
+      "name": "customers", "version": 1, "primaryKey": "id",
+      "columns": { "id": { "type": "integer" } },
+      "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" } }
+    })"),
+    ContainsSubstring("sync.endpoint.listQueryTemplate is required")
+  );
+}
+
 TEST_CASE("a bare DELETE FROM with no WHERE on a schema without sync still notifies subscribers (#63)", "[migration][notify]") {
   auto conn = std::make_shared<SQLiteConnection>(uniqueDbPath("bare_delete_no_sync"));
   MigrationEngine engine(conn);
