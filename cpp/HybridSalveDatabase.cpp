@@ -3,6 +3,7 @@
 #include "database/DatabaseResetter.hpp"
 #include "database/MigrationEngine.hpp"
 #include "database/NativeConfigStore.hpp"
+#include "credentials/CredentialProvider.hpp"
 #include "platform/platform.hpp"
 #include <algorithm>
 #include <cmath>
@@ -111,6 +112,13 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::reset() {
     // Outside the lock, like configure() — scheduleBackgroundSync() re-locks synchronously and would self-deadlock otherwise.
     platform::scheduleBackgroundSync();
   });
+}
+
+void HybridSalveDatabase::logout() {
+  // Serialized against the sync lock, like configure()/reset() — avoids
+  // racing an in-flight refresh() that reads/writes the same Keychain keys.
+  auto lock = DatabaseManager::shared().lockSync();
+  CredentialProvider::clearStoredTokens();
 }
 
 QueryResult HybridSalveDatabase::execute(

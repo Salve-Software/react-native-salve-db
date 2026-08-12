@@ -66,6 +66,7 @@ namespace margelo::nitro::salvedb {
       virtual void configure(const ConfigureParams& params) = 0;
       virtual std::shared_ptr<Promise<void>> registerSchema(const std::string& schemaJson) = 0;
       virtual std::shared_ptr<Promise<void>> reset() = 0;
+      virtual void logout() = 0;
       virtual QueryResult execute(const std::string& sql, const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) = 0;
       virtual void beginTransaction() = 0;
       virtual void commit() = 0;

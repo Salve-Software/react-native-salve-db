@@ -22,6 +22,7 @@ public:
   void configure(const ConfigureParams& params) override;
   std::shared_ptr<Promise<void>> registerSchema(const std::string& schemaJson) override;
   std::shared_ptr<Promise<void>> reset() override;
+  void logout() override;
   QueryResult execute(const std::string& sql, const std::vector<std::variant<nitro::NullType, bool, std::shared_ptr<ArrayBuffer>, std::string, double>>& params) override;
   void beginTransaction() override;
   void commit() override;
