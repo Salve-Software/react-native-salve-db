@@ -4,6 +4,8 @@
 >
 > **Referência viva:** [`packages/salve-db-server`](../packages/salve-db-server) implementa exatamente este contrato — um backend REST de referência que qualquer adotante da lib pode ler como "essa é a forma que minha API precisa ter". O README de lá cobre o contrato do ponto de vista do backend; este doc cobre o mesmo contrato do ponto de vista do motor de sync nativo que o consome.
 
+> **Mudança breaking (#115):** `IEndpointDefinition.sinceParam`/`limitParam` foram **removidos**. `listQueryTemplate` (obrigatório) e `itemPathTemplate` (opcional, default `"{basePath}/{id}"`) os substituem — um motor de template `{token}` (não RFC 6570) que monta a query de pull e o path de item a partir de texto livre com buracos `{since}`/`{limit}`/`{cursorField}` (query) e `{basePath}`/`{id}` (item), resolvido contra um vocabulário fechado por contexto. Cobre casos que dois nomes de parâmetro soltos não cobriam (ex: filtro composto `$filter=updatedAt gt {since}&$top={limit}`, ou endereçamento de item estilo OData `{basePath}({id})`). Todo schema existente precisa reescrever `endpoint: { sinceParam, limitParam }` para `endpoint: { listQueryTemplate: "<nome>={since}&<nome>={limit}" }` — `Database.register()` (`SyncContract::fromDefinition` em modo estrito) **rejeita** um schema que ainda declare os campos antigos, não aceita silenciosamente. A única exceção é o caminho de leitura de `_salve_sync_definitions` já persistido (`SyncOrchestrator`, inclusive o wake de sync em background headless, que roda antes de qualquer `register()` ter chance de reescrever a linha): ali, e só ali, `SyncContract::fromDefinition(definition, /*allowLegacyEndpointFallback*/ true)` sintetiza um `listQueryTemplate` equivalente a partir de `sinceParam`/`limitParam` legados em vez de lançar erro — mesmo tratamento de auto-correção que o #84 deu ao cursor, aplicado seletivamente pra não travar sync em background durante a janela entre o app atualizar e o usuário abrir ele em foreground de novo. Ver `cpp/http/UrlTemplate.hpp` pro mecanismo e `src/types/sync/IEndpointDefinition.ts` pro contrato TS atual — o restante deste doc descreve o desenho original do #84 e não foi reescrito linha a linha para refletir o #115.
+
 ---
 
 # Por que isso mudou
@@ -22,7 +24,7 @@ Por módulo de entidade (schema), com um `basePath` (ex: `/users`):
 
 | Ação | Rota | Resposta | Quem chama |
 |---|---|---|---|
-| Listar (pull inicial ou incremental) | `GET /<base>?<sinceParam>=<epochMillis>&<limitParam>=<n>` | `Entity[]` — array puro | `SyncOrchestrator` (loop de pull) |
+| Listar (pull inicial ou incremental) | `GET /<base>?<listQueryTemplate renderizado>` | `Entity[]` — array puro | `SyncOrchestrator` (loop de pull) |
 | Buscar um | `GET /<base>/:id` | `Entity`, ou `404` | não usado pelo motor de sync — só faz parte do contrato REST convencional que o backend expõe |
 | Criar | `POST /<base>` | `201` + `Entity` criada | `SyncOrchestrator` (drenagem da fila, `operation: "insert"`) |
 | Atualizar | `PATCH /<base>/:id` | `200` + `Entity` atualizada, ou `404` | idem, `operation: "update"` |
@@ -30,7 +32,7 @@ Por módulo de entidade (schema), com um `basePath` (ex: `/users`):
 
 **Tombstone**: uma linha deletada aparece na listagem como `{ id, deletedAt }` mínimo — sem os outros campos. Discriminador: `deletedAt` não-nulo (toda linha viva também carrega `deletedAt: null`).
 
-**Paginação**: sem envelope, sem `hasMore`. Menos itens que `<limitParam>` = última página. Ordenado por `(updatedAt ASC, id ASC)`.
+**Paginação**: sem envelope, sem `hasMore`. Menos itens que `{limit}` = última página. Ordenado por `(updatedAt ASC, id ASC)`.
 
 **Cursor**: epoch millis, número puro — mesma convenção de `updatedAt`/`datetime` já usada no resto do projeto (`mvp-scope.md`). Avançado com `row.deletedAt ?? row.updatedAt` da última linha da página.
 
@@ -67,25 +69,33 @@ export interface SyncDefinition<TEntity> {
 Note que `strategy: SyncStrategy` (`"operations"`) some — não faz mais sentido como conceito: não existe mais um "lote de operações" trafegando como payload, o motor sempre fala REST convencional. `request`/`response` (as duas interfaces JSONPath-configuráveis) também somem inteiramente.
 
 ```ts
+// EndpointDefinition — atualizado pelo #115: sinceParam/limitParam saíram,
+// entraram itemPathTemplate (opcional)/listQueryTemplate (obrigatório).
 export interface EndpointDefinition {
 
     /**
      * Caminho base do módulo REST da entidade, ex: "/users". As cinco rotas
      * do contrato (GET lista, GET um, POST, PATCH, DELETE) são sempre
-     * relativas a isso — não há mais `method`/`path` configurável por
-     * operação, porque os verbos HTTP já são fixos pelo contrato REST.
+     * relativas a isso por padrão — `itemPathTemplate` pode sobrescrever
+     * o formato do path de item.
      */
     basePath: string;
 
     /**
-     * Nomes dos query params do pull incremental. Configurável por schema
-     * porque uma API já existente pode já ter uma convenção própria (ex:
-     * "since" em vez de "updatedAfter") — o ponto central de minimizar o
-     * que o adotante precisa mudar.
+     * Template `{token}` (não RFC 6570) do path de item, usado em
+     * PATCH/DELETE. Tokens: `{basePath}`, `{id}`. Default quando ausente:
+     * `"{basePath}/{id}"` — idêntico ao comportamento anterior ao #115.
      */
-    sinceParam: string;
+    itemPathTemplate?: string;
 
-    limitParam: string;
+    /**
+     * Template `{token}` da query string do pull, ex.
+     * `"updatedAfter={since}&limit={limit}"`. Tokens: `{since}`, `{limit}`,
+     * `{cursorField}`. Obrigatório — substitui `sinceParam`/`limitParam`
+     * (removidos, mudança breaking do #115): não há mais forma fixa de
+     * dois pares soltos, o autor do schema escreve a query inteira.
+     */
+    listQueryTemplate: string;
 
     headers?: Record<string, string>;
 
@@ -96,9 +106,10 @@ export interface EndpointDefinition {
 export interface PaginationDefinition {
 
     /**
-     * Valor enviado em `<limitParam>` quando o motor pede uma página de
-     * pull. Continua controlando só o pull — o push não tem mais conceito
-     * de "página batchada", cada item da fila é sua própria chamada.
+     * Valor renderizado em `listQueryTemplate`'s `{limit}` quando o motor
+     * pede uma página de pull. Continua controlando só o pull — o push não
+     * tem mais conceito de "página batchada", cada item da fila é sua
+     * própria chamada.
      */
     pageSize: number;
 
@@ -143,7 +154,7 @@ FASE 1 — Push (drena a sync_queue inteira, sequencial)
 
 FASE 2 — Pull (loop de páginas, só roda se a FASE 1 não abortou por rede)
 │
-├─ GET <base>?<sinceParam>=<cursor>&<limitParam>=<pageSize>
+├─ GET <base>?<listQueryTemplate renderizado>
 │
 ├─ Pra cada linha da resposta:
 │    deletedAt != null?  → soft-delete local (tombstone)
@@ -227,16 +238,18 @@ export interface ISyncDefinition<TEntity> {
 ```
 
 ```ts
-// IEndpointDefinition.ts — method/path/authentication saem, entram basePath/sinceParam/limitParam
+// IEndpointDefinition.ts — method/path/authentication saem, entram
+// basePath/itemPathTemplate/listQueryTemplate (nomes atualizados pelo #115,
+// que removeu sinceParam/limitParam em favor de listQueryTemplate)
 export interface IEndpointDefinition {
   basePath: string;
-  sinceParam: string;
-  limitParam: string;
+  itemPathTemplate?: string;
+  listQueryTemplate: string;
   headers?: Record<string, string>;
 }
 ```
 
-`IPaginationDefinition.pageSize` — o comentário atual ("usado tanto no pull quanto pra limitar o lote de push") fica incorreto — passa a valer só pro pull (`<limitParam>`). Atualizar o JSDoc.
+`IPaginationDefinition.pageSize` — o comentário atual ("usado tanto no pull quanto pra limitar o lote de push") fica incorreto — passa a valer só pro pull (renderizado em `listQueryTemplate`'s `{limit}`). Atualizar o JSDoc.
 
 **Sem mudança:** `JsonPath.ts`, `ICredentialsDefinition.ts`, `IBackgroundDefinition.ts`, `ConflictStrategy.ts`, `SyncDirection.ts`, `ITransport.ts`, `ISyncOperation.ts`, `NativeSyncResult.ts`, `SyncMetadataStatus.ts`.
 
@@ -246,8 +259,8 @@ export interface IEndpointDefinition {
 // cpp/http/SyncHttpCaller.hpp — hoje é um send() genérico(endpoint, body) que
 // serializa method/path arbitrários do EndpointDefinition antigo. Precisa virar
 // pelo menos 4 construtores de chamada, um por verbo REST do contrato:
-static SyncHttpOutcome list(const std::string& basePath, const std::string& sinceParam,
-                             const std::string& limitParam, double since, double limit,
+static SyncHttpOutcome list(const std::string& basePath, const UrlTemplate& listQueryTemplate,
+                             double since, double limit,
                              const AuthHeader&, const NetworkConfig&);
 static SyncHttpOutcome create(const std::string& basePath, const json::Value& body, ...);
 static SyncHttpOutcome update(const std::string& basePath, const std::string& id, const json::Value& body, ...);
@@ -311,7 +324,7 @@ Duas tabelas de sistema guardam estado no formato antigo, que precisa ser tratad
 
 ## `example/` app
 
-Migrado: `example/mock-sync-server/` (protocolo batchado antigo) e os 3 schemas de teste antigos (`SyncTestItemSchema`/`NoteSchema`/`TagSchema`, formato `endpoint.method/path` + `request`/`response`) foram removidos — não coexistem com o motor novo. `example/src/schemas/{UserSchema,ProductSchema}.ts` espelham `IUser`/`IProduct` de `packages/salve-db-server` e sincronizam contra os módulos `/users`/`/products` reais de lá (nomes de `sinceParam`/`limitParam` diferentes por schema, provando que a config é por-módulo). `SyncTestScreen.tsx` foi reescrita: composer local (insert/edit/delete → POST/PATCH/DELETE), botão "Write directly on server" (POST direto no REST, sem passar pelo SQLite — substitui o antigo `POST /admin/seed`, rota que nunca existiu no `salve-db-server`), e um painel de debug com a contagem por `status` em `sync_queue`/`_salve_sync_metadata` por entidade.
+Migrado: `example/mock-sync-server/` (protocolo batchado antigo) e os 3 schemas de teste antigos (`SyncTestItemSchema`/`NoteSchema`/`TagSchema`, formato `endpoint.method/path` + `request`/`response`) foram removidos — não coexistem com o motor novo. `example/src/schemas/{UserSchema,ProductSchema}.ts` espelham `IUser`/`IProduct` de `packages/salve-db-server` e sincronizam contra os módulos `/users`/`/products` reais de lá (`listQueryTemplate` com nomes de query param diferentes por schema — `updatedAfter`/`limit` vs. `modified_since`/`page_size` — provando que a config é por-módulo, atualizado pelo #115). `SyncTestScreen.tsx` foi reescrita: composer local (insert/edit/delete → POST/PATCH/DELETE), botão "Write directly on server" (POST direto no REST, sem passar pelo SQLite — substitui o antigo `POST /admin/seed`, rota que nunca existiu no `salve-db…
 
 ---
 
@@ -344,8 +357,7 @@ export const CustomerSchema = {
 
         endpoint: {
             basePath: "/customers",
-            sinceParam: "updatedAfter",
-            limitParam: "limit",
+            listQueryTemplate: "updatedAfter={since}&limit={limit}",
         },
 
         background: {
@@ -362,7 +374,7 @@ export const CustomerSchema = {
 } satisfies SchemaDefinition<Customer>;
 ```
 
-Comparado ao exemplo equivalente em `architecture.md`: sem `request.body` com `$ref`, sem `response` com `JsonPath` — `endpoint` ganhou `sinceParam`/`limitParam`, perdeu `method`.
+Comparado ao exemplo equivalente em `architecture.md`: sem `request.body` com `$ref`, sem `response` com `JsonPath` — `endpoint` ganhou `listQueryTemplate`/`itemPathTemplate` (nomes atualizados pelo #115), perdeu `method`.
 
 ---
 

@@ -120,7 +120,7 @@ TEST_CASE("execute() writes through db.execute fire sync triggers into sync_queu
     db.registerSchema(JSON.stringify({
       name: 'notes', version: 1, primaryKey: 'id',
       columns: { id: { type: 'integer' }, body: { type: 'text' }, updatedAt: { type: 'datetime', nullable: false } },
-      sync: { enabled: true }
+      sync: { enabled: true, endpoint: { basePath: '/customers', listQueryTemplate: 'since={since}&limit={limit}' } }
     }))
   )");
 

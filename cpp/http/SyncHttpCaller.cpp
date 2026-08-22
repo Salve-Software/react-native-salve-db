@@ -56,10 +56,11 @@ SyncHttpOutcome performRequest(HttpRequest request) {
 
 SyncHttpOutcome SyncHttpCaller::list(const SyncEndpoint& endpoint, int64_t sinceMs, int limit,
                                       const AuthHeader& authHeader, const NetworkConfig& network) {
-  HttpUrlBuilder::QueryParams query{
-    {endpoint.sinceParam, std::to_string(sinceMs)},
-    {endpoint.limitParam, std::to_string(limit)}
-  };
+  std::string query = endpoint.listQueryTemplate.render({
+    {"since", std::to_string(sinceMs)},
+    {"limit", std::to_string(limit)},
+    {"cursorField", endpoint.cursorField}
+  });
   HttpRequest request{
     HttpMethod::Get,
     HttpUrlBuilder::build(network.baseUrl, endpoint.basePath, query),
@@ -84,9 +85,10 @@ SyncHttpOutcome SyncHttpCaller::create(const SyncEndpoint& endpoint, const json:
 
 SyncHttpOutcome SyncHttpCaller::update(const SyncEndpoint& endpoint, const std::string& id, const json::Value& entity,
                                         const AuthHeader& authHeader, const NetworkConfig& network) {
+  std::string path = endpoint.itemPathTemplate.render({{"basePath", endpoint.basePath}, {"id", id}});
   HttpRequest request{
     HttpMethod::Patch,
-    HttpUrlBuilder::build(network.baseUrl, endpoint.basePath + "/" + HttpUrlBuilder::encodeSegment(id)),
+    HttpUrlBuilder::build(network.baseUrl, path),
     buildHeaders(endpoint, authHeader, true),
     json::stringify(entity),
     network.timeoutMs
@@ -96,9 +98,10 @@ SyncHttpOutcome SyncHttpCaller::update(const SyncEndpoint& endpoint, const std::
 
 SyncHttpOutcome SyncHttpCaller::remove(const SyncEndpoint& endpoint, const std::string& id,
                                         const AuthHeader& authHeader, const NetworkConfig& network) {
+  std::string path = endpoint.itemPathTemplate.render({{"basePath", endpoint.basePath}, {"id", id}});
   HttpRequest request{
     HttpMethod::Delete,
-    HttpUrlBuilder::build(network.baseUrl, endpoint.basePath + "/" + HttpUrlBuilder::encodeSegment(id)),
+    HttpUrlBuilder::build(network.baseUrl, path),
     buildHeaders(endpoint, authHeader, false),
     std::nullopt,
     network.timeoutMs

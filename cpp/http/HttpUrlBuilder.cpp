@@ -27,16 +27,16 @@ std::string HttpUrlBuilder::build(const std::string& baseUrl, const std::string&
   return base + "/" + path;
 }
 
-std::string HttpUrlBuilder::build(const std::string& baseUrl, const std::string& path, const QueryParams& query) {
+std::string HttpUrlBuilder::build(const std::string& baseUrl, const std::string& path, const std::string& renderedQuery) {
   std::string url = build(baseUrl, path);
-  if (query.empty()) return url;
-
-  url += '?';
-  for (size_t i = 0; i < query.size(); ++i) {
-    if (i) url += '&';
-    url += encodeSegment(query[i].first) + "=" + encodeSegment(query[i].second);
-  }
-  return url;
+  // A schema author writing "?updatedAfter={since}..." (a natural reading of
+  // "template for the query string") must not produce a literal "??" — this
+  // is the one place that owns the '?', so normalize a leading one here
+  // rather than rejecting it at template-parse time (where '?' is otherwise
+  // legal literal text, e.g. mid-template in an already-encoded value).
+  size_t start = renderedQuery.find_first_not_of('?');
+  if (start == std::string::npos) return url;
+  return url + "?" + renderedQuery.substr(start);
 }
 
 std::string HttpUrlBuilder::encodeSegment(const std::string& segment) {

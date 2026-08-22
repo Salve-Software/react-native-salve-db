@@ -29,7 +29,7 @@ const syncEnabledSchema: AnySchema = {
     direction: 'bidirectional',
     conflict: { strategy: 'lastWriteWins' },
     transport: 'rest',
-    endpoint: { basePath: '/orders', sinceParam: 'updatedAfter', limitParam: 'limit' },
+    endpoint: { basePath: '/orders', listQueryTemplate: 'updatedAfter={since}&limit={limit}' },
   },
 };
 

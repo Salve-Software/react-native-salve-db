@@ -54,7 +54,7 @@ function makeSyncSchema(name: string): AnySchema {
       // resolution, so it needs no NOT NULL datetime column on the schema.
       conflict: { strategy: 'serverWins' },
       transport: 'rest',
-      endpoint: { basePath: `/${name}`, sinceParam: 'updatedAfter', limitParam: 'limit' },
+      endpoint: { basePath: `/${name}`, listQueryTemplate: 'updatedAfter={since}&limit={limit}' },
     },
   };
 }

@@ -25,7 +25,7 @@ std::shared_ptr<SQLiteConnection> openWithCustomers(const std::string& testName)
       "name": { "type": "text" },
       "updatedAt": { "type": "datetime", "nullable": false }
     },
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
   return conn;
 }
@@ -37,7 +37,7 @@ std::shared_ptr<SQLiteConnection> openWithCustomersNoTimestamp(const std::string
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "text" }, "name": { "type": "text" } },
-    "sync": { "enabled": true, "conflict": { "strategy": ")" + strategy + R"(" } }
+    "sync": { "enabled": true, "conflict": { "strategy": ")" + strategy + R"(" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
   return conn;
 }
@@ -275,7 +275,7 @@ TEST_CASE("applyReplace cascades child FK rewrites via RelationCascadeRewriter",
       "updatedAt": { "type": "datetime", "nullable": false }
     },
     "relations": [ { "column": "customerId", "references": "customers" } ],
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('temp-1', 'alice', 100)", {});
@@ -458,7 +458,7 @@ TEST_CASE("apply with a custom lastWriteWins field compares that column, not 'up
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "modifiedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" } }
+    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
   conn->execute("INSERT INTO customers (id, name, modifiedAt) VALUES ('1', 'old-name', 100)", {});
   SyncOperationApplier applier(conn, SyncConflict{"lastWriteWins", "modifiedAt"});

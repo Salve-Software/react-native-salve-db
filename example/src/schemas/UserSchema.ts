@@ -28,7 +28,7 @@ export const UserSchema = {
     direction: 'bidirectional',
     conflict: { strategy: 'lastWriteWins' },
     transport: 'rest',
-    endpoint: { basePath: '/users', sinceParam: 'updatedAfter', limitParam: 'limit' },
+    endpoint: { basePath: '/users', listQueryTemplate: 'updatedAfter={since}&limit={limit}' },
     pagination: { pageSize: 50, maxPagesPerSession: 20 },
   },
 } satisfies ISchemaDefinition<User>;

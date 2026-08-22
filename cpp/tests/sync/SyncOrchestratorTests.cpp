@@ -42,7 +42,7 @@ std::shared_ptr<SQLiteConnection> openOrchestratorFixture(
     "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" },
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" },
       "pagination": { "pageSize": )" + std::to_string(pageSize) + R"(, "maxPagesPerSession": )" + std::to_string(maxPagesPerSession) + R"( }
     }
   })"));
@@ -448,7 +448,7 @@ TEST_CASE("triggerSyncAll runs every enabled schema, isolating one schema's fail
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/orders", "sinceParam": "updatedAfter", "limitParam": "limit" }
+      "endpoint": { "basePath": "/orders", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
     }
   })"));
 
@@ -472,7 +472,7 @@ TEST_CASE("triggerSyncAll stops at the first network failure instead of retrying
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/orders", "sinceParam": "updatedAfter", "limitParam": "limit" }
+      "endpoint": { "basePath": "/orders", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
     }
   })"));
 
@@ -936,7 +936,7 @@ TEST_CASE("a pre-#84 opaque cursor is reset on registration; the first pull star
     "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" }
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
     }
   })"));
 
@@ -972,7 +972,7 @@ std::shared_ptr<SQLiteConnection> openOrchestratorFixtureNoTimestamp(const std::
     "columns": { "id": { "type": "text" }, "name": { "type": "text" } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" },
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" },
       "conflict": { "strategy": ")" + strategy + R"(" }
     }
   })"));
@@ -1034,7 +1034,7 @@ TEST_CASE("triggerSync advances the cursor from endpoint.cursorField, independen
     "columns": { "id": { "type": "text" }, "name": { "type": "text" } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit", "cursorField": "modifiedAt" },
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}", "cursorField": "modifiedAt" },
       "conflict": { "strategy": "serverWins" }
     }
   })"));

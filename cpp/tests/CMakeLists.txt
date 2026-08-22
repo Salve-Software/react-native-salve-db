@@ -131,6 +131,7 @@ set(PROJECT_SOURCES
   "${PROJECT_CPP_DIR}/expression/JsonPathExtractor.cpp"
   "${PROJECT_CPP_DIR}/credentials/CredentialProvider.cpp"
   "${PROJECT_CPP_DIR}/http/HttpUrlBuilder.cpp"
+  "${PROJECT_CPP_DIR}/http/UrlTemplate.cpp"
   "${PROJECT_CPP_DIR}/http/CredentialHttpCaller.cpp"
   "${PROJECT_CPP_DIR}/http/SyncHttpCaller.cpp"
   "${PROJECT_CPP_DIR}/http/SyncHttpRequester.cpp"

@@ -2,14 +2,17 @@
 
 #include "../database/json_parser.hpp"
 #include "../http/HttpTypes.hpp"
+#include "../http/UrlTemplate.hpp"
 #include <string>
 
 namespace margelo::nitro::salvedb {
 
 struct SyncEndpoint {
   std::string basePath;
-  std::string sinceParam;
-  std::string limitParam;
+  // Fallback when the schema omits `itemPathTemplate`: `{basePath}/{id}`,
+  // matching the pre-#115 hardcoded behavior exactly.
+  UrlTemplate itemPathTemplate;
+  UrlTemplate listQueryTemplate;
   HttpHeaders extraHeaders;
   // Per-row JSON field carrying that row's timestamp, read from the last row
   // of a pulled page to advance the incremental-pull cursor. Required
@@ -34,14 +37,15 @@ struct SyncContract {
   int pageSize = 20;
   int maxPagesPerSession = 20;
 
-  static SyncContract fromDefinition(const json::Value& definition);
+  // `allowLegacyEndpointFallback`: when true, a missing `listQueryTemplate`
+  // is synthesized from legacy `sinceParam`/`limitParam` instead of throwing.
+  // Only `SyncOrchestrator` (reading a possibly pre-#115 persisted
+  // `_salve_sync_definitions` row from the headless background-wake path)
+  // passes true. `MigrationEngine::parseSchemaJson` (register(), always
+  // fresh JS-authored schema JSON) uses the strict default — the #115
+  // breaking change requires listQueryTemplate explicitly there, no
+  // silent legacy acceptance.
+  static SyncContract fromDefinition(const json::Value& definition, bool allowLegacyEndpointFallback = false);
 };
-
-// Single source of truth for the supported `sync.conflict.strategy` values —
-// shared by SyncContract's own parsing and MigrationEngine::registerSchema's
-// eager validation, so the two never drift apart.
-bool isValidConflictStrategy(const std::string& strategy);
-
-SyncConflict readConflictDefaults(const json::Value& syncDefinition);
 
 } // namespace margelo::nitro::salvedb

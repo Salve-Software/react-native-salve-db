@@ -214,7 +214,7 @@ TEST_CASE("rewrite performed inside applyWithBypass does not re-enqueue the rewr
     "name": "orders", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "text" }, "customerId": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "relations": [ { "column": "customerId", "references": "customers" } ],
-    "sync": { "enabled": true }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   conn->execute("INSERT INTO orders (id, customerId, updatedAt) VALUES ('ord-1', 'temp-cust', 100)", {});
