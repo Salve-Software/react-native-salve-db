@@ -117,7 +117,9 @@ SyncContract SyncContract::fromDefinition(const json::Value& definition, bool al
     );
   }
   contract.endpoint.extraHeaders = parseExtraHeaders(endpoint);
-  contract.endpoint.cursorField = endpoint.getString("cursorField", "updatedAt");
+  contract.endpoint.cursorField = endpoint.has("cursorField")
+    ? requireString(endpoint, "cursorField")
+    : "updatedAt";
   contract.conflict = parseConflict(definition);
 
   auto pagination = definition.get("pagination");

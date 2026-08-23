@@ -38,6 +38,15 @@ TEST_CASE("fromDefinition honors a custom endpoint.cursorField, independent of c
   REQUIRE(lastWriteWins.endpoint.cursorField == "modifiedAt");
 }
 
+TEST_CASE("fromDefinition rejects an explicitly empty endpoint.cursorField instead of failing later at pull time", "[sync][SyncContract]") {
+  REQUIRE_THROWS_WITH(
+    SyncContract::fromDefinition(json::parse(R"({
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}", "cursorField": "" }
+    })")),
+    Equals("SyncContract: sync.endpoint.cursorField is required")
+  );
+}
+
 TEST_CASE("fromDefinition parses a custom itemPathTemplate", "[sync][SyncContract]") {
   auto contract = SyncContract::fromDefinition(json::parse(R"JSON({
     "endpoint": {
