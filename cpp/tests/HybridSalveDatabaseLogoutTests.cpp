@@ -54,8 +54,10 @@ TEST_CASE("db.logout() clears credentials so a later seedInitialTokens isn't sil
 
   harness.run("db.logout()");
 
-  // Same db name, same connection — configure() again with a different token
-  // pair must actually take, proving the already-seeded guard was cleared.
+  // Deliberately a different db name/connection — the already-seeded guard
+  // lives in the Keychain under a fixed key (CredentialProvider.cpp),
+  // independent of which SQLite connection is open, so this still proves
+  // logout() cleared it rather than the guard merely resetting per-connection.
   harness.run(configureWithCreds(uniqueDbName("logout_creds_b"), "token-b", "refresh-b"));
 
   REQUIRE(DatabaseManager::shared().credentials().getAccessToken().value() == "token-b");
