@@ -2,6 +2,7 @@ import type { SalveDatabase } from '../../specs/SalveDatabase.nitro';
 import { READ_SYNC_THROTTLE_MS } from '../constants';
 
 let bridge: SalveDatabase | null = null;
+let registrationToken = 0;
 const lastAttemptAt = new Map<string, number>();
 const inFlight = new Set<string>();
 
@@ -12,6 +13,7 @@ const inFlight = new Set<string>();
  */
 export function registerSyncBridge(nextBridge: SalveDatabase): void {
   bridge = nextBridge;
+  registrationToken = registrationToken + 1;
   lastAttemptAt.clear();
   inFlight.clear();
 }
@@ -37,13 +39,20 @@ function dispatchSync(schemaName: string): void {
 
   // Deferred a tick so a synchronous throw from triggerSync() becomes a rejection .catch() can still see.
   const currentBridge = bridge;
+  const currentToken = registrationToken;
   Promise.resolve()
-    .then(() => currentBridge.triggerSync(schemaName, true))
+    .then(() => {
+      // A newer registerSyncBridge() call landed while this dispatch was
+      // queued (e.g. Database.reset()+configure() in quick succession) —
+      // firing against the old bridge here would race the new registration.
+      if (registrationToken !== currentToken) return undefined;
+      return currentBridge.triggerSync(schemaName, true);
+    })
     .catch((err) => {
       console.error('Database: sync trigger failed', err);
     })
     .finally(() => {
-      inFlight.delete(schemaName);
+      if (registrationToken === currentToken) inFlight.delete(schemaName);
     });
 }
 

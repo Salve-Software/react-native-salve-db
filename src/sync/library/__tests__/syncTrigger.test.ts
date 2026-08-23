@@ -193,6 +193,21 @@ describe('syncTrigger', () => {
     await flushMicrotasks();
 
     expect(second.triggerSync).toHaveBeenCalledWith('customers', true);
+    expect(first.triggerSync).not.toHaveBeenCalled();
+  });
+
+  test('a dispatch already queued before re-registration never fires against the stale bridge', async () => {
+    const first = makeBridge();
+    registerSyncBridge(first);
+    requestReadSync('customers'); // queues a microtask targeting `first`, not yet flushed
+
+    const second = makeBridge();
+    registerSyncBridge(second); // invalidates the queued dispatch above
+
+    await flushMicrotasks();
+
+    expect(first.triggerSync).not.toHaveBeenCalled();
+    expect(second.triggerSync).not.toHaveBeenCalled(); // nothing new was requested against `second` either
   });
 });
 
