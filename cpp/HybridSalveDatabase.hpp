@@ -3,9 +3,12 @@
 #include "HybridSalveDatabaseSpec.hpp"
 #include "query/QueryExecutor.hpp"
 #include "sync/SyncOrchestrator.hpp"
+#include <memory>
 #include <vector>
 
 namespace margelo::nitro::salvedb {
+
+class SQLiteConnection;
 
 /**
  * The single Nitro-facing HybridObject exposed to JS — every JSI call from
@@ -36,7 +39,15 @@ public:
 private:
   QueryExecutor _queryExecutor;
   SyncOrchestrator _syncOrchestrator;
-  std::vector<int> _ownedSubscriptionIds;
+  // Each subscription is only valid against the SQLiteConnection that
+  // created it — DatabaseManager::open() can replace the connection
+  // (different db name), and a later HybridSalveDatabase teardown must not
+  // unsubscribe by id against whatever connection happens to be current.
+  struct OwnedSubscription {
+    int id;
+    std::weak_ptr<SQLiteConnection> connection;
+  };
+  std::vector<OwnedSubscription> _ownedSubscriptions;
 };
 
 } // namespace margelo::nitro::salvedb

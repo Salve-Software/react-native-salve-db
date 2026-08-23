@@ -13,10 +13,10 @@ namespace margelo::nitro::salvedb {
 
 HybridSalveDatabase::~HybridSalveDatabase() {
   try {
-    if (!DatabaseManager::shared().isOpen()) return;
-    auto conn = DatabaseManager::shared().connection();
-    for (int id : _ownedSubscriptionIds) {
-      try { conn->unsubscribe(id); } catch (...) {}
+    for (auto& sub : _ownedSubscriptions) {
+      if (auto conn = sub.connection.lock()) {
+        try { conn->unsubscribe(sub.id); } catch (...) {}
+      }
     }
   } catch (...) {}
 }
@@ -153,19 +153,23 @@ std::shared_ptr<Promise<std::vector<NativeSyncResult>>> HybridSalveDatabase::tri
 }
 
 double HybridSalveDatabase::subscribeToChanges(const std::function<void(const std::vector<std::string>&)>& callback) {
-  int id = DatabaseManager::shared().connection()->subscribe(
+  auto conn = DatabaseManager::shared().connection();
+  int id = conn->subscribe(
     [callback](std::vector<std::string> tables) { callback(tables); }
   );
-  _ownedSubscriptionIds.push_back(id);
+  _ownedSubscriptions.push_back(OwnedSubscription{id, conn});
   return static_cast<double>(id);
 }
 
 void HybridSalveDatabase::unsubscribeFromChanges(double id) {
   int intId = static_cast<int>(id);
-  DatabaseManager::shared().connection()->unsubscribe(intId);
-  auto it = std::find(_ownedSubscriptionIds.begin(), _ownedSubscriptionIds.end(), intId);
-  if (it != _ownedSubscriptionIds.end()) _ownedSubscriptionIds.erase(it);
+  auto it = std::find_if(_ownedSubscriptions.begin(), _ownedSubscriptions.end(),
+    [intId](const OwnedSubscription& sub) { return sub.id == intId; });
+  if (it == _ownedSubscriptions.end()) return;
+  if (auto conn = it->connection.lock()) conn->unsubscribe(intId);
+  _ownedSubscriptions.erase(it);
 }
+
 
 double HybridSalveDatabase::debugPreparedStatementCount() {
   return static_cast<double>(DatabaseManager::shared().connection()->prepareCount());
