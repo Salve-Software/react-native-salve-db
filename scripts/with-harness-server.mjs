@@ -59,35 +59,44 @@ let waiter;
 let child;
 
 let stopped = false;
-async function stopServer() {
-  if (stopped) return;
-  stopped = true;
 
-  waiter?.kill('SIGTERM');
-  child?.kill('SIGTERM');
-
-  if (server.exitCode !== null || server.pid === undefined) return;
-  const exited = new Promise((resolve) => server.once('exit', resolve));
+// Terminates a `shell: true, detached: true` child's whole process group
+// (negative PID) rather than just the shell wrapper, then waits (bounded)
+// for the real exit before escalating to SIGKILL — mirrors the reasoning
+// above `server`'s spawn: a plain `.kill()` only reaches the wrapper,
+// leaving the actual grandchild process orphaned and squatting on its port.
+async function stopProcessGroup(proc, timeoutMs) {
+  if (!proc || proc.exitCode !== null || proc.pid === undefined) return;
+  const exited = new Promise((resolve) => proc.once('exit', resolve));
   try {
-    process.kill(-server.pid, 'SIGTERM');
+    process.kill(-proc.pid, 'SIGTERM');
   } catch {
     return; // process group already gone
   }
 
   // `detached: true` means the parent exiting does not take the group down —
   // wait for the real exit (bounded) instead of racing process.exit() against
-  // a SIGTERM that pglite/tsx may take a moment to act on.
+  // a SIGTERM the child may take a moment to act on.
   const timedOut = await Promise.race([
     exited.then(() => false),
-    new Promise((resolve) => setTimeout(() => resolve(true), STOP_TIMEOUT_MS)),
+    new Promise((resolve) => setTimeout(() => resolve(true), timeoutMs)),
   ]);
   if (timedOut) {
     try {
-      process.kill(-server.pid, 'SIGKILL');
+      process.kill(-proc.pid, 'SIGKILL');
     } catch {
       // already gone
     }
   }
+}
+
+async function stopServer() {
+  if (stopped) return;
+  stopped = true;
+
+  waiter?.kill('SIGTERM');
+  await stopProcessGroup(child, STOP_TIMEOUT_MS);
+  await stopProcessGroup(server, STOP_TIMEOUT_MS);
 }
 
 // Same readiness check the CI workflows use (`npx wait-on <url> -t <ms>` in
@@ -117,7 +126,7 @@ try {
   await Promise.race([waitForServer(READY_URL, READY_TIMEOUT_MS), startupFailed]);
   ready = true;
 
-  child = spawn(command, { stdio: 'inherit', shell: true });
+  child = spawn(command, { stdio: 'inherit', shell: true, detached: true });
   const exitCode = await new Promise((resolve, reject) => {
     child.on('error', reject);
     child.on('exit', (code) => resolve(code ?? 1));
