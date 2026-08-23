@@ -88,6 +88,22 @@ TEST_CASE("apply updates an existing row when the remote updatedAt is newer", "[
   REQUIRE(nameOf(*conn, "1") == "new-name");
 }
 
+TEST_CASE("apply does not crash and applies the remote row when the local conflict column holds a non-numeric legacy value", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomers("applier_legacy_non_numeric_conflict_column");
+  // Simulates a pre-migration row (or a raw Database.execute() write) whose
+  // "updatedAt" column never went through the NOT NULL/datetime validation —
+  // std::get<double> would throw std::bad_variant_access on this.
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'old-name', 'not-a-number')", {});
+  SyncOperationApplier applier(conn);
+
+  auto rows = json::parse(R"([{ "id": "1", "name": "new-name", "updatedAt": 200 }])").asArray();
+
+  ApplyStats stats;
+  REQUIRE_NOTHROW(stats = applier.apply("customers", rows));
+  REQUIRE(stats.updated == 1);
+  REQUIRE(nameOf(*conn, "1") == "new-name"); // no local timestamp to trust — remote wins
+}
+
 TEST_CASE("apply skips a stale update older than the local row (lastWriteWins)", "[sync][SyncOperationApplier]") {
   auto conn = openWithCustomers("applier_update_stale");
   conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'local-newer', 200)", {});
@@ -112,6 +128,18 @@ TEST_CASE("apply soft-deletes via a tombstone when newer than the local row", "[
   REQUIRE(stats.deleted == 1);
   REQUIRE(deletedAtOf(*conn, "1") == 150.0);
   REQUIRE(nameOf(*conn, "1") == "a"); // soft-delete — row and other columns survive
+}
+
+TEST_CASE("apply does not crash and applies a tombstone when the local conflict column holds a non-numeric legacy value", "[sync][SyncOperationApplier][conflict]") {
+  auto conn = openWithCustomers("applier_legacy_non_numeric_tombstone");
+  conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('1', 'a', 'not-a-number')", {});
+  SyncOperationApplier applier(conn);
+
+  auto rows = json::parse(R"([{ "id": "1", "deletedAt": 150 }])").asArray();
+
+  ApplyStats stats;
+  REQUIRE_NOTHROW(stats = applier.apply("customers", rows));
+  REQUIRE(stats.deleted == 1); // no local timestamp to trust — remote wins
 }
 
 TEST_CASE("apply ignores a tombstone for a row that does not exist locally", "[sync][SyncOperationApplier]") {
@@ -275,7 +303,7 @@ TEST_CASE("applyReplace cascades child FK rewrites via RelationCascadeRewriter",
       "updatedAt": { "type": "datetime", "nullable": false }
     },
     "relations": [ { "column": "customerId", "references": "customers" } ],
-    "sync": { "enabled": true, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
+    "sync": { "enabled": true, "endpoint": { "basePath": "/orders", "listQueryTemplate": "since={since}&limit={limit}" } }
   })"));
 
   conn->execute("INSERT INTO customers (id, name, updatedAt) VALUES ('temp-1', 'alice', 100)", {});
@@ -458,7 +486,7 @@ TEST_CASE("apply with a custom lastWriteWins field compares that column, not 'up
   engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
     "name": "customers", "version": 1, "primaryKey": "id",
     "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "modifiedAt": { "type": "datetime", "nullable": false } },
-    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}" } }
+    "sync": { "enabled": true, "conflict": { "strategy": "lastWriteWins", "field": "modifiedAt" }, "endpoint": { "basePath": "/customers", "listQueryTemplate": "since={since}&limit={limit}", "cursorField": "modifiedAt" } }
   })"));
   conn->execute("INSERT INTO customers (id, name, modifiedAt) VALUES ('1', 'old-name', 100)", {});
   SyncOperationApplier applier(conn, SyncConflict{"lastWriteWins", "modifiedAt"});

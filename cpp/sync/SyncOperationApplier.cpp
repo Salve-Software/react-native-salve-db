@@ -99,7 +99,9 @@ ApplyStats SyncOperationApplier::apply(const std::string& expectedEntity, const 
         { pkValue }
       );
       exists = !existing.rows.empty();
-      if (exists) localTimestamp = std::get<double>(existing.rows[0][0]);
+      if (exists) {
+        if (auto* n = std::get_if<double>(&existing.rows[0][0])) localTimestamp = *n;
+      }
     } else {
       auto existing = _conn->execute(
         "SELECT 1 FROM \"" + expectedEntity + "\" WHERE \"" + pkCol + "\" = ?",
@@ -112,7 +114,7 @@ ApplyStats SyncOperationApplier::apply(const std::string& expectedEntity, const 
     if (deletedAt.has_value()) {
       bool shouldDelete = _conflict.strategy == "serverWins" ? exists
         : _conflict.strategy == "clientWins" ? false
-        : exists && remoteTimestamp > *localTimestamp; // lastWriteWins
+        : exists && (!localTimestamp.has_value() || remoteTimestamp > *localTimestamp); // lastWriteWins
       if (shouldDelete) {
         _conn->execute(
           "UPDATE \"" + expectedEntity + "\" SET \"deletedAt\" = ? WHERE \"" + pkCol + "\" = ?",
@@ -126,7 +128,7 @@ ApplyStats SyncOperationApplier::apply(const std::string& expectedEntity, const 
 
     bool shouldApply = _conflict.strategy == "serverWins" ? true
       : _conflict.strategy == "clientWins" ? !exists
-      : !exists || remoteTimestamp > *localTimestamp; // lastWriteWins
+      : !exists || !localTimestamp.has_value() || remoteTimestamp > *localTimestamp; // lastWriteWins
     if (!shouldApply) continue;
 
     std::vector<std::string> columns;
@@ -214,7 +216,7 @@ void SyncOperationApplier::rewriteLocalRow(const std::string& expectedEntity, co
     );
   }
 
-  // The other columns are data: a concurrent local edit during this request's round-trip must win (lastWriteWins, mirroring apply()'s pull-side rule) — always, regardless of the schema's overall conflict strategy.
+  // The other columns are data: a concurrent local edit during this request's round-trip must win (lastWriteWins, mirroring apply()'s pull-side rule) — always, regardless of the schema's overall conflict strategy. Without a real comparison column (serverWins/clientWins, or a lastWriteWins schema whose conflict.field isn't a column), there's no way to tell whether a local edit landed mid-flight, so the safe default is to skip and let the next pull session reconcile it instead of risking a stale push-response echo overwriting fresher local data.
   if (!columns.empty()) {
     bool shouldApplyData;
     if (cols.all.count(_conflict.field) == 0) {
@@ -228,7 +230,11 @@ void SyncOperationApplier::rewriteLocalRow(const std::string& expectedEntity, co
           { identity.resolvedEntityId }
         );
         if (!current.rows.empty()) {
-          shouldApplyData = std::get<double>(current.rows[0][0]) <= *responseUpdatedAt;
+          // A non-numeric stored value (legacy row predating NOT NULL enforcement, or a raw-SQL write) — no
+          // local timestamp to trust; keep the default of applying the response rather than crashing.
+          if (auto* n = std::get_if<double>(&current.rows[0][0])) {
+            shouldApplyData = *n <= *responseUpdatedAt;
+          }
         }
       }
     }
