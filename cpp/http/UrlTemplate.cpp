@@ -51,6 +51,7 @@ bool isHexDigit(char c) {
 
 UrlTemplate UrlTemplate::parse(const std::string& raw, UrlTemplateContext context, const std::string& fieldName) {
   UrlTemplate result;
+  result._parsed = true;
   std::string literal;
 
   auto flushLiteral = [&]() {
@@ -127,6 +128,9 @@ UrlTemplate UrlTemplate::parse(const std::string& raw, UrlTemplateContext contex
 }
 
 std::string UrlTemplate::render(const std::unordered_map<std::string, std::string>& vars) const {
+  if (!_parsed) {
+    throw std::runtime_error("UrlTemplate: render() called on a template that was never parsed (default-constructed)");
+  }
   std::string out;
   for (const auto& segment : segments_) {
     if (!segment.isVariable) {

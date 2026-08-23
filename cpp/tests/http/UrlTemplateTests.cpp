@@ -156,3 +156,11 @@ TEST_CASE("rejects a percent escape with only one hex digit", "[http][UrlTemplat
     Equals("UrlTemplate: sync.endpoint.listQueryTemplate contains an incomplete or invalid percent-escape '%' in its literal text")
   );
 }
+
+TEST_CASE("render() throws on a default-constructed template instead of silently returning empty", "[http][UrlTemplate]") {
+  UrlTemplate unset;
+  REQUIRE_THROWS_WITH(
+    unset.render({{"basePath", "/customers"}, {"id", "1"}}),
+    Equals("UrlTemplate: render() called on a template that was never parsed (default-constructed)")
+  );
+}

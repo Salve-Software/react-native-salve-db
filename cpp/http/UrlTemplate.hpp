@@ -43,7 +43,9 @@ public:
 
   // Substitutes each `{token}` with `vars.at(token)`. Missing keys are a
   // caller bug (the caller always supplies exactly the context's
-  // vocabulary) and throw `std::out_of_range`.
+  // vocabulary) and throw `std::out_of_range`. Throws `std::runtime_error`
+  // if called on a default-constructed instance that was never parsed —
+  // rendering silent empty output on unset config is worse than failing loud.
   std::string render(const std::unordered_map<std::string, std::string>& vars) const;
 
   // True if the parsed template contains a `{token}` variable reference
@@ -62,6 +64,9 @@ private:
   };
 
   std::vector<Segment> segments_;
+  // Distinguishes "parsed an empty/literal-only template" from "never
+  // parsed" — segments_.empty() alone can't tell those apart.
+  bool _parsed = false;
 };
 
 } // namespace margelo::nitro::salvedb
