@@ -53,7 +53,7 @@ export interface SyncDefinition<TEntity> {
 
     direction: SyncDirection;      // sem mudança — "bidirectional" único no MVP
 
-    conflict: ConflictStrategy;    // sem mudança — "lastWriteWins" único no MVP
+    conflict: ConflictConfig;      // objeto { strategy, field? } — "lastWriteWins" (default) | "serverWins" | "clientWins"
 
     transport: "rest";             // sem mudança
 
@@ -351,13 +351,14 @@ export const CustomerSchema = {
 
         direction: "bidirectional",
 
-        conflict: "lastWriteWins",
+        conflict: { strategy: "lastWriteWins" },
 
         transport: "rest",
 
         endpoint: {
             basePath: "/customers",
             listQueryTemplate: "updatedAfter={since}&limit={limit}",
+            cursorField: "updatedAt", // opcional — default já é "updatedAt", mostrado aqui por completude
         },
 
         background: {
