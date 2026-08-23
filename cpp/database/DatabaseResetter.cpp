@@ -125,9 +125,16 @@ void DatabaseResetter::reset() {
   SchemaRegistry::shared().clear();
   CredentialProvider::clearStoredTokens();
   manager.resetConfig();
-  NativeConfigStore::remove();
+
+  std::exception_ptr removeConfigError;
+  try {
+    NativeConfigStore::remove();
+  } catch (...) {
+    removeConfigError = std::current_exception();
+  }
 
   if (wipeError) std::rethrow_exception(wipeError);
+  if (removeConfigError) std::rethrow_exception(removeConfigError);
 }
 
 } // namespace margelo::nitro::salvedb

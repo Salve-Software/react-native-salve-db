@@ -2,7 +2,11 @@
 #include "../../database/DatabaseManager.hpp"
 #include "../../database/DatabaseResetter.hpp"
 #include "../../database/MigrationEngine.hpp"
+#include "../../database/NativeConfigStore.hpp"
+#include "../../platform/platform.hpp"
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <vector>
 
 using namespace margelo::nitro::salvedb;
@@ -91,4 +95,23 @@ TEST_CASE("DatabaseResetter::reset() is a no-op that doesn't throw when the data
 
   REQUIRE_NOTHROW(DatabaseResetter::reset());
   REQUIRE_FALSE(DatabaseManager::shared().isOpen());
+}
+
+TEST_CASE("DatabaseResetter::reset() still wipes local data and propagates a persisted-config removal failure", "[database][DatabaseResetter]") {
+  auto conn = openResetterFixture("resetter_config_remove_failure");
+  conn->execute("INSERT INTO widgets (id) VALUES (?)", {1.0});
+
+  std::string configPath = platform::getDocumentsDirectory() + "/_salve_config.json";
+  std::filesystem::remove_all(configPath);
+  // Non-empty directory at the config path — std::remove() fails with
+  // ENOTEMPTY/EEXIST, the class of failure reset() must not silently absorb.
+  std::filesystem::create_directory(configPath);
+  std::ofstream(configPath + "/blocker.txt") << "x";
+
+  REQUIRE_THROWS_AS(DatabaseResetter::reset(), std::runtime_error);
+
+  // The rest of the wipe still completed despite the propagated failure.
+  REQUIRE(rowCount(*conn, "widgets") == 0);
+
+  std::filesystem::remove_all(configPath);
 }

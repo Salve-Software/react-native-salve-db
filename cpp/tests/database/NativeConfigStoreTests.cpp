@@ -2,6 +2,7 @@
 #include "../../database/NativeConfigStore.hpp"
 #include "../../platform/platform.hpp"
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 
 using namespace margelo::nitro::salvedb;
@@ -116,4 +117,19 @@ TEST_CASE("NativeConfigStore::load defaults accessTokenScheme to Bearer for a co
   REQUIRE(loaded.has_value());
   REQUIRE(loaded->credentials.has_value());
   REQUIRE(loaded->credentials->accessTokenScheme == "Bearer");
+}
+
+TEST_CASE("NativeConfigStore::remove() throws instead of silently swallowing a non-ENOENT failure", "[database][NativeConfigStore]") {
+  ConfigFileGuard guard;
+
+  // A non-empty directory at the config path makes std::remove() fail with
+  // ENOTEMPTY/EEXIST rather than ENOENT — the class of failure that must
+  // surface, not just get logged (a completed reset() would otherwise
+  // silently leave the old config in place for a later launch to restore).
+  std::filesystem::create_directory(configFilePath());
+  std::ofstream(configFilePath() + "/blocker.txt") << "x";
+
+  REQUIRE_THROWS_AS(NativeConfigStore::remove(), std::runtime_error);
+
+  std::filesystem::remove_all(configFilePath());
 }

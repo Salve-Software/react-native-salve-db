@@ -3,6 +3,7 @@
 #include "../platform/platform.hpp"
 #include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -138,7 +139,7 @@ std::optional<PersistedConfig> NativeConfigStore::load() {
 void NativeConfigStore::remove() {
   std::string path = configFilePath();
   if (std::remove(path.c_str()) != 0 && errno != ENOENT) {
-    platform::logError("SalveDb", "NativeConfigStore: failed to remove " + path);
+    throw std::runtime_error("NativeConfigStore: failed to remove " + path + ": " + std::strerror(errno));
   }
 }
 
