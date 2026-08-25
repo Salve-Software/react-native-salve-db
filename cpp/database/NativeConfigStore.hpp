@@ -9,6 +9,7 @@ namespace margelo::nitro::salvedb {
 struct PersistedCredentialConfig {
   std::string provider;
   std::string accessTokenHeaderName;
+  std::string accessTokenScheme;
   std::string refreshEndpoint;
   std::string responseAccessTokenPath;
   std::string responseRefreshTokenPath;
@@ -33,6 +34,9 @@ class NativeConfigStore {
 public:
   static void save(const PersistedConfig& config);
   static std::optional<PersistedConfig> load();
+
+  // Deletes the persisted config file, if any. No-op if it doesn't exist.
+  static void remove();
 };
 
 } // namespace margelo::nitro::salvedb

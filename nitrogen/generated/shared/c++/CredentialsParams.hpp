@@ -47,12 +47,13 @@ namespace margelo::nitro::salvedb {
   public:
     std::string provider     SWIFT_PRIVATE;
     std::string accessTokenHeaderName     SWIFT_PRIVATE;
+    std::string accessTokenScheme     SWIFT_PRIVATE;
     std::optional<InitialTokensParams> tokens     SWIFT_PRIVATE;
     RefreshParams refresh     SWIFT_PRIVATE;
 
   public:
     CredentialsParams() = default;
-    explicit CredentialsParams(std::string provider, std::string accessTokenHeaderName, std::optional<InitialTokensParams> tokens, RefreshParams refresh): provider(provider), accessTokenHeaderName(accessTokenHeaderName), tokens(tokens), refresh(refresh) {}
+    explicit CredentialsParams(std::string provider, std::string accessTokenHeaderName, std::string accessTokenScheme, std::optional<InitialTokensParams> tokens, RefreshParams refresh): provider(provider), accessTokenHeaderName(accessTokenHeaderName), accessTokenScheme(accessTokenScheme), tokens(tokens), refresh(refresh) {}
 
   public:
     friend bool operator==(const CredentialsParams& lhs, const CredentialsParams& rhs) = default;
@@ -70,6 +71,7 @@ namespace margelo::nitro {
       return margelo::nitro::salvedb::CredentialsParams(
         JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "provider"))),
         JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "accessTokenHeaderName"))),
+        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "accessTokenScheme"))),
         JSIConverter<std::optional<margelo::nitro::salvedb::InitialTokensParams>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "tokens"))),
         JSIConverter<margelo::nitro::salvedb::RefreshParams>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "refresh")))
       );
@@ -78,6 +80,7 @@ namespace margelo::nitro {
       jsi::Object obj(runtime);
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "provider"), JSIConverter<std::string>::toJSI(runtime, arg.provider));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "accessTokenHeaderName"), JSIConverter<std::string>::toJSI(runtime, arg.accessTokenHeaderName));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "accessTokenScheme"), JSIConverter<std::string>::toJSI(runtime, arg.accessTokenScheme));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "tokens"), JSIConverter<std::optional<margelo::nitro::salvedb::InitialTokensParams>>::toJSI(runtime, arg.tokens));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "refresh"), JSIConverter<margelo::nitro::salvedb::RefreshParams>::toJSI(runtime, arg.refresh));
       return obj;
@@ -92,6 +95,7 @@ namespace margelo::nitro {
       }
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "provider")))) return false;
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "accessTokenHeaderName")))) return false;
+      if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "accessTokenScheme")))) return false;
       if (!JSIConverter<std::optional<margelo::nitro::salvedb::InitialTokensParams>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "tokens")))) return false;
       if (!JSIConverter<margelo::nitro::salvedb::RefreshParams>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "refresh")))) return false;
       return true;

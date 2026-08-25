@@ -1,12 +1,25 @@
 #include "HybridSalveDatabase.hpp"
 #include "database/DatabaseManager.hpp"
+#include "database/DatabaseResetter.hpp"
 #include "database/MigrationEngine.hpp"
 #include "database/NativeConfigStore.hpp"
+#include "credentials/CredentialProvider.hpp"
 #include "platform/platform.hpp"
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
 namespace margelo::nitro::salvedb {
+
+HybridSalveDatabase::~HybridSalveDatabase() {
+  try {
+    for (auto& sub : _ownedSubscriptions) {
+      if (auto conn = sub.connection.lock()) {
+        try { conn->unsubscribe(sub.id); } catch (...) {}
+      }
+    }
+  } catch (...) {}
+}
 
 void HybridSalveDatabase::configure(const ConfigureParams& params) {
   if (params.name.empty())
@@ -44,6 +57,7 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
       DatabaseManager::shared().configureCredentials(
         creds.provider,
         creds.accessTokenHeaderName,
+        creds.accessTokenScheme,
         creds.refresh.endpoint,
         creds.refresh.responseAccessTokenPath,
         creds.refresh.responseRefreshTokenPath,
@@ -66,6 +80,7 @@ void HybridSalveDatabase::configure(const ConfigureParams& params) {
     persisted.credentials = PersistedCredentialConfig{
       creds.provider,
       creds.accessTokenHeaderName,
+      creds.accessTokenScheme,
       creds.refresh.endpoint,
       creds.refresh.responseAccessTokenPath,
       creds.refresh.responseRefreshTokenPath
@@ -86,6 +101,24 @@ std::shared_ptr<Promise<void>> HybridSalveDatabase::registerSchema(const std::st
     MigrationEngine engine(mgr.connection());
     engine.registerSchema(schema);
   });
+}
+
+std::shared_ptr<Promise<void>> HybridSalveDatabase::reset() {
+  return Promise<void>::async([]() {
+    {
+      auto lock = DatabaseManager::shared().lockSync();
+      DatabaseResetter::reset();
+    }
+    // Outside the lock, like configure() — scheduleBackgroundSync() re-locks synchronously and would self-deadlock otherwise.
+    platform::scheduleBackgroundSync();
+  });
+}
+
+void HybridSalveDatabase::logout() {
+  // Serialized against the sync lock, like configure()/reset() — avoids
+  // racing an in-flight refresh() that reads/writes the same Keychain keys.
+  auto lock = DatabaseManager::shared().lockSync();
+  CredentialProvider::clearStoredTokens();
 }
 
 QueryResult HybridSalveDatabase::execute(
@@ -120,15 +153,23 @@ std::shared_ptr<Promise<std::vector<NativeSyncResult>>> HybridSalveDatabase::tri
 }
 
 double HybridSalveDatabase::subscribeToChanges(const std::function<void(const std::vector<std::string>&)>& callback) {
-  int id = DatabaseManager::shared().connection()->subscribe(
+  auto conn = DatabaseManager::shared().connection();
+  int id = conn->subscribe(
     [callback](std::vector<std::string> tables) { callback(tables); }
   );
+  _ownedSubscriptions.push_back(OwnedSubscription{id, conn});
   return static_cast<double>(id);
 }
 
 void HybridSalveDatabase::unsubscribeFromChanges(double id) {
-  DatabaseManager::shared().connection()->unsubscribe(static_cast<int>(id));
+  int intId = static_cast<int>(id);
+  auto it = std::find_if(_ownedSubscriptions.begin(), _ownedSubscriptions.end(),
+    [intId](const OwnedSubscription& sub) { return sub.id == intId; });
+  if (it == _ownedSubscriptions.end()) return;
+  if (auto conn = it->connection.lock()) conn->unsubscribe(intId);
+  _ownedSubscriptions.erase(it);
 }
+
 
 double HybridSalveDatabase::debugPreparedStatementCount() {
   return static_cast<double>(DatabaseManager::shared().connection()->prepareCount());

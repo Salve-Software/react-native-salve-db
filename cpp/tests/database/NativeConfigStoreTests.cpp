@@ -2,6 +2,7 @@
 #include "../../database/NativeConfigStore.hpp"
 #include "../../platform/platform.hpp"
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 
 using namespace margelo::nitro::salvedb;
@@ -29,7 +30,7 @@ TEST_CASE("NativeConfigStore round-trips every field", "[database][NativeConfigS
   config.baseUrl = "https://api.company.com";
   config.networkTimeoutMs = 9000.0;
   config.credentials = PersistedCredentialConfig{
-    "oauth2", "Authorization", "https://api.company.com/refresh", "$.access_token", "$.refresh_token"
+    "oauth2", "Authorization", "Token", "https://api.company.com/refresh", "$.access_token", "$.refresh_token"
   };
   config.background = BackgroundConfig{900000.0, true, true};
 
@@ -45,6 +46,7 @@ TEST_CASE("NativeConfigStore round-trips every field", "[database][NativeConfigS
   REQUIRE(loaded->credentials.has_value());
   REQUIRE(loaded->credentials->provider == "oauth2");
   REQUIRE(loaded->credentials->accessTokenHeaderName == "Authorization");
+  REQUIRE(loaded->credentials->accessTokenScheme == "Token");
   REQUIRE(loaded->credentials->refreshEndpoint == "https://api.company.com/refresh");
   REQUIRE(loaded->credentials->responseAccessTokenPath == "$.access_token");
   REQUIRE(loaded->credentials->responseRefreshTokenPath == "$.refresh_token");
@@ -87,4 +89,47 @@ TEST_CASE("NativeConfigStore::load returns nullopt for corrupted content", "[dat
   out.close();
 
   REQUIRE_FALSE(NativeConfigStore::load().has_value());
+}
+
+TEST_CASE("NativeConfigStore::load defaults accessTokenScheme to Bearer for a config persisted before it existed", "[database][NativeConfigStore]") {
+  ConfigFileGuard guard;
+
+  // Simulates a config written by an app build predating accessTokenScheme
+  // (issue #104) — load() must not crash and must default it instead of
+  // losing the credentials block on a cold-start reopen.
+  std::ofstream out(configFilePath(), std::ios::binary | std::ios::trunc);
+  out << R"({
+    "dbName": "legacy_db",
+    "walMode": true,
+    "syncOnAppOpen": true,
+    "credentials": {
+      "provider": "oauth2",
+      "accessTokenHeaderName": "Authorization",
+      "refreshEndpoint": "https://api.company.com/refresh",
+      "responseAccessTokenPath": "$.access_token",
+      "responseRefreshTokenPath": "$.refresh_token"
+    }
+  })";
+  out.close();
+
+  auto loaded = NativeConfigStore::load();
+
+  REQUIRE(loaded.has_value());
+  REQUIRE(loaded->credentials.has_value());
+  REQUIRE(loaded->credentials->accessTokenScheme == "Bearer");
+}
+
+TEST_CASE("NativeConfigStore::remove() throws instead of silently swallowing a non-ENOENT failure", "[database][NativeConfigStore]") {
+  ConfigFileGuard guard;
+
+  // A non-empty directory at the config path makes std::remove() fail with
+  // ENOTEMPTY/EEXIST rather than ENOENT — the class of failure that must
+  // surface, not just get logged (a completed reset() would otherwise
+  // silently leave the old config in place for a later launch to restore).
+  std::filesystem::create_directory(configFilePath());
+  std::ofstream(configFilePath() + "/blocker.txt") << "x";
+
+  REQUIRE_THROWS_AS(NativeConfigStore::remove(), std::runtime_error);
+
+  std::filesystem::remove_all(configFilePath());
 }

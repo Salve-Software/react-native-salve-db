@@ -55,7 +55,7 @@ Read sync_queue (up to pageSize)
 | Area | Decision |
 |---|---|
 | Sync strategy | `operations` only (queue-based diff via triggers) |
-| Conflict | `lastWriteWins` only (compares `updatedAt`) |
+| Conflict | `lastWriteWins` (configurable `field`, default `updatedAt`), `serverWins`, `clientWins` — `manual` not implemented |
 | Transport | REST only |
 | Direction | `bidirectional` only |
 | Auth | Single global OAuth2 (`Database.configure`) — no per-schema override |

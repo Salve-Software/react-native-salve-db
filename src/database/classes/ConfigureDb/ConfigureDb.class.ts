@@ -2,7 +2,7 @@ import type { SalveDatabase } from '../../../specs/SalveDatabase.nitro';
 import type { IConfigureProps, IRegisterProps } from './types';
 import { registerAppOpenSync } from './library/registerAppOpenSync';
 import { mapCredentials } from './library/mapCredentials';
-import { registerReadSyncBridge } from '../../../sync';
+import { registerSyncBridge } from '../../../sync';
 import { StudioAgent } from '../../../studio';
 
 export class ConfigureDb {
@@ -37,7 +37,7 @@ export class ConfigureDb {
     ConfigureDb._configured = true;
     ConfigureDb._syncOnAppOpen = syncOnAppOpen;
     registerAppOpenSync(this._bridge, () => ConfigureDb._syncOnAppOpen);
-    registerReadSyncBridge(this._bridge);
+    registerSyncBridge(this._bridge);
 
     if (__DEV__) {
       this._studioAgent.start(undefined, props.name);
@@ -62,6 +62,16 @@ export class ConfigureDb {
     }
 
     return this._bridge.registerSchema(JSON.stringify(schema));
+  }
+
+  /** Wipes all local data and credentials; `register()` per schema resumes local use, `configure()` again is only needed to restore sync. */
+  reset(): Promise<void> {
+    return this._bridge.reset();
+  }
+
+  /** Clears only the stored credential tokens; local data, schemas, and config are untouched. Use for a normal sign-out. */
+  logout(): void {
+    this._bridge.logout();
   }
 
   static isConfigured(): boolean {

@@ -8,21 +8,29 @@ namespace margelo::nitro::salvedb {
 void DatabaseManager::open(const std::string& dbName, bool walMode) {
   std::string dir  = platform::getDocumentsDirectory();
   std::string path = dir + "/" + dbName + ".db";
+
+  if (_db && path == _dbPath && walMode == _dbWalMode) {
+    return; // same file already open — keep the connection (and its subscriptions) alive
+  }
+
   _db = std::make_shared<SQLiteConnection>(path, walMode);
-  // Keyed by schema name, not db file — avoid stale leaks across opens.
+  _dbPath = path;
+  _dbWalMode = walMode;
+  // Keyed by schema name, not db file — avoid stale leaks across a genuine file change.
   SchemaRegistry::shared().clear();
 }
 
 void DatabaseManager::configureCredentials(
   const std::string& provider,
   const std::string& accessTokenHeaderName,
+  const std::string& accessTokenScheme,
   const std::string& refreshEndpoint,
   const std::string& responseAccessTokenPath,
   const std::string& responseRefreshTokenPath,
   const std::optional<InitialCredentialTokens>& initialTokens
 ) {
   _credentials = std::make_unique<CredentialProvider>(
-    provider, accessTokenHeaderName, refreshEndpoint, responseAccessTokenPath, responseRefreshTokenPath
+    provider, accessTokenHeaderName, accessTokenScheme, refreshEndpoint, responseAccessTokenPath, responseRefreshTokenPath
   );
   if (initialTokens.has_value()) {
     _credentials->seedInitialTokens(initialTokens->accessToken, initialTokens->refreshToken);
@@ -54,6 +62,7 @@ bool DatabaseManager::reopenFromPersistedConfigIfNeeded() {
     configureCredentials(
       creds.provider,
       creds.accessTokenHeaderName,
+      creds.accessTokenScheme,
       creds.refreshEndpoint,
       creds.responseAccessTokenPath,
       creds.responseRefreshTokenPath,

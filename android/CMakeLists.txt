@@ -18,6 +18,7 @@ add_library(${PACKAGE_NAME} SHARED
 	src/main/cpp/SyncConnectivityJni.cpp
 	src/main/cpp/BackgroundSchedulerJni.cpp
 	../cpp/http/HttpUrlBuilder.cpp
+	../cpp/http/UrlTemplate.cpp
 	../cpp/http/CredentialHttpCaller.cpp
 	../cpp/HybridSalveDatabase.cpp
 	../cpp/database/SQLiteConnection.cpp
@@ -26,6 +27,7 @@ add_library(${PACKAGE_NAME} SHARED
 	../cpp/database/MigrationEngine.cpp
 		../cpp/database/SalveMetadataManager.cpp
 	../cpp/database/SchemaRegistry.cpp
+	../cpp/database/DatabaseResetter.cpp
 	../cpp/query/QueryExecutor.cpp
 	../cpp/sync/SyncOrchestrator.cpp
 	../cpp/sync/SyncNativeEntryPoint.cpp

@@ -28,13 +28,13 @@ void openSyncFixture(const std::string& testName) {
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" },
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" },
       "pagination": { "pageSize": 20, "maxPagesPerSession": 20 }
     }
   })"));
 
   DatabaseManager::shared().configureCredentials(
-    "oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken",
+    "oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken",
     InitialCredentialTokens{"access-1", "refresh-1"}
   );
   DatabaseManager::shared().configureNetwork("https://api.company.com", 5000.0);

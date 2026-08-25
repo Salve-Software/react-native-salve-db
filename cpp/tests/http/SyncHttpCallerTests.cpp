@@ -15,7 +15,19 @@ json::Value endpoint(const std::string& method, const std::string& path, const s
 }
 
 SyncEndpoint restEndpoint() {
-  return SyncEndpoint{"/customers", "updatedAfter", "limit", {}};
+  return SyncContract::fromDefinition(json::parse(R"({
+    "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
+  })")).endpoint;
+}
+
+SyncEndpoint odataEndpoint() {
+  return SyncContract::fromDefinition(json::parse(R"JSON({
+    "endpoint": {
+      "basePath": "/Products",
+      "itemPathTemplate": "{basePath}({id})",
+      "listQueryTemplate": "$filter={cursorField} gt {since}&$top={limit}"
+    }
+  })JSON")).endpoint;
 }
 
 AuthHeader authHeader() { return {"Authorization", "token-abc"}; }
@@ -125,7 +137,7 @@ TEST_CASE("throws when endpoint.path is missing", "[http][SyncHttpCaller]") {
   );
 }
 
-TEST_CASE("list builds a GET with sinceParam/limitParam query and no body", "[http][SyncHttpCaller]") {
+TEST_CASE("list builds a GET with the rendered listQueryTemplate and no body", "[http][SyncHttpCaller]") {
   HttpRequest captured;
   platform::test::setHttpExecuteResult([&](const HttpRequest& request) -> HttpOutcome {
     captured = request;
@@ -181,6 +193,59 @@ TEST_CASE("remove builds a DELETE with the id in the route and no body", "[http]
   REQUIRE_FALSE(captured.body.has_value());
 }
 
+TEST_CASE("a schema without itemPathTemplate falls back to {basePath}/{id}", "[http][SyncHttpCaller][UrlTemplate]") {
+  HttpRequest captured;
+  platform::test::setHttpExecuteResult([&](const HttpRequest& request) -> HttpOutcome {
+    captured = request;
+    return HttpResponse{200, {}, "{}"};
+  });
+
+  SyncHttpCaller::update(restEndpoint(), "1", json::parse(R"({"name": "alice"})"), authHeader(), testNetwork());
+
+  REQUIRE(captured.url == "https://api.company.com/customers/1");
+}
+
+TEST_CASE("a custom itemPathTemplate renders PATCH/DELETE at the OData-style route", "[http][SyncHttpCaller][UrlTemplate]") {
+  HttpRequest captured;
+  platform::test::setHttpExecuteResult([&](const HttpRequest& request) -> HttpOutcome {
+    captured = request;
+    return HttpResponse{200, {}, "{}"};
+  });
+
+  SyncHttpCaller::update(odataEndpoint(), "42", json::parse(R"({"name": "alice"})"), authHeader(), testNetwork());
+  REQUIRE(captured.url == "https://api.company.com/Products(42)");
+  REQUIRE(captured.method == HttpMethod::Patch);
+
+  SyncHttpCaller::remove(odataEndpoint(), "42", authHeader(), testNetwork());
+  REQUIRE(captured.url == "https://api.company.com/Products(42)");
+  REQUIRE(captured.method == HttpMethod::Delete);
+}
+
+TEST_CASE("an id needing encoding is escaped inside a custom itemPathTemplate", "[http][SyncHttpCaller][UrlTemplate]") {
+  HttpRequest captured;
+  platform::test::setHttpExecuteResult([&](const HttpRequest& request) -> HttpOutcome {
+    captured = request;
+    return HttpResponse{200, {}, "{}"};
+  });
+
+  SyncHttpCaller::update(odataEndpoint(), "a/b", json::parse(R"({"name": "alice"})"), authHeader(), testNetwork());
+
+  REQUIRE(captured.url == "https://api.company.com/Products(a%2Fb)");
+}
+
+TEST_CASE("a composed listQueryTemplate filter renders correctly and is accepted by list()", "[http][SyncHttpCaller][UrlTemplate]") {
+  HttpRequest captured;
+  platform::test::setHttpExecuteResult([&](const HttpRequest& request) -> HttpOutcome {
+    captured = request;
+    return HttpResponse{200, {}, "[]"};
+  });
+
+  SyncHttpCaller::list(odataEndpoint(), 1700000000000, 200, authHeader(), testNetwork());
+
+  REQUIRE(captured.method == HttpMethod::Get);
+  REQUIRE(captured.url == "https://api.company.com/Products?$filter=updatedAt%20gt%201700000000000&$top=200");
+}
+
 TEST_CASE("endpoint.extraHeaders are merged into every verb's request", "[http][SyncHttpCaller]") {
   HttpRequest captured;
   platform::test::setHttpExecuteResult([&](const HttpRequest& request) -> HttpOutcome {
@@ -188,7 +253,9 @@ TEST_CASE("endpoint.extraHeaders are merged into every verb's request", "[http][
     return HttpResponse{200, {}, "[]"};
   });
 
-  SyncEndpoint endpointWithHeader{"/customers", "updatedAfter", "limit", {{"X-Tenant", "acme"}}};
+  SyncEndpoint endpointWithHeader = SyncContract::fromDefinition(json::parse(R"({
+    "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}", "headers": { "X-Tenant": "acme" } }
+  })")).endpoint;
   SyncHttpCaller::list(endpointWithHeader, 0, 50, authHeader(), testNetwork());
 
   bool hasTenant = false;

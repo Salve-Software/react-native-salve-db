@@ -14,10 +14,11 @@ void resetSecureStore() {
   platform::deleteSecureValue("salvedb.credentials.refreshToken");
 }
 
-CredentialProvider makeProvider() {
+CredentialProvider makeProvider(std::string accessTokenScheme = "Bearer") {
   return CredentialProvider(
     "oauth2",
     "Authorization",
+    std::move(accessTokenScheme),
     "/auth/refresh",
     "$.accessToken",
     "$.refreshToken"
@@ -39,6 +40,28 @@ TEST_CASE("seedInitialTokens persists the token pair and getAuthHeader injects i
   provider.seedInitialTokens("access-abc", "refresh-abc");
 
   REQUIRE(provider.getAccessToken().value() == "access-abc");
+  auto [headerName, headerValue] = provider.getAuthHeader();
+  REQUIRE(headerName == "Authorization");
+  REQUIRE(headerValue == "Bearer access-abc");
+}
+
+TEST_CASE("getAuthHeader applies a custom scheme prefix", "[credentials][CredentialProvider]") {
+  resetSecureStore();
+  auto provider = makeProvider("Token");
+
+  provider.seedInitialTokens("access-abc", "refresh-abc");
+
+  auto [headerName, headerValue] = provider.getAuthHeader();
+  REQUIRE(headerName == "Authorization");
+  REQUIRE(headerValue == "Token access-abc");
+}
+
+TEST_CASE("getAuthHeader returns the raw token with no prefix when scheme is empty", "[credentials][CredentialProvider]") {
+  resetSecureStore();
+  auto provider = makeProvider("");
+
+  provider.seedInitialTokens("access-abc", "refresh-abc");
+
   auto [headerName, headerValue] = provider.getAuthHeader();
   REQUIRE(headerName == "Authorization");
   REQUIRE(headerValue == "access-abc");
@@ -110,7 +133,7 @@ TEST_CASE("refresh sends the fixed refreshToken body and persists the new token 
 
   auto [headerName, headerValue] = provider.getAuthHeader();
   REQUIRE(headerName == "Authorization");
-  REQUIRE(headerValue == "access-new");
+  REQUIRE(headerValue == "Bearer access-new");
 }
 
 TEST_CASE("refresh throws a clear error on non-2xx response and does not touch stored tokens", "[credentials][CredentialProvider]") {

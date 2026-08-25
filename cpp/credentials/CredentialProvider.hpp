@@ -27,6 +27,7 @@ public:
   CredentialProvider(
     std::string provider,
     std::string accessTokenHeaderName,
+    std::string accessTokenScheme,
     std::string refreshEndpoint,
     std::string responseAccessTokenPath,
     std::string responseRefreshTokenPath
@@ -36,6 +37,9 @@ public:
   // token pair is already persisted (e.g. configure() called again on a
   // later app launch) — never overwrites a token natively refreshed since.
   void seedInitialTokens(const std::string& accessToken, const std::string& refreshToken);
+
+  // Deletes both stored tokens, so a later seedInitialTokens() isn't blocked by its already-seeded guard.
+  static void clearStoredTokens();
 
   // Current access token, or nullopt if none was ever seeded/refreshed.
   std::optional<std::string> getAccessToken() const;
@@ -55,6 +59,7 @@ public:
 private:
   std::string _provider;
   std::string _accessTokenHeaderName;
+  std::string _accessTokenScheme;
   std::string _refreshEndpoint;
   std::string _responseAccessTokenPath;
   std::string _responseRefreshTokenPath;

@@ -42,13 +42,13 @@ std::shared_ptr<SQLiteConnection> openOrchestratorFixture(
     "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" },
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" },
       "pagination": { "pageSize": )" + std::to_string(pageSize) + R"(, "maxPagesPerSession": )" + std::to_string(maxPagesPerSession) + R"( }
     }
   })"));
 
   DatabaseManager::shared().configureCredentials(
-    "oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken",
+    "oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken",
     InitialCredentialTokens{"access-1", "refresh-1"}
   );
   DatabaseManager::shared().configureNetwork("https://api.company.com", 5000.0);
@@ -313,7 +313,7 @@ TEST_CASE("a pulled page's last row without a numeric updatedAt/deletedAt fails 
 
   REQUIRE_THROWS_WITH(
     SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false),
-    ContainsSubstring("no numeric updatedAt or deletedAt")
+    ContainsSubstring("no numeric 'updatedAt' or deletedAt")
   );
 
   SyncCursorStore cursorStore(conn);
@@ -448,7 +448,7 @@ TEST_CASE("triggerSyncAll runs every enabled schema, isolating one schema's fail
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/orders", "sinceParam": "updatedAfter", "limitParam": "limit" }
+      "endpoint": { "basePath": "/orders", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
     }
   })"));
 
@@ -472,7 +472,7 @@ TEST_CASE("triggerSyncAll stops at the first network failure instead of retrying
     "columns": { "id": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/orders", "sinceParam": "updatedAfter", "limitParam": "limit" }
+      "endpoint": { "basePath": "/orders", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
     }
   })"));
 
@@ -936,12 +936,12 @@ TEST_CASE("a pre-#84 opaque cursor is reset on registration; the first pull star
     "columns": { "id": { "type": "text" }, "name": { "type": "text" }, "updatedAt": { "type": "datetime", "nullable": false } },
     "sync": {
       "enabled": true,
-      "endpoint": { "basePath": "/customers", "sinceParam": "updatedAfter", "limitParam": "limit" }
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
     }
   })"));
 
   DatabaseManager::shared().configureCredentials(
-    "oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken",
+    "oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken",
     InitialCredentialTokens{"access-1", "refresh-1"}
   );
   DatabaseManager::shared().configureNetwork("https://api.company.com", 5000.0);
@@ -955,4 +955,104 @@ TEST_CASE("a pre-#84 opaque cursor is reset on registration; the first pull star
   SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
 
   REQUIRE(captured.url.find("updatedAfter=0") != std::string::npos);
+}
+
+// ── Conflict strategies: serverWins/clientWins through a full session ───────
+
+// No local timestamp column — serverWins/clientWins don't require one. The
+// API payload still carries "updatedAt" for pull cursor advancement, which
+// is orthogonal to the conflict strategy (see plan discussion in #103-adjacent work).
+std::shared_ptr<SQLiteConnection> openOrchestratorFixtureNoTimestamp(const std::string& testName, const std::string& strategy) {
+  resetSecureStore();
+
+  DatabaseManager::shared().open(uniqueDbName(testName));
+  MigrationEngine engine(DatabaseManager::shared().connection());
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "text" }, "name": { "type": "text" } },
+    "sync": {
+      "enabled": true,
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" },
+      "conflict": { "strategy": ")" + strategy + R"(" }
+    }
+  })"));
+
+  DatabaseManager::shared().configureCredentials(
+    "oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken",
+    InitialCredentialTokens{"access-1", "refresh-1"}
+  );
+  DatabaseManager::shared().configureNetwork("https://api.company.com", 5000.0);
+
+  return DatabaseManager::shared().connection();
+}
+
+TEST_CASE("triggerSync with serverWins overwrites a local row and advances the cursor via the JSI bridge", "[sync][SyncOrchestrator][conflict]") {
+  auto conn = openOrchestratorFixtureNoTimestamp("orchestrator_server_wins", "serverWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('1', 'local-name')", {});
+
+  respondByRoute(
+    [](const HttpRequest&) -> HttpOutcome { return HttpResponse{200, {}, R"([{"id":"1","name":"server-name","updatedAt":500}])"}; },
+    nullptr, nullptr, nullptr
+  );
+
+  auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
+
+  // `result->updated` also folds in push's own replace of the freshly-inserted
+  // local row (auto-queued by the insert trigger) — assert on the row state
+  // directly instead, mirroring the existing tombstone test's pattern.
+  REQUIRE(result.has_value());
+  REQUIRE(result->cursor.value() == "499");
+
+  auto row = conn->execute("SELECT name FROM customers WHERE id = '1'", {});
+  REQUIRE(std::get<std::string>(row.rows[0][0]) == "server-name");
+}
+
+TEST_CASE("triggerSync with clientWins keeps the local row and still advances the cursor via the JSI bridge", "[sync][SyncOrchestrator][conflict]") {
+  auto conn = openOrchestratorFixtureNoTimestamp("orchestrator_client_wins", "clientWins");
+  conn->execute("INSERT INTO customers (id, name) VALUES ('1', 'local-name')", {});
+
+  respondByRoute(
+    [](const HttpRequest&) -> HttpOutcome { return HttpResponse{200, {}, R"([{"id":"1","name":"server-name","updatedAt":500}])"}; },
+    nullptr, nullptr, nullptr
+  );
+
+  auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
+
+  REQUIRE(result.has_value());
+  REQUIRE(result->cursor.value() == "499"); // cursor still advances — orthogonal to the strategy
+
+  auto row = conn->execute("SELECT name FROM customers WHERE id = '1'", {});
+  REQUIRE(std::get<std::string>(row.rows[0][0]) == "local-name");
+}
+
+TEST_CASE("triggerSync advances the cursor from endpoint.cursorField, independent of the conflict strategy", "[sync][SyncOrchestrator][conflict]") {
+  resetSecureStore();
+  DatabaseManager::shared().open(uniqueDbName("orchestrator_custom_cursor_field"));
+  MigrationEngine engine(DatabaseManager::shared().connection());
+  engine.registerSchema(MigrationEngine::parseSchemaJson(R"({
+    "name": "customers", "version": 1, "primaryKey": "id",
+    "columns": { "id": { "type": "text" }, "name": { "type": "text" } },
+    "sync": {
+      "enabled": true,
+      "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}", "cursorField": "modifiedAt" },
+      "conflict": { "strategy": "serverWins" }
+    }
+  })"));
+  DatabaseManager::shared().configureCredentials(
+    "oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken",
+    InitialCredentialTokens{"access-1", "refresh-1"}
+  );
+  DatabaseManager::shared().configureNetwork("https://api.company.com", 5000.0);
+
+  respondByRoute(
+    // "updatedAt" is absent — only "modifiedAt" is present. A hardcoded cursor
+    // field would fail to advance the cursor at all here.
+    [](const HttpRequest&) -> HttpOutcome { return HttpResponse{200, {}, R"([{"id":"1","name":"a","modifiedAt":500}])"}; },
+    nullptr, nullptr, nullptr
+  );
+
+  auto result = SyncOrchestrator().triggerSync("customers", /*discardIfBusy*/ false);
+
+  REQUIRE(result.has_value());
+  REQUIRE(result->cursor.value() == "499");
 }

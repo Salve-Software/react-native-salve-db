@@ -42,9 +42,11 @@ function makeSyncSchema(name: string, enabled: boolean): AnySchema {
     sync: {
       enabled,
       direction: 'bidirectional',
-      conflict: 'lastWriteWins',
+      // serverWins — this file tests read-triggered dispatch, not conflict
+      // resolution, so it needs no NOT NULL datetime column on the schema.
+      conflict: { strategy: 'serverWins' },
       transport: 'rest',
-      endpoint: { basePath: `/${name}`, sinceParam: 'updatedAfter', limitParam: 'limit' },
+      endpoint: { basePath: `/${name}`, listQueryTemplate: 'updatedAfter={since}&limit={limit}' },
     },
   };
 }

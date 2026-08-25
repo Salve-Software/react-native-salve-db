@@ -17,12 +17,14 @@ const std::string kRefreshTokenKey = "salvedb.credentials.refreshToken";
 CredentialProvider::CredentialProvider(
   std::string provider,
   std::string accessTokenHeaderName,
+  std::string accessTokenScheme,
   std::string refreshEndpoint,
   std::string responseAccessTokenPath,
   std::string responseRefreshTokenPath
 )
   : _provider(std::move(provider)),
     _accessTokenHeaderName(std::move(accessTokenHeaderName)),
+    _accessTokenScheme(std::move(accessTokenScheme)),
     _refreshEndpoint(std::move(refreshEndpoint)),
     _responseAccessTokenPath(std::move(responseAccessTokenPath)),
     _responseRefreshTokenPath(std::move(responseRefreshTokenPath)) {}
@@ -36,6 +38,11 @@ void CredentialProvider::seedInitialTokens(const std::string& accessToken, const
   platform::setSecureValue(kRefreshTokenKey, refreshToken);
 }
 
+void CredentialProvider::clearStoredTokens() {
+  platform::deleteSecureValue(kAccessTokenKey);
+  platform::deleteSecureValue(kRefreshTokenKey);
+}
+
 std::optional<std::string> CredentialProvider::getAccessToken() const {
   return platform::getSecureValue(kAccessTokenKey);
 }
@@ -45,7 +52,8 @@ std::pair<std::string, std::string> CredentialProvider::getAuthHeader() const {
   if (!token.has_value()) {
     throw std::runtime_error("CredentialProvider: no access token stored yet — call configure() with initial tokens first");
   }
-  return {_accessTokenHeaderName, *token};
+  std::string headerValue = _accessTokenScheme.empty() ? *token : _accessTokenScheme + " " + *token;
+  return {_accessTokenHeaderName, headerValue};
 }
 
 void CredentialProvider::refresh(const HttpCaller& httpCaller) {

@@ -14,13 +14,15 @@ CredentialProvider testCredentials() {
   platform::deleteSecureValue("salvedb.credentials.accessToken");
   platform::deleteSecureValue("salvedb.credentials.refreshToken");
 
-  CredentialProvider credentials("oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken");
+  CredentialProvider credentials("oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken");
   credentials.seedInitialTokens("access-1", "refresh-1");
   return credentials;
 }
 
 SyncEndpoint testEndpoint() {
-  return SyncEndpoint{"/customers", "updatedAfter", "limit", {}};
+  return SyncContract::fromDefinition(json::parse(R"({
+    "endpoint": { "basePath": "/customers", "listQueryTemplate": "updatedAfter={since}&limit={limit}" }
+  })")).endpoint;
 }
 
 NetworkConfig testNetwork() {
@@ -55,7 +57,7 @@ TEST_CASE("refreshes the token on 401 and reexecutes the call", "[http][SyncHttp
     for (auto& [name, value] : request.headers) {
       if (name == "Authorization") authHeader = value;
     }
-    if (authHeader == "access-1") return HttpResponse{401, {}, "{}"};
+    if (authHeader == "Bearer access-1") return HttpResponse{401, {}, "{}"};
     return HttpResponse{200, {}, "[]"};
   });
 
@@ -79,7 +81,7 @@ TEST_CASE("a 401 refresh does not eat into the retry budget for a subsequent net
     for (auto& [name, value] : request.headers) {
       if (name == "Authorization") authHeader = value;
     }
-    if (authHeader == "access-1") return HttpResponse{401, {}, "{}"};
+    if (authHeader == "Bearer access-1") return HttpResponse{401, {}, "{}"};
     ++networkAttempts;
     return HttpNetworkError{HttpNetworkErrorKind::NoConnection, "no connection"};
   });
@@ -93,7 +95,7 @@ TEST_CASE("a 401 refresh does not eat into the retry budget for a subsequent net
 }
 
 TEST_CASE("a credential lookup failure comes back as HttpNetworkError, not a thrown exception", "[http][SyncHttpRequester]") {
-  CredentialProvider credentials("oauth2", "Authorization", "/auth/refresh", "$.accessToken", "$.refreshToken");
+  CredentialProvider credentials("oauth2", "Authorization", "Bearer", "/auth/refresh", "$.accessToken", "$.refreshToken");
   // No seedInitialTokens() call — getAuthHeader() throws with no token stored.
   SyncHttpRequester requester(credentials, testNetwork());
 

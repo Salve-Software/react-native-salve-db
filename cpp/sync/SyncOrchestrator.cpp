@@ -47,13 +47,15 @@ NativeSyncResult SyncOrchestrator::runSyncSession(const std::string& schemaName)
   if (!definition || !definition->getBool("enabled", false)) {
     throw std::runtime_error("SyncOrchestrator: schema '" + schemaName + "' has no sync.enabled contract registered");
   }
-  SyncContract contract = SyncContract::fromDefinition(*definition);
+  // true: this reads a possibly pre-#115 persisted `_salve_sync_definitions`
+  // row (see SyncContract::fromDefinition's doc comment on the parameter).
+  SyncContract contract = SyncContract::fromDefinition(*definition, /*allowLegacyEndpointFallback*/ true);
 
   SyncHttpRequester requester(DatabaseManager::shared().credentials(), DatabaseManager::shared().network());
   SyncQueueStore queue(conn);
   SyncApplyGuard guard(conn);
   SyncCursorStore cursors(conn);
-  SyncOperationApplier applier(conn);
+  SyncOperationApplier applier(conn, contract.conflict);
 
   double start = nowMillis();
 

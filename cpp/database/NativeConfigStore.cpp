@@ -1,7 +1,9 @@
 #include "NativeConfigStore.hpp"
 #include "json_parser.hpp"
 #include "../platform/platform.hpp"
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -18,6 +20,7 @@ json::Object serializeCredentials(const PersistedCredentialConfig& creds) {
   json::Object obj;
   obj["provider"] = json::Value(creds.provider);
   obj["accessTokenHeaderName"] = json::Value(creds.accessTokenHeaderName);
+  obj["accessTokenScheme"] = json::Value(creds.accessTokenScheme);
   obj["refreshEndpoint"] = json::Value(creds.refreshEndpoint);
   obj["responseAccessTokenPath"] = json::Value(creds.responseAccessTokenPath);
   obj["responseRefreshTokenPath"] = json::Value(creds.responseRefreshTokenPath);
@@ -39,6 +42,7 @@ std::optional<PersistedCredentialConfig> parseCredentials(const json::Value& roo
   return PersistedCredentialConfig{
     obj.getString("provider"),
     obj.getString("accessTokenHeaderName"),
+    obj.getString("accessTokenScheme", "Bearer"),
     obj.getString("refreshEndpoint"),
     obj.getString("responseAccessTokenPath"),
     obj.getString("responseRefreshTokenPath"),
@@ -130,6 +134,13 @@ std::optional<PersistedConfig> NativeConfigStore::load() {
   config.background = parseBackground(root);
 
   return config;
+}
+
+void NativeConfigStore::remove() {
+  std::string path = configFilePath();
+  if (std::remove(path.c_str()) != 0 && errno != ENOENT) {
+    throw std::runtime_error("NativeConfigStore: failed to remove " + path + ": " + std::strerror(errno));
+  }
 }
 
 } // namespace margelo::nitro::salvedb

@@ -32,7 +32,7 @@ std::string customersSchemaJson() {
     columns: { id: { type: "text" }, name: { type: "text" }, updatedAt: { type: "datetime", nullable: false } },
     sync: {
       enabled: true,
-      endpoint: { basePath: "/customers", sinceParam: "updatedAfter", limitParam: "limit" },
+      endpoint: { basePath: "/customers", listQueryTemplate: "updatedAfter={since}&limit={limit}" },
       pagination: { pageSize: 20, maxPagesPerSession: 20 }
     }
   })";
@@ -44,7 +44,11 @@ TEST_CASE("db.triggerSync() runs a full sync cycle through the real JSI bridge",
   deleteSecureValue("salvedb.credentials.accessToken");
   deleteSecureValue("salvedb.credentials.refreshToken");
 
-  setHttpExecuteResult([](const HttpRequest& request) -> HttpOutcome {
+  std::string capturedAuthHeader;
+  setHttpExecuteResult([&capturedAuthHeader](const HttpRequest& request) -> HttpOutcome {
+    for (auto& [name, value] : request.headers) {
+      if (name == "Authorization") capturedAuthHeader = value;
+    }
     if (request.method == margelo::nitro::salvedb::HttpMethod::Get) return HttpResponse{200, {}, "[]"};
     return HttpResponse{201, {}, *request.body}; // POST: echo the pushed entity back
   });
@@ -57,7 +61,7 @@ TEST_CASE("db.triggerSync() runs a full sync cycle through the real JSI bridge",
     baseUrl: 'https://api.company.com',
     network: { timeout: 5000 },
     credentials: {
-      provider: 'oauth2', accessTokenHeaderName: 'Authorization',
+      provider: 'oauth2', accessTokenHeaderName: 'Authorization', accessTokenScheme: 'Bearer',
       tokens: { accessToken: 'access-1', refreshToken: 'refresh-1' },
       refresh: { endpoint: '/auth/refresh', responseAccessTokenPath: '$.accessToken', responseRefreshTokenPath: '$.refreshToken' }
     }
@@ -68,6 +72,7 @@ TEST_CASE("db.triggerSync() runs a full sync cycle through the real JSI bridge",
 
   auto resultJson = harness.run("db.triggerSync('customers', false)");
   REQUIRE(resultJson.find(R"("operationsApplied":1)") != std::string::npos);
+  REQUIRE(capturedAuthHeader == "Bearer access-1"); // real outgoing header, not a mock
 
   auto rows = DatabaseManager::shared().connection()->execute("SELECT COUNT(*) FROM sync_queue WHERE entity = 'customers'", {});
   REQUIRE(std::get<double>(rows.rows[0][0]) == 0.0);
@@ -109,7 +114,7 @@ TEST_CASE("db.triggerSync() refreshes the token on 401 through the real JSI brid
     for (auto& [name, value] : request.headers) {
       if (name == "Authorization") authHeader = value;
     }
-    if (authHeader == "access-1") return HttpResponse{401, {}, "{}"};
+    if (authHeader == "Bearer access-1") return HttpResponse{401, {}, "{}"};
     return HttpResponse{200, {}, "[]"};
   });
 
@@ -121,7 +126,7 @@ TEST_CASE("db.triggerSync() refreshes the token on 401 through the real JSI brid
     baseUrl: 'https://api.company.com',
     network: { timeout: 5000 },
     credentials: {
-      provider: 'oauth2', accessTokenHeaderName: 'Authorization',
+      provider: 'oauth2', accessTokenHeaderName: 'Authorization', accessTokenScheme: 'Bearer',
       tokens: { accessToken: 'access-1', refreshToken: 'refresh-1' },
       refresh: { endpoint: '/auth/refresh', responseAccessTokenPath: '$.accessToken', responseRefreshTokenPath: '$.refreshToken' }
     }
@@ -171,7 +176,7 @@ TEST_CASE("db.triggerSyncAll() runs every enabled schema through the real JSI br
     baseUrl: 'https://api.company.com',
     network: { timeout: 5000 },
     credentials: {
-      provider: 'oauth2', accessTokenHeaderName: 'Authorization',
+      provider: 'oauth2', accessTokenHeaderName: 'Authorization', accessTokenScheme: 'Bearer',
       tokens: { accessToken: 'access-1', refreshToken: 'refresh-1' },
       refresh: { endpoint: '/auth/refresh', responseAccessTokenPath: '$.accessToken', responseRefreshTokenPath: '$.refreshToken' }
     }

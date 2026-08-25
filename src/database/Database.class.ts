@@ -36,6 +36,16 @@ export class Database {
     return this.configureDb.register(props)
   }
 
+  /** Wipes all local data and credentials — full sign-out; `register` per schema resumes local use, `configure` again is only needed to restore sync. */
+  static reset = () => {
+    return this.configureDb.reset()
+  }
+
+  /** Clears only the stored credential tokens; local data, schemas, and config are untouched. Use for a normal sign-out. */
+  static logout = () => {
+    return this.configureDb.logout()
+  }
+
   /** Starts a `SELECT` against `schema`'s table. Call `.execute()` on the returned builder to run it. */
   static select = <TSchema extends AnySchema>(schema: TSchema) => {
     return this.queryDb.select(schema);

@@ -2,6 +2,7 @@
 #include "json_parser.hpp"
 #include "SchemaRegistry.hpp"
 #include "SalveMetadataManager.hpp"
+#include "../sync/SyncContract.hpp"
 #include "../sync/SyncDefinitionStore.hpp"
 #include "../sync/SyncCursorStore.hpp"
 
@@ -585,14 +586,23 @@ SchemaDef MigrationEngine::parseSchemaJson(const std::string& jsonStr) {
     schema.sync.definition = syncObj;
 
     if (schema.sync.enabled) {
-      auto updatedAt = schema.columns.find("updatedAt");
-      bool valid = updatedAt != schema.columns.end()
-        && updatedAt->second.type == "datetime"
-        && !updatedAt->second.nullable;
-      if (!valid) {
-        throw std::runtime_error(
-          "registerSchema: sync.enabled requires a NOT NULL 'datetime' column named 'updatedAt' (used for lastWriteWins)"
-        );
+      SyncContract contract = SyncContract::fromDefinition(syncObj);
+
+      if (contract.conflict.strategy == "lastWriteWins") {
+        auto field = schema.columns.find(contract.conflict.field);
+        bool valid = field != schema.columns.end()
+          && field->second.type == "datetime"
+          && !field->second.nullable;
+        if (!valid) {
+          std::string hint = contract.conflict.fieldExplicit
+            ? "" // the developer already chose this name — nothing more to suggest
+            : " ('" + contract.conflict.field + "' is the default when sync.conflict.field is not set — "
+              "pass a different sync.conflict.field to use another column instead)";
+          throw std::runtime_error(
+            "registerSchema: sync.conflict.strategy 'lastWriteWins' requires a NOT NULL 'datetime' column named '" +
+            contract.conflict.field + "'" + hint
+          );
+        }
       }
     }
   }

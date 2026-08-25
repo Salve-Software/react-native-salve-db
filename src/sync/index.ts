@@ -1,1 +1,1 @@
-export { registerReadSyncBridge, requestReadSync } from './library';
+export { registerSyncBridge, requestReadSync, requestWriteSync } from './library';
