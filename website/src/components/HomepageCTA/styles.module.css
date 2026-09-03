@@ -1,0 +1,20 @@
+.section {
+  padding: 4rem 0 5rem;
+}
+
+.inner {
+  max-width: 40rem;
+  text-align: center;
+}
+
+.inner p {
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 2rem;
+}
+
+.buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}

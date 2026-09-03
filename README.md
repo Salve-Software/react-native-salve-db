@@ -19,6 +19,8 @@
 
 Salve DB is an offline-first SQLite database for React Native. You declare your tables and their REST sync contract as plain TypeScript data; a native C++/Swift/Kotlin core creates the tables, migrates them, installs SQLite triggers that queue every local write, and pushes/pulls against your own REST API — including OAuth2 token refresh — **without the JS engine ever being started**. A background job (`WorkManager` on Android, `BGTaskScheduler` on iOS) wakes the native sync orchestrator on its own; your app doesn't need to be open.
 
+Full docs, architecture, and API reference: **[salve-software.github.io/react-native-salve-db](https://salve-software.github.io/react-native-salve-db)**
+
 In the foreground you get a Drizzle-style typed query builder plus `useQuery` / `useInfiniteQuery` hooks that re-render automatically whenever a table changes — no matter whether the write came from your own code, raw SQL, a migration, or the background sync engine.
 
 ## Features
