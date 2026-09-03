@@ -12,6 +12,23 @@
   color: #ffffff;
 }
 
+.heroStripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--ifm-color-primary) 0%,
+    var(--ifm-color-primary) 33.33%,
+    var(--brand-yellow) 33.33%,
+    var(--brand-yellow) 66.66%,
+    var(--brand-blue) 66.66%,
+    var(--brand-blue) 100%
+  );
+}
+
 .heroInner {
   max-width: 56rem;
 }
