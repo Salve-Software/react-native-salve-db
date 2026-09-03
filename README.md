@@ -228,7 +228,9 @@ import { useQuery, useInfiniteQuery } from '@salve-software/react-native-salve-d
 function UserList() {
   const { data, isLoading, error } = useQuery({
     schema: UserSchema,
-    queryFn: (db) => db.select(UserSchema).where(eq('name', search)).limit(50),
+    // queryFn receives a `select` builder already scoped to UserSchema — apply
+    // where/orderBy/limit/offset directly on it, don't call `.select()` again.
+    queryFn: (q) => q.where(eq('name', search)).orderBy('updatedAt', 'desc').limit(50),
     deps: [search],
   });
   // re-runs automatically on any write to `users`, from any source
@@ -237,7 +239,8 @@ function UserList() {
 function UserFeed() {
   const { data, hasNextPage, fetchNextPage } = useInfiniteQuery({
     schema: UserSchema,
-    queryFn: (db, { limit, offset }) => db.select(UserSchema).limit(limit).offset(offset),
+    // set where/orderBy only — the hook manages limit/offset internally via pageSize
+    queryFn: (q) => q.orderBy('updatedAt', 'desc'),
     pageSize: 20,
   });
 }
