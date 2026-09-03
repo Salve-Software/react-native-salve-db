@@ -1,6 +1,6 @@
 {
   "name": "@salve-software/react-native-salve-db",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Offline-first SQLite database for React Native with a 100% native sync engine (Swift/Kotlin + C++).",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
