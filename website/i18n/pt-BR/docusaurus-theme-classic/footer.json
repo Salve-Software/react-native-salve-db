@@ -1,0 +1,54 @@
+{
+  "link.title.Docs": {
+    "message": "Documentação",
+    "description": "The title of the footer links column with title=Docs in the footer"
+  },
+  "link.title.Community": {
+    "message": "Comunidade",
+    "description": "The title of the footer links column with title=Community in the footer"
+  },
+  "link.title.More": {
+    "message": "Mais",
+    "description": "The title of the footer links column with title=More in the footer"
+  },
+  "link.item.label.Introduction": {
+    "message": "Introdução",
+    "description": "The label of footer link with label=Introduction linking to /docs/intro"
+  },
+  "link.item.label.Quick Start": {
+    "message": "Início Rápido",
+    "description": "The label of footer link with label=Quick Start linking to /docs/getting-started/quick-start"
+  },
+  "link.item.label.Architecture": {
+    "message": "Arquitetura",
+    "description": "The label of footer link with label=Architecture linking to /docs/architecture"
+  },
+  "link.item.label.Studio": {
+    "message": "Studio",
+    "description": "The label of footer link with label=Studio linking to /docs/studio"
+  },
+  "link.item.label.API Reference": {
+    "message": "Referência da API",
+    "description": "The label of footer link with label=API Reference linking to /docs/api-reference/database"
+  },
+  "link.item.label.Salve-Software on GitHub": {
+    "message": "Salve-Software no GitHub",
+    "description": "The label of footer link with label=Salve-Software on GitHub linking to https://github.com/Salve-Software"
+  },
+  "link.item.label.Issues": {
+    "message": "Issues",
+    "description": "The label of footer link with label=Issues linking to https://github.com/Salve-Software/react-native-salve-db/issues"
+  },
+  "link.item.label.npm": {
+    "message": "npm",
+    "description": "The label of footer link with label=npm linking to https://www.npmjs.com/package/@salve-software/react-native-salve-db"
+  },
+  "link.item.label.GitHub": {
+    "message": "GitHub",
+    "description": "The label of footer link with label=GitHub linking to https://github.com/Salve-Software/react-native-salve-db"
+  },
+  "copyright": {
+    "message": "Copyright © 2026 Salve-Software. Construído com Docusaurus.",
+    "description": "The footer copyright"
+  }
+}

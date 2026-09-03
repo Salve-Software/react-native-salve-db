@@ -1,0 +1,60 @@
+.heroBanner {
+  padding: 5rem 0 4rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--brand-black);
+  color: #ffffff;
+}
+
+[data-theme='light'] .heroBanner {
+  background: linear-gradient(180deg, #0d1218 0%, #10161d 100%);
+  color: #ffffff;
+}
+
+.heroInner {
+  max-width: 56rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--brand-yellow);
+  margin-bottom: 1rem;
+}
+
+.heroTitle {
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.15;
+  margin-bottom: 1rem;
+}
+
+.heroSubtitle {
+  font-size: 1.15rem;
+  color: rgba(255, 255, 255, 0.75);
+  max-width: 40rem;
+  margin: 0 auto 2rem;
+}
+
+.buttons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 3rem;
+  flex-wrap: wrap;
+}
+
+.codeSample {
+  text-align: left;
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+@media screen and (max-width: 996px) {
+  .heroBanner {
+    padding: 3rem 1.5rem;
+  }
+}
