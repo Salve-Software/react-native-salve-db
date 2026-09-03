@@ -19,6 +19,8 @@
 
 Salve DB is an offline-first SQLite database for React Native. You declare your tables and their REST sync contract as plain TypeScript data; a native C++/Swift/Kotlin core creates the tables, migrates them, installs SQLite triggers that queue every local write, and pushes/pulls against your own REST API — including OAuth2 token refresh — **without the JS engine ever being started**. A background job (`WorkManager` on Android, `BGTaskScheduler` on iOS) wakes the native sync orchestrator on its own; your app doesn't need to be open.
 
+Full docs, architecture, and API reference: **[salve-software.github.io/react-native-salve-db](https://salve-software.github.io/react-native-salve-db)**
+
 In the foreground you get a Drizzle-style typed query builder plus `useQuery` / `useInfiniteQuery` hooks that re-render automatically whenever a table changes — no matter whether the write came from your own code, raw SQL, a migration, or the background sync engine.
 
 ## Features
@@ -226,7 +228,9 @@ import { useQuery, useInfiniteQuery } from '@salve-software/react-native-salve-d
 function UserList() {
   const { data, isLoading, error } = useQuery({
     schema: UserSchema,
-    queryFn: (db) => db.select(UserSchema).where(eq('name', search)).limit(50),
+    // queryFn receives a `select` builder already scoped to UserSchema — apply
+    // where/orderBy/limit/offset directly on it, don't call `.select()` again.
+    queryFn: (q) => q.where(eq('name', search)).orderBy('updatedAt', 'desc').limit(50),
     deps: [search],
   });
   // re-runs automatically on any write to `users`, from any source
@@ -235,7 +239,8 @@ function UserList() {
 function UserFeed() {
   const { data, hasNextPage, fetchNextPage } = useInfiniteQuery({
     schema: UserSchema,
-    queryFn: (db, { limit, offset }) => db.select(UserSchema).limit(limit).offset(offset),
+    // set where/orderBy only — the hook manages limit/offset internally via pageSize
+    queryFn: (q) => q.orderBy('updatedAt', 'desc'),
     pageSize: 20,
   });
 }

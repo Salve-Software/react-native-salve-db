@@ -1,0 +1,78 @@
+/**
+ * Brand palette sampled directly from assets/banner.png (Salve DB):
+ * near-black background, white wordmark, green/yellow/blue stripe.
+ * Same "Salve Software" tricolor identity used across the org's libraries,
+ * e.g. https://github.com/Salve-Software/react-native-nitro-jsdom
+ */
+:root {
+  --ifm-color-primary: #00af4f;
+  --ifm-color-primary-dark: #009b46;
+  --ifm-color-primary-darker: #009342;
+  --ifm-color-primary-darkest: #007937;
+  --ifm-color-primary-light: #00c358;
+  --ifm-color-primary-lighter: #00cb5c;
+  --ifm-color-primary-lightest: #12e56f;
+
+  --brand-yellow: #fedb02;
+  --brand-yellow-dark: #cbae00;
+  --brand-blue: #0054da;
+  --brand-blue-light: #2f74ff;
+  --brand-black: #0d1218;
+
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  --ifm-heading-font-weight: 700;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 175, 79, 0.12);
+  --ifm-navbar-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Brighter, higher-contrast green in dark mode for readability. */
+[data-theme='dark'] {
+  --ifm-color-primary: #22d16c;
+  --ifm-color-primary-dark: #10c25c;
+  --ifm-color-primary-darker: #0fb856;
+  --ifm-color-primary-darkest: #0c9748;
+  --ifm-color-primary-light: #43da82;
+  --ifm-color-primary-lighter: #52dd8d;
+  --ifm-color-primary-lightest: #7fe6ab;
+
+  --brand-blue: #2f74ff;
+
+  --ifm-background-color: var(--brand-black);
+  --docusaurus-highlighted-code-line-bg: rgba(34, 209, 108, 0.15);
+}
+
+[data-theme='dark'] .navbar {
+  --ifm-navbar-background-color: #000000;
+  --ifm-navbar-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='dark'] .footer {
+  --ifm-footer-background-color: #000000;
+}
+
+.navbar__logo img,
+.footer__logo {
+  border-radius: 6px;
+}
+
+/* Brand stripe divider — echoes the tricolor bar under the Salve DB mark. */
+.brandStripe {
+  display: block;
+  height: 4px;
+  width: 100%;
+  background: linear-gradient(
+    to right,
+    var(--ifm-color-primary) 0%,
+    var(--ifm-color-primary) 33.33%,
+    var(--brand-yellow) 33.33%,
+    var(--brand-yellow) 66.66%,
+    var(--brand-blue) 66.66%,
+    var(--brand-blue) 100%
+  );
+}
+
+.markdown h1:first-child {
+  --ifm-h1-font-size: 2.25rem;
+}

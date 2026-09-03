@@ -1,0 +1,39 @@
+.section {
+  padding: 4rem 0;
+  background: var(--ifm-color-emphasis-100);
+}
+
+[data-theme='dark'] .section {
+  background: #000000;
+}
+
+.header {
+  max-width: 42rem;
+  margin: 0 auto 2rem;
+  text-align: center;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ifm-color-primary);
+  margin-bottom: 0.5rem;
+}
+
+.lead {
+  color: var(--ifm-color-emphasis-700);
+}
+
+.diagram {
+  max-width: 100%;
+  overflow-x: auto;
+  font-size: 0.7rem;
+}
+
+.ctaRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}

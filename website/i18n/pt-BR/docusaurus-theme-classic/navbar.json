@@ -1,0 +1,18 @@
+{
+  "title": {
+    "message": "Salve DB",
+    "description": "The title in the navbar"
+  },
+  "logo.alt": {
+    "message": "Logo da Salve Software",
+    "description": "The alt text of navbar logo"
+  },
+  "item.label.Docs": {
+    "message": "Documentação",
+    "description": "Navbar item with label Docs"
+  },
+  "item.label.GitHub": {
+    "message": "GitHub",
+    "description": "Navbar item with label GitHub"
+  }
+}
