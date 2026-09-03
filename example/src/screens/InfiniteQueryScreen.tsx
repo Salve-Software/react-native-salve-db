@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Database, useDatabaseReady, useInfiniteQuery } from '@salve-software/react-native-salve-db';
 import { FeedItemSchema } from '../schemas/FeedItemSchema';
 import { formatTimestamp } from '../library/formatTimestamp';
+import { Button, Card, EmptyState, IconButton, ScreenHeader, useToast } from '../components/ui';
+import { colors, spacing, typography } from '../theme/tokens';
+import { DotsThreeVerticalIcon, TrayIcon } from '../theme/icons';
 
-const ACCENT = '#5B5FEF';
 const PAGE_SIZE = 10;
 const SEED_COUNT = 50;
 
@@ -19,6 +21,8 @@ const SEED_COUNT = 50;
  */
 export function InfiniteQueryScreen(): React.JSX.Element {
   const { isReady, isLoading: dbLoading, error: dbError } = useDatabaseReady();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { showError } = useToast();
 
   const {
     data: items,
@@ -32,7 +36,14 @@ export function InfiniteQueryScreen(): React.JSX.Element {
     pageSize: PAGE_SIZE,
   });
 
+  useEffect(() => {
+    if (itemsError) {
+      showError(`Query failed: ${String(itemsError)}`);
+    }
+  }, [itemsError, showError]);
+
   function seedItems() {
+    setMenuOpen(false);
     const startIndex = Database.count(FeedItemSchema).execute();
     const base = Date.now();
     const rows = Array.from({ length: SEED_COUNT }, (_, i) => ({
@@ -44,6 +55,7 @@ export function InfiniteQueryScreen(): React.JSX.Element {
   }
 
   function addOne() {
+    setMenuOpen(false);
     const startIndex = Database.count(FeedItemSchema).execute();
     Database.insert(FeedItemSchema)
       .values({ id: startIndex, title: `Item #${startIndex + 1}`, createdAt: Date.now() })
@@ -55,188 +67,137 @@ export function InfiniteQueryScreen(): React.JSX.Element {
   // which skips the update hook the reactive subscription relies on — the list won't
   // refresh until some other write touches the table.
   function clearAll() {
+    setMenuOpen(false);
     Database.delete(FeedItemSchema).execute();
   }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F4F5FA" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
 
-      <View style={styles.header}>
-        <Text style={styles.title}>Infinite Query</Text>
-        <Text style={styles.subtitle}>
-          {isReady
-            ? `${items?.length ?? 0} loaded${hasNextPage ? ' · more available' : items && items.length > 0 ? ' · all loaded' : ''}`
-            : 'Starting database…'}
-        </Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerTitle}>
+          <ScreenHeader
+            title="Infinite Query"
+            subtitle={
+              isReady
+                ? `${items?.length ?? 0} loaded${hasNextPage ? ' · more available' : items && items.length > 0 ? ' · all loaded' : ''}`
+                : 'Starting database…'
+            }
+          />
+        </View>
+        <View style={styles.headerAction}>
+          <IconButton icon={<DotsThreeVerticalIcon size={18} color={colors.ink} />} onPress={() => setMenuOpen((v) => !v)} />
+          {menuOpen ? (
+            <>
+              <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)} />
+              <Card style={styles.menu}>
+                <Button variant="text" label={`Seed ${SEED_COUNT}`} onPress={seedItems} />
+                <Button variant="text" label="Add one" onPress={addOne} />
+                <Button variant="text" label="Clear all" onPress={clearAll} />
+              </Card>
+            </>
+          ) : null}
+        </View>
       </View>
 
       {!isReady ? (
         <View style={styles.centered}>
-          {dbLoading ? <ActivityIndicator color={ACCENT} size="large" /> : null}
+          {dbLoading ? <ActivityIndicator color={colors.accent} size="large" /> : null}
           {dbError ? <Text style={styles.errorText}>Failed to start database: {String(dbError)}</Text> : null}
         </View>
       ) : (
-        <>
-          <View style={styles.controlsRow}>
-            <Pressable onPress={seedItems} style={styles.controlButton}>
-              <Text style={styles.controlButtonText}>Seed {SEED_COUNT}</Text>
-            </Pressable>
-            <Pressable onPress={addOne} style={styles.controlButton}>
-              <Text style={styles.controlButtonText}>Add one</Text>
-            </Pressable>
-            <Pressable onPress={clearAll} style={[styles.controlButton, styles.clearButton]}>
-              <Text style={[styles.controlButtonText, styles.clearButtonText]}>Clear all</Text>
-            </Pressable>
-          </View>
+        <ScrollView contentContainerStyle={styles.listContent}>
+          {itemsLoading ? (
+            <View style={styles.centered}>
+              <ActivityIndicator color={colors.accent} size="small" />
+            </View>
+          ) : (items ?? []).length === 0 ? (
+            <EmptyState icon={<TrayIcon size={32} color={colors.muted} />} title="No items yet" message="Seed some to test pagination." />
+          ) : (
+            (items ?? []).map((item) => (
+              <Card key={item.id} style={styles.card}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardMeta}>{formatTimestamp(item.createdAt)}</Text>
+              </Card>
+            ))
+          )}
 
-          {itemsError ? <Text style={styles.errorText}>Query failed: {String(itemsError)}</Text> : null}
-
-          <ScrollView contentContainerStyle={styles.listContent}>
-            {itemsLoading ? (
-              <View style={styles.centered}>
-                <ActivityIndicator color={ACCENT} size="small" />
-              </View>
-            ) : (items ?? []).length === 0 ? (
-              <View style={styles.empty}>
-                <Text style={styles.emptyEmoji}>📭</Text>
-                <Text style={styles.emptyText}>No items yet — seed some to test pagination.</Text>
-              </View>
-            ) : (
-              (items ?? []).map((item) => (
-                <View key={item.id} style={styles.card}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardMeta}>{formatTimestamp(item.createdAt)}</Text>
-                </View>
-              ))
-            )}
-
-            {hasNextPage ? (
-              <Pressable onPress={fetchNextPage} style={styles.loadMoreButton}>
-                <Text style={styles.loadMoreButtonText}>Load more</Text>
-              </Pressable>
-            ) : null}
-          </ScrollView>
-        </>
+          {hasNextPage ? <Button variant="ghost" label="Load more" onPress={fetchNextPage} style={styles.loadMoreButton} /> : null}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F4F5FA' },
+  safeArea: { flex: 1, backgroundColor: colors.canvas },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 12,
+    paddingHorizontal: spacing.xxl,
+    gap: spacing.md,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 16,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1C1D3E',
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#8A8CA8',
-    fontWeight: '500',
-  },
-  controlsRow: {
+  headerRow: {
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 20,
-    marginBottom: 14,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingRight: spacing.lg,
   },
-  controlButton: {
+  headerTitle: {
     flex: 1,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
   },
-  controlButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: ACCENT,
+  headerAction: {
+    marginTop: spacing.md,
   },
-  clearButton: {
-    backgroundColor: '#FDEBEE',
+  menuBackdrop: {
+    position: 'absolute',
+    top: -1000,
+    left: -1000,
+    right: -1000,
+    bottom: -1000,
   },
-  clearButtonText: {
-    color: '#E14F62',
+  menu: {
+    position: 'absolute',
+    top: 44,
+    right: 0,
+    width: 160,
+    padding: spacing.xs,
+    gap: spacing.xxs,
+    zIndex: 10,
+    elevation: 10,
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
     flexGrow: 1,
+    gap: spacing.sm,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-    shadowColor: '#2B2D6B',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    paddingVertical: spacing.md,
   },
   cardTitle: {
-    fontSize: 15,
+    ...typography.body,
     fontWeight: '600',
-    color: '#1C1D3E',
+    color: colors.ink,
   },
   cardMeta: {
-    fontSize: 11,
-    color: '#A6A8C4',
-    fontWeight: '500',
+    ...typography.caption,
+    color: colors.muted,
   },
   loadMoreButton: {
     alignSelf: 'center',
-    marginTop: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  loadMoreButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: ACCENT,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
-    gap: 8,
-  },
-  emptyEmoji: {
-    fontSize: 36,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#9B9DB8',
-    fontWeight: '500',
-    textAlign: 'center',
+    marginTop: spacing.xs,
   },
   errorText: {
-    marginHorizontal: 20,
-    marginBottom: 8,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
     fontSize: 13,
-    color: '#E14F62',
+    color: colors.danger,
     fontWeight: '500',
     textAlign: 'center',
   },

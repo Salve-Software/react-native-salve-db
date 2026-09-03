@@ -8,7 +8,6 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,9 +17,10 @@ import { ExpenseSchema, type ExpenseCategory } from '../schemas/ExpenseSchema';
 import { BudgetSchema } from '../schemas/BudgetSchema';
 import { formatCurrency } from '../library/formatCurrency';
 import { formatTimestamp } from '../library/formatTimestamp';
+import { colors, radius, spacing, typography } from '../theme/tokens';
+import { CheckIcon, MagnifyingGlassIcon, PlusIcon, ReceiptIcon, TrashIcon } from '../theme/icons';
+import { Button, Card, EmptyState, IconButton, Input, ProgressBar, ScreenHeader, useToast } from '../components/ui';
 
-const ACCENT = '#5B5FEF';
-const DANGER = '#E14F62';
 const CATEGORIES: ExpenseCategory[] = ['food', 'transport', 'shopping', 'other'];
 const CATEGORY_EMOJI: Record<ExpenseCategory, string> = {
   food: '🍔',
@@ -52,11 +52,13 @@ function buildExpenseFilter(search: string, category: CategoryFilter, unpaidOnly
 
 export function ExpensesScreen(): React.JSX.Element {
   const { isReady, isLoading, error } = useDatabaseReady();
+  const toast = useToast();
 
   const [title, setTitle] = useState('');
   const [amountInput, setAmountInput] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('food');
   const [addError, setAddError] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
@@ -94,6 +96,14 @@ export function ExpensesScreen(): React.JSX.Element {
     ) as { category: string; total: number }[];
     setCategoryTotals(rows);
   }, [expenses]);
+
+  useEffect(() => {
+    if (expensesError) toast.showError(`Query failed: ${String(expensesError)}`);
+  }, [expensesError, toast]);
+
+  useEffect(() => {
+    if (budgetError) toast.showError(`Budget query failed: ${String(budgetError)}`);
+  }, [budgetError, toast]);
 
   function addExpense() {
     setAddError(null);
@@ -145,44 +155,29 @@ export function ExpensesScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F4F5FA" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
 
-      <View style={styles.header}>
-        <Text style={styles.title}>Expenses</Text>
-        <Text style={styles.subtitle}>
-          {isReady ? `${expenses?.length ?? 0} shown · powered by Salve DB` : 'Starting database…'}
-        </Text>
-      </View>
+      <ScreenHeader
+        title="Query"
+        subtitle={isReady ? `${expenses?.length ?? 0} shown · powered by Salve DB` : 'Starting database…'}
+      />
 
       {!isReady ? (
         <View style={styles.centered}>
-          {isLoading ? <ActivityIndicator color={ACCENT} size="large" /> : null}
+          {isLoading ? <ActivityIndicator color={colors.accent} size="large" /> : null}
           {error ? <Text style={styles.errorText}>Failed to start database: {String(error)}</Text> : null}
         </View>
       ) : (
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          {expensesError ? <Text style={styles.errorText}>Query failed: {String(expensesError)}</Text> : null}
-          {budgetError ? <Text style={styles.errorText}>Budget query failed: {String(budgetError)}</Text> : null}
-
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {budget ? (
-            <View style={styles.budgetCard}>
+            <Card style={styles.budgetCard}>
               <View style={styles.budgetHeaderRow}>
                 <Text style={styles.budgetLabel}>Monthly budget</Text>
                 <Text style={[styles.budgetValue, overBudget && styles.budgetValueOver]}>
                   {formatCurrency(budget.spentCents)} / {formatCurrency(budget.limitCents)}
                 </Text>
               </View>
-              <View style={styles.budgetTrack}>
-                <View
-                  style={[
-                    styles.budgetFill,
-                    { width: `${spentPct}%`, backgroundColor: overBudget ? DANGER : ACCENT },
-                  ]}
-                />
-              </View>
+              <ProgressBar progress={spentPct / 100} tone={overBudget ? 'danger' : 'accent'} />
 
               {categoryTotals.length > 0 ? (
                 <View style={styles.categoryTotalsRow}>
@@ -195,24 +190,26 @@ export function ExpensesScreen(): React.JSX.Element {
                   ))}
                 </View>
               ) : null}
-            </View>
+            </Card>
           ) : null}
 
           <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
             <View style={styles.filterRow}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search expenses…"
-                placeholderTextColor="#9B9DB8"
-                value={search}
-                onChangeText={setSearch}
-                returnKeyType="search"
-              />
+              <View style={styles.searchWrapper}>
+                <MagnifyingGlassIcon size={16} color={colors.muted} style={styles.searchIcon} />
+                <Input
+                  style={styles.searchInput}
+                  placeholder="Search expenses…"
+                  value={search}
+                  onChangeText={setSearch}
+                  returnKeyType="search"
+                />
+              </View>
               <Pressable
                 onPress={() => setUnpaidOnly((prev) => !prev)}
-                style={[styles.unpaidToggle, unpaidOnly && styles.unpaidToggleActive]}
+                style={[styles.chip, unpaidOnly && styles.chipActive]}
               >
-                <Text style={[styles.unpaidToggleText, unpaidOnly && styles.unpaidToggleTextActive]}>Unpaid</Text>
+                <Text style={[styles.chipText, unpaidOnly && styles.chipTextActive]}>Unpaid</Text>
               </Pressable>
             </View>
 
@@ -221,9 +218,9 @@ export function ExpensesScreen(): React.JSX.Element {
                 <Pressable
                   key={c}
                   onPress={() => setCategoryFilter(c)}
-                  style={[styles.categoryChip, categoryFilter === c && styles.categoryChipActive]}
+                  style={[styles.chip, categoryFilter === c && styles.chipActive]}
                 >
-                  <Text style={[styles.categoryChipText, categoryFilter === c && styles.categoryChipTextActive]}>
+                  <Text style={[styles.chipText, categoryFilter === c && styles.chipTextActive]}>
                     {c === 'all' ? 'All' : `${CATEGORY_EMOJI[c]} ${c}`}
                   </Text>
                 </Pressable>
@@ -231,91 +228,88 @@ export function ExpensesScreen(): React.JSX.Element {
             </View>
 
             {(expenses ?? []).length === 0 ? (
-              <View style={styles.empty}>
-                <Text style={styles.emptyEmoji}>💸</Text>
-                <Text style={styles.emptyText}>
-                  {search || unpaidOnly || categoryFilter !== 'all'
+              <EmptyState
+                icon={<ReceiptIcon size={32} color={colors.muted} />}
+                title={
+                  search || unpaidOnly || categoryFilter !== 'all'
                     ? 'No expenses match this filter.'
-                    : 'No expenses yet — add your first one below.'}
-                </Text>
-              </View>
+                    : 'No expenses yet — add your first one below.'
+                }
+              />
             ) : (
               (expenses ?? []).map((item) => (
-                <View key={item.id} style={styles.card}>
+                <View key={item.id} style={styles.row}>
                   <Pressable onPress={() => togglePaid(item.id, item.paid)} hitSlop={12} style={styles.paidCheckbox}>
                     <View style={[styles.paidCheckboxBox, item.paid && styles.paidCheckboxBoxChecked]}>
-                      {item.paid ? <Text style={styles.paidCheckboxMark}>✓</Text> : null}
+                      {item.paid ? <CheckIcon size={12} color={colors.accentInk} weight="bold" /> : null}
                     </View>
                   </Pressable>
-                  <View style={styles.cardBody}>
-                    <Text style={[styles.cardTitle, item.paid && styles.cardTitlePaid]}>{item.title}</Text>
-                    <Text style={styles.cardMeta}>
-                      {CATEGORY_EMOJI[item.category as ExpenseCategory] ?? '📦'} {item.category} · {formatTimestamp(item.createdAt)}
+                  <View style={styles.rowBody}>
+                    <Text style={[styles.rowTitle, item.paid && styles.rowTitlePaid]}>{item.title}</Text>
+                    <Text style={styles.rowMeta}>
+                      {CATEGORY_EMOJI[item.category as ExpenseCategory] ?? '📦'} {item.category} ·{' '}
+                      {formatTimestamp(item.createdAt)}
                     </Text>
                   </View>
-                  <Text style={styles.cardAmount}>{formatCurrency(item.amountCents)}</Text>
-                  <Pressable
+                  <Text style={styles.rowAmount}>{formatCurrency(item.amountCents)}</Text>
+                  <IconButton
+                    icon={<TrashIcon size={16} color={colors.muted} />}
                     onPress={() => removeExpense(item.id, item.amountCents)}
-                    hitSlop={12}
-                    style={styles.deleteButton}
-                  >
-                    <Text style={styles.deleteButtonText}>✕</Text>
-                  </Pressable>
+                  />
                 </View>
               ))
             )}
           </ScrollView>
 
-          {addError ? <Text style={styles.errorText}>{addError}</Text> : null}
+          <View style={styles.composerArea}>
+            {composerOpen ? (
+              <Card style={styles.composerCard}>
+                <View style={styles.categoryPicker}>
+                  {CATEGORIES.map((c) => (
+                    <Pressable
+                      key={c}
+                      onPress={() => setCategory(c)}
+                      style={[styles.categoryPickerChip, category === c && styles.categoryPickerChipActive]}
+                    >
+                      <Text style={styles.categoryPickerChipEmoji}>{CATEGORY_EMOJI[c]}</Text>
+                      <Text
+                        style={[styles.categoryPickerChipLabel, category === c && styles.categoryPickerChipLabelActive]}
+                      >
+                        {c}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
 
-          <View style={styles.composer}>
-            <View style={styles.categoryPicker}>
-              {CATEGORIES.map((c) => (
-                <Pressable
-                  key={c}
-                  onPress={() => setCategory(c)}
-                  style={[styles.categoryPickerChip, category === c && styles.categoryPickerChipActive]}
-                >
-                  <Text style={styles.categoryPickerChipText}>{CATEGORY_EMOJI[c]}</Text>
-                  <Text style={[styles.categoryPickerChipLabel, category === c && styles.categoryPickerChipLabelActive]}>
-                    {c}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+                <Input placeholder="What did you buy?" value={title} onChangeText={setTitle} returnKeyType="next" />
 
-            <TextInput
-              style={styles.titleInput}
-              placeholder="What did you buy?"
-              placeholderTextColor="#9B9DB8"
-              value={title}
-              onChangeText={setTitle}
-              returnKeyType="next"
-            />
+                {addError ? <Text style={styles.errorText}>{addError}</Text> : null}
 
-            <View style={styles.amountRow}>
-              <TextInput
-                style={styles.amountInput}
-                placeholder="Amount ($)"
-                placeholderTextColor="#9B9DB8"
-                keyboardType="decimal-pad"
-                value={amountInput}
-                onChangeText={setAmountInput}
-                onSubmitEditing={addExpense}
-                returnKeyType="done"
+                <View style={styles.amountRow}>
+                  <Input
+                    style={styles.amountInput}
+                    placeholder="Amount ($)"
+                    keyboardType="decimal-pad"
+                    value={amountInput}
+                    onChangeText={setAmountInput}
+                    onSubmitEditing={addExpense}
+                    returnKeyType="done"
+                  />
+                  <Button
+                    label="Confirm"
+                    onPress={addExpense}
+                    disabled={!title.trim() || !amountInput.trim()}
+                    style={styles.confirmButton}
+                  />
+                </View>
+              </Card>
+            ) : (
+              <Button
+                label="Add expense"
+                icon={<PlusIcon size={18} color={colors.accentInk} />}
+                onPress={() => setComposerOpen(true)}
               />
-              <Pressable
-                onPress={addExpense}
-                disabled={!title.trim() || !amountInput.trim()}
-                style={({ pressed }) => [
-                  styles.addButton,
-                  (!title.trim() || !amountInput.trim()) && styles.addButtonDisabled,
-                  pressed && title.trim() && amountInput.trim() ? styles.addButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.addButtonText}>Add expense</Text>
-              </Pressable>
-            </View>
+            )}
           </View>
         </KeyboardAvoidingView>
       )}
@@ -324,323 +318,146 @@ export function ExpensesScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F4F5FA' },
+  safeArea: { flex: 1, backgroundColor: colors.canvas },
   flex: { flex: 1 },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 12,
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 16,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1C1D3E',
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#8A8CA8',
-    fontWeight: '500',
+    paddingHorizontal: spacing.xxl,
+    gap: spacing.md,
   },
   budgetCard: {
-    marginHorizontal: 20,
-    marginBottom: 14,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#2B2D6B',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
   budgetHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  budgetLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8A8CA8',
-  },
-  budgetValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1C1D3E',
-  },
-  budgetValueOver: {
-    color: DANGER,
-  },
-  budgetTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F4F5FA',
-    overflow: 'hidden',
-  },
-  budgetFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
+  budgetLabel: { ...typography.label, color: colors.muted },
+  budgetValue: { ...typography.label, color: colors.ink },
+  budgetValueOver: { color: colors.danger },
   categoryTotalsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 12,
+    gap: spacing.xs,
+    marginTop: spacing.md,
   },
   categoryTotalChip: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: '#F4F5FA',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface2,
   },
-  categoryTotalText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#8A8CA8',
-  },
+  categoryTotalText: { ...typography.caption, color: colors.muted },
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
     flexGrow: 1,
   },
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    fontSize: 13,
-    color: '#1C1D3E',
-  },
-  unpaidToggle: {
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-  },
-  unpaidToggleActive: {
-    backgroundColor: ACCENT,
-  },
-  unpaidToggleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8A8CA8',
-  },
-  unpaidToggleTextActive: {
-    color: '#FFFFFF',
-  },
+  searchWrapper: { flex: 1, justifyContent: 'center' },
+  searchIcon: { position: 'absolute', left: spacing.md, zIndex: 1 },
+  searchInput: { paddingLeft: spacing.xl + spacing.xs },
   categoryFilterRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 14,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  categoryChip: {
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+  chip: {
+    paddingVertical: spacing.sm - 1,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface2,
   },
-  categoryChipActive: {
-    backgroundColor: ACCENT,
-  },
-  categoryChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8A8CA8',
-    textTransform: 'capitalize',
-  },
-  categoryChipTextActive: {
-    color: '#FFFFFF',
-  },
-  card: {
+  chipActive: { backgroundColor: colors.accent },
+  chipText: { ...typography.caption, color: colors.muted, textTransform: 'capitalize' },
+  chipTextActive: { color: colors.accentInk },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-    shadowColor: '#2B2D6B',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
-  paidCheckbox: {
-    marginRight: 12,
-  },
+  paidCheckbox: {},
   paidCheckboxBox: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#D5D6EC',
+    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
   paidCheckboxBoxChecked: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
-  paidCheckboxMark: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  cardBody: {
-    flex: 1,
-    marginRight: 8,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1C1D3E',
-  },
-  cardTitlePaid: {
-    textDecorationLine: 'line-through',
-    color: '#B4B6D0',
-  },
-  cardMeta: {
+  rowBody: { flex: 1 },
+  rowTitle: { fontSize: 15, fontWeight: '600', color: colors.ink },
+  rowTitlePaid: { textDecorationLine: 'line-through', color: colors.muted },
+  rowMeta: {
     marginTop: 2,
-    fontSize: 11,
-    color: '#A6A8C4',
-    fontWeight: '500',
+    ...typography.caption,
+    color: colors.muted,
     textTransform: 'capitalize',
   },
-  cardAmount: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1C1D3E',
-    marginRight: 10,
-  },
-  deleteButton: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F4F5FA',
-  },
-  deleteButtonText: {
-    fontSize: 12,
-    color: '#B4B6D0',
-    fontWeight: '700',
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
-    gap: 8,
-  },
-  emptyEmoji: {
-    fontSize: 36,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#9B9DB8',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  rowAmount: { fontSize: 14, fontWeight: '700', color: colors.ink },
   errorText: {
-    marginHorizontal: 20,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
     fontSize: 13,
-    color: '#E14F62',
+    color: colors.danger,
     fontWeight: '500',
     textAlign: 'center',
   },
-  composer: {
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 16,
-    backgroundColor: '#F4F5FA',
+  composerArea: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E1E2F0',
+    borderTopColor: colors.line,
   },
+  composerCard: { gap: spacing.md },
   categoryPicker: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.sm,
   },
   categoryPickerChip: {
     flex: 1,
     height: 52,
-    borderRadius: 14,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
-    backgroundColor: '#FFFFFF',
+    gap: spacing.xxs,
+    backgroundColor: colors.surface2,
   },
-  categoryPickerChipActive: {
-    backgroundColor: '#E4E4FB',
-  },
-  categoryPickerChipText: {
-    fontSize: 17,
-  },
+  categoryPickerChipActive: { backgroundColor: colors.accent },
+  categoryPickerChipEmoji: { fontSize: 17 },
   categoryPickerChipLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#9B9DB8',
+    ...typography.caption,
+    color: colors.muted,
     textTransform: 'capitalize',
   },
-  categoryPickerChipLabelActive: {
-    color: ACCENT,
-  },
-  titleInput: {
-    height: 50,
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    backgroundColor: '#FFFFFF',
-    fontSize: 15,
-    color: '#1C1D3E',
-  },
+  categoryPickerChipLabelActive: { color: colors.accentInk },
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
   },
-  amountInput: {
-    flex: 1,
-    height: 50,
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    backgroundColor: '#FFFFFF',
-    fontSize: 15,
-    color: '#1C1D3E',
-  },
-  addButton: {
-    height: 50,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: ACCENT,
-  },
-  addButtonPressed: {
-    opacity: 0.85,
-  },
-  addButtonDisabled: {
-    backgroundColor: '#C6C7E8',
-  },
-  addButtonText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
+  amountInput: { flex: 1 },
+  confirmButton: { paddingHorizontal: spacing.lg },
 });

@@ -1,20 +1,9 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, StatusBar, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card, Input } from '../components/ui';
+import { colors, spacing, typography } from '../theme/tokens';
 import { SYNC_SERVER_BASE_URL } from '../library/syncServer';
-
-const ACCENT = '#5B5FEF';
-const DANGER = '#E14F62';
 
 export interface LoginTokens {
   accessToken: string;
@@ -58,100 +47,61 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Ele
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F4F5FA" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>Salve DB Example</Text>
           <Text style={styles.subtitle}>
             Sign in against salve-db-server's mock oauth2 user to exercise the native
             refresh-on-401 flow.
           </Text>
 
-          <TextInput
-            style={styles.input}
+          <Input
+            label="Email"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
-            placeholder="Email"
-            placeholderTextColor="#9B9DB8"
           />
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="Password"
-            placeholderTextColor="#9B9DB8"
-          />
+          <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry />
 
-          <Pressable
-            style={[styles.button, busy && styles.buttonDisabled]}
+          <Button
+            variant="primary"
+            loading={busy}
             disabled={busy}
+            label={busy ? 'Signing in…' : 'Sign in'}
             onPress={submit}
-          >
-            <Text style={styles.buttonText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
-          </Pressable>
+            style={styles.button}
+          />
 
-          {busy ? <ActivityIndicator color={ACCENT} style={styles.spinner} /> : null}
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        </View>
+        </Card>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F4F5FA' },
+  safeArea: { flex: 1, backgroundColor: colors.canvas },
   flex: { flex: 1, justifyContent: 'center' },
   card: {
-    marginHorizontal: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    gap: 12,
+    marginHorizontal: spacing.xl,
+    gap: spacing.md,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#1C1D3E',
+    ...typography.title,
+    color: colors.ink,
   },
   subtitle: {
-    fontSize: 13,
-    color: '#8A8CA8',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  input: {
-    height: 44,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    backgroundColor: '#F4F5FA',
-    fontSize: 14,
-    color: '#1C1D3E',
+    ...typography.body,
+    color: colors.muted,
+    marginBottom: spacing.xs,
   },
   button: {
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: ACCENT,
-    marginTop: 4,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  spinner: {
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
   errorText: {
-    fontSize: 12,
-    color: DANGER,
-    fontWeight: '500',
+    ...typography.caption,
+    color: colors.danger,
   },
 });

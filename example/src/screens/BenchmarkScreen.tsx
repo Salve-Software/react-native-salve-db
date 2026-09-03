@@ -1,21 +1,12 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Database, gte, useDatabaseReady } from '@salve-software/react-native-salve-db';
 import { BenchmarkSchema } from '../schemas/BenchmarkSchema';
+import { Button, Card, Divider, Input, ProgressBar, ScreenHeader, useToast } from '../components/ui';
+import { LightningIcon } from '../theme/icons';
+import { colors, spacing } from '../theme/tokens';
 
-const ACCENT = '#5B5FEF';
-const GOOD = '#22B07D';
-const BAD = '#E14F62';
 const DEFAULT_ROWS = 5_000;
 
 interface BenchmarkResult {
@@ -29,17 +20,29 @@ interface BenchmarkResult {
 }
 
 /** Horizontal bar sized relative to the slowest measurement in the pair, so the two are visually comparable at a glance. */
-function TimingBar({ label, ms, rows, color, maxMs }: { label: string; ms: number; rows: number; color: string; maxMs: number }) {
-  const widthPct = maxMs === 0 ? 4 : Math.max(4, Math.round((ms / maxMs) * 100));
+function TimingBar({
+  label,
+  ms,
+  rows,
+  tone,
+  maxMs,
+}: {
+  label: string;
+  ms: number;
+  rows: number;
+  tone: 'accent' | 'danger';
+  maxMs: number;
+}) {
+  const progress = maxMs === 0 ? 0.04 : Math.max(0.04, ms / maxMs);
   return (
     <View style={styles.timingRow}>
       <View style={styles.timingHeader}>
         <Text style={styles.timingLabel}>{label}</Text>
-        <Text style={styles.timingValue}>{ms}ms · {rows} rows</Text>
+        <Text style={styles.timingValue}>
+          {ms}ms · {rows} rows
+        </Text>
       </View>
-      <View style={styles.timingTrack}>
-        <View style={[styles.timingFill, { width: `${widthPct}%`, backgroundColor: color }]} />
-      </View>
+      <ProgressBar progress={progress} tone={tone} height={10} />
     </View>
   );
 }
@@ -50,6 +53,7 @@ export function BenchmarkScreen(): React.JSX.Element {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<BenchmarkResult | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const { showError } = useToast();
 
   function runBenchmark() {
     const rowCount = Math.max(1, Math.round(Number(rowCountInput)) || DEFAULT_ROWS);
@@ -102,7 +106,9 @@ export function BenchmarkScreen(): React.JSX.Element {
           unindexedScanRows: scanned.length,
         });
       } catch (err) {
-        setRunError(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        setRunError(message);
+        showError(message);
       } finally {
         setRunning(false);
       }
@@ -113,54 +119,46 @@ export function BenchmarkScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F4F5FA" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
 
-      <View style={styles.header}>
-        <Text style={styles.title}>Benchmark</Text>
-        <Text style={styles.subtitle}>
-          {isReady ? 'Real SQLite timings, measured on this device' : 'Starting database…'}
-        </Text>
-      </View>
+      <ScreenHeader
+        title="Benchmark"
+        subtitle={isReady ? 'Real SQLite timings, measured on this device' : 'Starting database…'}
+      />
 
       {!isReady ? (
         <View style={styles.centered}>
-          {isLoading ? <ActivityIndicator color={ACCENT} size="large" /> : null}
+          {isLoading ? <ActivityIndicator color={colors.accent} size="large" /> : null}
           {error ? <Text style={styles.errorText}>Failed to start database: {String(error)}</Text> : null}
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.controlsCard}>
-            <Text style={styles.controlsLabel}>Rows to insert</Text>
-            <View style={styles.controlsRow}>
-              <TextInput
-                style={styles.rowCountInput}
+          <Card>
+            <View style={styles.controlsBody}>
+              <Input
+                label="Rows to insert"
                 keyboardType="number-pad"
                 value={rowCountInput}
                 onChangeText={setRowCountInput}
                 editable={!running}
               />
-              <Pressable
+              <Button
+                variant="primary"
                 onPress={runBenchmark}
                 disabled={running}
-                style={({ pressed }) => [styles.runButton, running && styles.runButtonDisabled, pressed && !running ? styles.runButtonPressed : null]}
-              >
-                {running ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.runButtonText}>Run benchmark</Text>
-                )}
-              </Pressable>
+                loading={running}
+                label="Run benchmark"
+                icon={running ? undefined : <LightningIcon size={16} color={colors.accentInk} weight="fill" />}
+              />
+              <Text style={styles.controlsHint}>
+                Clears the benchmark table, bulk-inserts inside one transaction, then times an
+                indexed `select()` against a raw-SQL unindexed scan.
+              </Text>
             </View>
-            <Text style={styles.controlsHint}>
-              Clears the benchmark table, bulk-inserts inside one transaction, then times an
-              indexed `select()` against a raw-SQL unindexed scan.
-            </Text>
-          </View>
-
-          {runError ? <Text style={styles.errorText}>{runError}</Text> : null}
+          </Card>
 
           {result ? (
-            <View style={styles.resultsCard}>
+            <Card>
               <View style={styles.statRow}>
                 <Text style={styles.statLabel}>Bulk insert ({result.rowCount} rows, 1 transaction)</Text>
                 <Text style={styles.statValue}>{result.insertMs}ms</Text>
@@ -169,24 +167,24 @@ export function BenchmarkScreen(): React.JSX.Element {
                 {Math.round(result.insertedCount / (result.insertMs / 1000 || 1)).toLocaleString()} rows/sec
               </Text>
 
-              <View style={styles.divider} />
+              <Divider />
 
               <Text style={styles.compareTitle}>Indexed range select vs. unindexed LIKE scan</Text>
               <TimingBar
                 label="Indexed select() — createdAt ≥ n-500"
                 ms={result.indexedSelectMs}
                 rows={result.indexedSelectRows}
-                color={GOOD}
+                tone="accent"
                 maxMs={maxCompareMs}
               />
               <TimingBar
                 label="Raw SQL — LIKE on unindexed column"
                 ms={result.unindexedScanMs}
                 rows={result.unindexedScanRows}
-                color={BAD}
+                tone="danger"
                 maxMs={maxCompareMs}
               />
-            </View>
+            </Card>
           ) : null}
         </ScrollView>
       )}
@@ -195,7 +193,7 @@ export function BenchmarkScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F4F5FA' },
+  safeArea: { flex: 1, backgroundColor: colors.canvas },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -203,91 +201,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 12,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 20,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1C1D3E',
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#8A8CA8',
-    fontWeight: '500',
-  },
   content: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    gap: 16,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+    gap: spacing.lg,
   },
-  controlsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    gap: 10,
-    shadowColor: '#2B2D6B',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  controlsLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8A8CA8',
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  rowCountInput: {
-    width: 110,
-    height: 44,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#F4F5FA',
-    fontSize: 16,
-    color: '#1C1D3E',
-  },
-  runButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: ACCENT,
-  },
-  runButtonPressed: {
-    opacity: 0.85,
-  },
-  runButtonDisabled: {
-    backgroundColor: '#9C9EE8',
-  },
-  runButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  controlsBody: {
+    gap: spacing.md,
   },
   controlsHint: {
     fontSize: 12,
-    color: '#B4B6D0',
+    color: colors.muted,
     lineHeight: 17,
-  },
-  resultsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    gap: 6,
-    shadowColor: '#2B2D6B',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   statRow: {
     flexDirection: 'row',
@@ -297,65 +222,50 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1C1D3E',
+    color: colors.ink,
     flexShrink: 1,
     marginRight: 8,
   },
   statValue: {
     fontSize: 18,
     fontWeight: '800',
-    color: ACCENT,
+    color: colors.accent,
   },
   statSub: {
     fontSize: 12,
-    color: '#8A8CA8',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E1E2F0',
-    marginVertical: 10,
+    color: colors.muted,
   },
   compareTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8A8CA8',
-    marginBottom: 8,
+    color: colors.muted,
+    marginBottom: spacing.sm,
   },
   timingRow: {
     marginBottom: 14,
+    gap: 6,
   },
   timingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
   },
   timingLabel: {
     fontSize: 13,
-    color: '#1C1D3E',
+    color: colors.ink,
     fontWeight: '500',
     flexShrink: 1,
     marginRight: 8,
   },
   timingValue: {
     fontSize: 13,
-    color: '#8A8CA8',
+    color: colors.muted,
     fontWeight: '600',
-  },
-  timingTrack: {
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#F4F5FA',
-    overflow: 'hidden',
-  },
-  timingFill: {
-    height: '100%',
-    borderRadius: 5,
   },
   errorText: {
     marginHorizontal: 20,
     marginBottom: 8,
     fontSize: 13,
-    color: '#E14F62',
+    color: colors.danger,
     fontWeight: '500',
     textAlign: 'center',
   },
