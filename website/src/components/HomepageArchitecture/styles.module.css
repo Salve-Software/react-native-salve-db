@@ -1,39 +1,113 @@
-.section {
-  padding: 4rem 0;
-  background: var(--ifm-color-emphasis-100);
-}
-
-[data-theme='dark'] .section {
-  background: #000000;
-}
-
-.header {
-  max-width: 42rem;
-  margin: 0 auto 2rem;
-  text-align: center;
-}
-
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--ifm-color-primary);
-  margin-bottom: 0.5rem;
-}
-
-.lead {
-  color: var(--ifm-color-emphasis-700);
-}
-
 .diagram {
-  max-width: 100%;
-  overflow-x: auto;
-  font-size: 0.7rem;
+  max-width: 34rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.ctaRow {
+.node {
+  padding: 0.9rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  width: 100%;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-surface-color);
+}
+
+.nodeTop,
+.nodeBottom {
+  color: var(--ifm-font-color-base);
+}
+
+.nodeMid {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 4px rgba(0, 175, 79, 0.1);
+}
+
+.nodeLeaf {
+  border-color: var(--brand-blue);
+  color: var(--brand-blue);
+}
+
+[data-theme='dark'] .nodeLeaf {
+  color: #6ea8ff;
+  border-color: #6ea8ff;
+}
+
+.nodeBottom {
+  border-color: var(--brand-yellow-dark);
+  color: var(--brand-yellow-dark);
+}
+
+[data-theme='dark'] .nodeBottom {
+  color: var(--brand-yellow);
+  border-color: var(--brand-yellow);
+}
+
+.arrow {
+  position: relative;
+  height: 2.5rem;
+  width: 2px;
+  background: var(--ifm-color-emphasis-300);
+  margin: 0.25rem 0;
+}
+
+.arrow::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--ifm-color-emphasis-300);
+}
+
+.arrowLabel {
+  position: absolute;
+  left: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-600);
+  font-style: italic;
+}
+
+@media screen and (max-width: 640px) {
+  .arrowLabel {
+    left: 50%;
+    transform: translate(-50%, -50%);
+    white-space: normal;
+    text-align: center;
+    max-width: 12rem;
+    background: var(--ifm-background-color);
+    padding: 0 0.4rem;
+  }
+}
+
+.leafList {
+  list-style: none;
+  padding: 1rem 1.25rem;
+  margin: 0.75rem 0 0;
+  border: 1px dashed var(--ifm-color-emphasis-300);
+  border-radius: 10px;
+  width: 100%;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-700);
   display: flex;
-  justify-content: center;
-  margin-top: 2rem;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.readMore {
+  text-align: center;
+  margin-top: 2.5rem;
+  font-weight: 600;
 }
