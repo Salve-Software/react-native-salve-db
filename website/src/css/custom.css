@@ -57,22 +57,6 @@
   border-radius: 6px;
 }
 
-/* Brand stripe divider — echoes the tricolor bar under the Salve DB mark. */
-.brandStripe {
-  display: block;
-  height: 4px;
-  width: 100%;
-  background: linear-gradient(
-    to right,
-    var(--ifm-color-primary) 0%,
-    var(--ifm-color-primary) 33.33%,
-    var(--brand-yellow) 33.33%,
-    var(--brand-yellow) 66.66%,
-    var(--brand-blue) 66.66%,
-    var(--brand-blue) 100%
-  );
-}
-
 .markdown h1:first-child {
   --ifm-h1-font-size: 2.25rem;
 }

@@ -25,7 +25,7 @@ Database.insert(UserSchema)
 function HomepageHeader() {
   return (
     <header className={styles.heroBanner}>
-      <span className="brandStripe" />
+      <span className={styles.heroStripe} />
       <div className={`container ${styles.heroInner}`}>
         <p className={styles.eyebrow}>
           <Translate id="homepage.hero.badge">

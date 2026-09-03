@@ -12,6 +12,23 @@
   color: #ffffff;
 }
 
+.heroStripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--ifm-color-primary) 0%,
+    var(--ifm-color-primary) 33.33%,
+    var(--brand-yellow) 33.33%,
+    var(--brand-yellow) 66.66%,
+    var(--brand-blue) 66.66%,
+    var(--brand-blue) 100%
+  );
+}
+
 .heroInner {
   max-width: 56rem;
 }
@@ -57,4 +74,43 @@
   .heroBanner {
     padding: 3rem 1.5rem;
   }
+}
+
+.section {
+  padding: 4.5rem 0;
+}
+
+.sectionAlt {
+  background: var(--ifm-color-emphasis-100);
+}
+
+[data-theme='dark'] .sectionAlt {
+  background: #000000;
+}
+
+.sectionHeader {
+  text-align: center;
+  max-width: 42rem;
+  margin: 0 auto 3rem;
+}
+
+.sectionEyebrow {
+  color: var(--ifm-color-primary);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.6rem;
+  display: block;
+}
+
+.sectionTitle {
+  font-size: 2.1rem;
+  font-weight: 800;
+}
+
+.sectionSubtitle {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 1.05rem;
+  margin-top: 0.75rem;
 }

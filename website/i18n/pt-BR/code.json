@@ -353,12 +353,6 @@
   "homepage.architecture.title": {
     "message": "O motor de sincronização nunca acorda o runtime JS"
   },
-  "homepage.architecture.lead": {
-    "message": "Um job em segundo plano (WorkManager no Android, BGTaskScheduler no iOS) acorda o orquestrador de sincronização nativo diretamente. Seu app não precisa estar aberto — e nenhuma thread JS chega a subir para isso."
-  },
-  "homepage.architecture.cta": {
-    "message": "Leia o detalhamento completo da arquitetura →"
-  },
   "homepage.cta.title": {
     "message": "Pronto para ir offline-first?"
   },
@@ -445,5 +439,56 @@
   },
   "homepage.features.sectionTitle": {
     "message": "Tudo o que um motor de sincronização em segundo plano deveria ser, sem a bagagem do JS"
+  },
+  "homepage.architecture.subtitle": {
+    "message": "Um job em segundo plano acorda o orquestrador de sincronização nativo diretamente — seu app não precisa estar aberto, e nenhuma thread JS chega a subir para isso."
+  },
+  "homepage.architecture.node.ts": {
+    "message": "TypeScript (camada de DX)"
+  },
+  "homepage.architecture.arrow.jsi": {
+    "message": "JSI (Nitro Modules) — eventos de mudança fluem de volta"
+  },
+  "homepage.architecture.node.core": {
+    "message": "Núcleo Nativo (C++)"
+  },
+  "homepage.architecture.core.sqlite": {
+    "message": "SQLite + cache LRU de prepared statements"
+  },
+  "homepage.architecture.core.migration": {
+    "message": "Migration Engine (ADD COLUMN)"
+  },
+  "homepage.architecture.core.trigger": {
+    "message": "Trigger Engine → sync_queue"
+  },
+  "homepage.architecture.core.orchestrator": {
+    "message": "Sync Orchestrator"
+  },
+  "homepage.architecture.core.credentials": {
+    "message": "Credential Provider (OAuth2)"
+  },
+  "homepage.architecture.core.http": {
+    "message": "Cliente HTTP"
+  },
+  "homepage.architecture.arrow.platform": {
+    "message": "contratos de função platform::"
+  },
+  "homepage.architecture.node.shims": {
+    "message": "Camadas Swift (iOS) / Kotlin (Android)"
+  },
+  "homepage.architecture.shims.background": {
+    "message": "BGTaskScheduler / WorkManager — agendador em segundo plano"
+  },
+  "homepage.architecture.shims.network": {
+    "message": "NWPathMonitor / ConnectivityManager — monitor de rede"
+  },
+  "homepage.architecture.shims.keychain": {
+    "message": "Keychain / Keystore — armazenamento seguro de tokens"
+  },
+  "homepage.architecture.node.api": {
+    "message": "Sua API REST"
+  },
+  "homepage.architecture.readMore": {
+    "message": "Leia o detalhamento completo da arquitetura →"
   }
 }
