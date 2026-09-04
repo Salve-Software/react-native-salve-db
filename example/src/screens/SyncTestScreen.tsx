@@ -3,12 +3,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import type { KeyboardTypeOptions } from 'react-native';
@@ -19,17 +17,29 @@ import { UserSchema } from '../schemas/UserSchema';
 import { ProductSchema } from '../schemas/ProductSchema';
 import { SYNC_SERVER_BASE_URL } from '../library/syncServer';
 import { formatTimestamp } from '../library/formatTimestamp';
-
-const ACCENT = '#5B5FEF';
-const DANGER = '#E14F62';
+import { Button, Card, IconButton, Input, ScreenHeader, StatusBadge, useToast, type StatusKind } from '../components/ui';
+import { CaretDownIcon, PencilSimpleIcon, TrashIcon } from '../theme/icons';
+import { colors, spacing } from '../theme/tokens';
 
 interface StatusCounts {
   [status: string]: number;
 }
 
-function formatCounts(counts: StatusCounts): string {
-  const entries = Object.entries(counts);
-  return entries.length === 0 ? 'none' : entries.map(([status, count]) => `${status} ${count}`).join(' · ');
+/** Maps a raw sync_queue/_salve_sync_metadata status string onto the shared <StatusBadge> vocabulary. */
+function statusToBadgeKind(status: string): StatusKind {
+  switch (status) {
+    case 'PENDING':
+      return 'pending';
+    case 'FAILED':
+    case 'BLOCKED':
+      return 'danger';
+    case 'SYNCED':
+      return 'ok';
+    case 'DELETED':
+      return 'muted';
+    default:
+      return 'muted';
+  }
 }
 
 /** Re-reads sync_queue/_salve_sync_metadata status breakdowns whenever `refreshKey` changes — surfaces PENDING/FAILED/BLOCKED and SYNCED/DELETED without opening the DB by hand. */
@@ -92,8 +102,15 @@ function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderI
   const [editingId, setEditingId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const toast = useToast();
 
   const { queue: queueCounts, metadata: metadataCounts } = useSyncStateCounts(schema.name, items);
+
+  useEffect(() => {
+    if (itemsError) toast.showError(`Query failed: ${String(itemsError)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsError]);
 
   function startEdit(item: Record<string, unknown>) {
     setEditingId(item[schema.primaryKey as string] as number);
@@ -135,7 +152,7 @@ function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderI
         `sync ok — inserted ${result.inserted}, updated ${result.updated}, deleted ${result.deleted}, cursor ${result.cursor ?? '(none)'}, ${Math.round(result.duration)}ms`
       );
     } catch (err) {
-      setLastResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      toast.showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -153,7 +170,7 @@ function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderI
       if (!response.ok) throw new Error(`${basePath} responded ${response.status}`);
       setLastResult('Wrote directly to the server — tap "Sync this entity" to pull it down.');
     } catch (err) {
-      setLastResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      toast.showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -162,31 +179,49 @@ function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderI
   const canSubmit = fields.every((field) => (values[field.key] ?? '').trim().length > 0);
 
   return (
-    <View style={styles.card}>
+    <Card style={styles.card}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>sync_queue: {formatCounts(queueCounts)}</Text>
-        <Text style={styles.subtitle}>metadata: {formatCounts(metadataCounts)}</Text>
+        <Button
+          variant="text"
+          size="sm"
+          label={showDetails ? 'Hide technical details' : 'Technical details'}
+          icon={<CaretDownIcon size={14} color={colors.muted} />}
+          onPress={() => setShowDetails((prev) => !prev)}
+          style={styles.detailsToggle}
+        />
+        {showDetails ? (
+          <View style={styles.detailsBlock}>
+            <View style={styles.detailsRow}>
+              <Text style={styles.detailsLabel}>queue</Text>
+              {Object.entries(queueCounts).map(([status, count]) => (
+                <StatusBadge key={`q-${status}`} label={`${status} ${count}`} status={statusToBadgeKind(status)} />
+              ))}
+            </View>
+            <View style={styles.detailsRow}>
+              <Text style={styles.detailsLabel}>state</Text>
+              {Object.entries(metadataCounts).map(([status, count]) => (
+                <StatusBadge key={`m-${status}`} label={`${status} ${count}`} status={statusToBadgeKind(status)} />
+              ))}
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.buttonRow}>
-        <Pressable style={styles.button} disabled={busy} onPress={writeDirectlyOnServer}>
-          <Text style={styles.buttonText}>Write directly on server</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.button, styles.buttonPrimary, busy && styles.buttonDisabled]}
+        <Button
+          variant="ghost"
+          size="sm"
+          label="Write directly on server"
           disabled={busy}
-          onPress={runSync}
-        >
-          <Text style={styles.buttonPrimaryText}>Sync this entity</Text>
-        </Pressable>
+          onPress={writeDirectlyOnServer}
+          style={styles.ghostAction}
+        />
+        <Button variant="primary" label="Sync this entity" disabled={busy} onPress={runSync} style={styles.primaryAction} />
       </View>
 
-      {busy ? <ActivityIndicator color={ACCENT} style={styles.busySpinner} /> : null}
-      {lastResult ? (
-        <Text style={[styles.resultText, lastResult.startsWith('Error') && styles.errorText]}>{lastResult}</Text>
-      ) : null}
-      {itemsError ? <Text style={styles.errorText}>Query failed: {String(itemsError)}</Text> : null}
+      {busy ? <ActivityIndicator color={colors.accent} style={styles.busySpinner} /> : null}
+      {lastResult ? <Text style={styles.resultText}>{lastResult}</Text> : null}
 
       {(items ?? []).length === 0 ? (
         <Text style={styles.emptyText}>No local items yet.</Text>
@@ -199,12 +234,8 @@ function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderI
                 <Text style={styles.itemTitle}>{renderItemLabel(item)}</Text>
                 <Text style={styles.itemMeta}>{renderItemMeta(item)}</Text>
               </View>
-              <Pressable onPress={() => startEdit(item)} hitSlop={10} style={styles.itemAction}>
-                <Text style={styles.itemActionText}>✎</Text>
-              </Pressable>
-              <Pressable onPress={() => removeItem(id)} hitSlop={10} style={styles.itemAction}>
-                <Text style={styles.itemActionTextDanger}>✕</Text>
-              </Pressable>
+              <IconButton icon={<PencilSimpleIcon size={16} color={colors.muted} />} onPress={() => startEdit(item)} />
+              <IconButton icon={<TrashIcon size={16} color={colors.danger} />} onPress={() => removeItem(id)} variant="danger" />
             </View>
           );
         })
@@ -214,33 +245,27 @@ function EntityPanel({ schema, title, basePath, fields, renderItemLabel, renderI
         {editingId !== null ? (
           <View style={styles.editingRow}>
             <Text style={styles.editingLabel}>Editing #{editingId}</Text>
-            <Pressable onPress={cancelEdit}>
-              <Text style={styles.editingCancel}>Cancel</Text>
-            </Pressable>
+            <Button variant="text" size="sm" label="Cancel" onPress={cancelEdit} />
           </View>
         ) : null}
 
         {fields.map((field) => (
-          <TextInput
+          <Input
             key={field.key}
-            style={styles.input}
             placeholder={field.label}
-            placeholderTextColor="#9B9DB8"
             keyboardType={field.keyboardType}
             value={values[field.key] ?? ''}
             onChangeText={(text) => setValues((prev) => ({ ...prev, [field.key]: text }))}
           />
         ))}
 
-        <Pressable
+        <Button
+          label={editingId === null ? 'Add local item' : 'Save changes'}
           onPress={submit}
           disabled={!canSubmit}
-          style={[styles.addButton, !canSubmit && styles.buttonDisabled]}
-        >
-          <Text style={styles.addButtonText}>{editingId === null ? 'Add local item' : 'Save changes'}</Text>
-        </Pressable>
+        />
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -265,6 +290,12 @@ export function SyncTestScreen({ accessToken }: SyncTestScreenProps): React.JSX.
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [refreshCount, setRefreshCount] = useState<number | null>(null);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (error) toast.showError(`Failed to start database: ${String(error)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
 
   async function syncAll() {
     setBusy(true);
@@ -280,45 +311,34 @@ export function SyncTestScreen({ accessToken }: SyncTestScreenProps): React.JSX.
           (delta !== null ? ` — native refresh fired ${delta}x during this sync` : '')
       );
     } catch (err) {
-      setLastResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      toast.showError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F4F5FA" />
+    <SafeAreaView style={styles.safeArea} edges={[]}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
 
-      <View style={styles.screenHeader}>
-        <Text style={styles.screenTitle}>Sync Test</Text>
-        <Text style={styles.screenSubtitle}>
-          {isReady ? 'Users + Products against salve-db-server' : 'Starting database…'}
-        </Text>
-        {refreshCount !== null ? (
-          <Text style={styles.screenSubtitle}>server-side native refresh count: {refreshCount}</Text>
-        ) : null}
-      </View>
+      <ScreenHeader
+        title="Sync Test"
+        subtitle={isReady ? 'Users + Products against salve-db-server' : 'Starting database…'}
+      />
+      {refreshCount !== null ? (
+        <Text style={styles.refreshCountText}>server-side native refresh count: {refreshCount}</Text>
+      ) : null}
 
       {!isReady ? (
-        <View style={styles.centered}>
-          {isLoading ? <ActivityIndicator color={ACCENT} size="large" /> : null}
-          {error ? <Text style={styles.errorText}>Failed to start database: {String(error)}</Text> : null}
-        </View>
+        <View style={styles.centered}>{isLoading ? <ActivityIndicator color={colors.accent} size="large" /> : null}</View>
       ) : (
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.screenButtonRow}>
-            <Pressable style={[styles.button, styles.buttonPrimary, busy && styles.buttonDisabled]} disabled={busy} onPress={syncAll}>
-              <Text style={styles.buttonPrimaryText}>Sync All</Text>
-            </Pressable>
+            <Button label="Sync All" disabled={busy} onPress={syncAll} />
           </View>
 
-          {busy ? <ActivityIndicator color={ACCENT} style={styles.busySpinner} /> : null}
-          {lastResult ? (
-            <Text style={[styles.resultText, styles.screenResultText, lastResult.startsWith('Error') && styles.errorText]}>
-              {lastResult}
-            </Text>
-          ) : null}
+          {busy ? <ActivityIndicator color={colors.accent} style={styles.busySpinner} /> : null}
+          {lastResult ? <Text style={[styles.resultText, styles.screenResultText]}>{lastResult}</Text> : null}
 
           <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
             <EntityPanel
@@ -355,13 +375,6 @@ export function SyncTestScreen({ accessToken }: SyncTestScreenProps): React.JSX.
               accessToken={accessToken}
             />
           </ScrollView>
-
-          <Text style={styles.hint}>
-            "Write directly on server" POSTs straight to salve-db-server, bypassing SQLite — proves the pull path when
-            you tap "Sync this entity" afterwards. It sends the login-time access token directly, so once that token
-            expires (see ACCESS_TOKEN_TTL_MS) this button starts getting 401 even though "Sync All" keeps working —
-            the native engine refreshes its own copy, this screen never sees the new one.
-          </Text>
         </KeyboardAvoidingView>
       )}
     </SafeAreaView>
@@ -369,7 +382,7 @@ export function SyncTestScreen({ accessToken }: SyncTestScreenProps): React.JSX.
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F4F5FA' },
+  safeArea: { flex: 1, backgroundColor: colors.canvas },
   flex: { flex: 1 },
   centered: {
     flex: 1,
@@ -378,161 +391,116 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 12,
   },
-  screenHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 16,
-  },
-  screenTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1C1D3E',
-    letterSpacing: -0.5,
-  },
-  screenSubtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#8A8CA8',
+  refreshCountText: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    fontSize: 12,
+    color: colors.muted,
     fontWeight: '500',
   },
   screenButtonRow: {
     flexDirection: 'row',
     gap: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     marginBottom: 10,
   },
   screenResultText: {
-    marginHorizontal: 20,
+    marginHorizontal: spacing.lg,
   },
   listContent: {
     paddingTop: 12,
     paddingBottom: 12,
     flexGrow: 1,
   },
-  hint: {
-    fontSize: 11,
-    color: '#9B9DB8',
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-    fontStyle: 'italic',
-  },
+
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   header: {
-    marginBottom: 12,
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
   },
   title: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#1C1D3E',
+    color: colors.ink,
   },
-  subtitle: {
-    marginTop: 2,
+  detailsToggle: {
+    alignSelf: 'flex-start',
+  },
+  detailsBlock: {
+    gap: spacing.xs,
+    marginTop: spacing.xxs,
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  detailsLabel: {
     fontSize: 11,
-    color: '#8A8CA8',
-    fontWeight: '500',
+    fontWeight: '700',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    marginRight: spacing.xxs,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  button: {
+  ghostAction: {
     flex: 1,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F4F5FA',
   },
-  buttonPrimary: {
-    backgroundColor: ACCENT,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1C1D3E',
-  },
-  buttonPrimaryText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  primaryAction: {
+    flex: 1,
   },
   busySpinner: {
     marginTop: 4,
   },
   resultText: {
-    marginTop: 8,
+    marginTop: spacing.sm,
     fontSize: 12,
-    color: '#4A4D7A',
-    fontWeight: '500',
-  },
-  errorText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: DANGER,
+    color: colors.muted,
     fontWeight: '500',
   },
   emptyText: {
     fontSize: 13,
-    color: '#9B9DB8',
+    color: colors.muted,
     fontWeight: '500',
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: spacing.md,
   },
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F4F5FA',
+    backgroundColor: colors.surface2,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    marginTop: 8,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
   itemBody: {
     flex: 1,
-    marginRight: 8,
+    marginRight: spacing.xs,
   },
   itemTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1C1D3E',
+    color: colors.ink,
   },
   itemMeta: {
     marginTop: 2,
     fontSize: 11,
-    color: '#A6A8C4',
+    color: colors.muted,
     fontWeight: '500',
   },
-  itemAction: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-  },
-  itemActionText: {
-    fontSize: 13,
-    color: '#8A8CA8',
-    fontWeight: '700',
-  },
-  itemActionTextDanger: {
-    fontSize: 12,
-    color: DANGER,
-    fontWeight: '700',
-  },
   composer: {
-    marginTop: 12,
-    gap: 8,
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
   editingRow: {
     flexDirection: 'row',
@@ -542,31 +510,6 @@ const styles = StyleSheet.create({
   editingLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: ACCENT,
-  },
-  editingCancel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8A8CA8',
-  },
-  input: {
-    height: 42,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    backgroundColor: '#F4F5FA',
-    fontSize: 13,
-    color: '#1C1D3E',
-  },
-  addButton: {
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: ACCENT,
-  },
-  addButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.accent,
   },
 });

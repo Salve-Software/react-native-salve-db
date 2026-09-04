@@ -16,10 +16,12 @@
   "dependencies": {
     "@react-native/new-app-screen": "0.86.0",
     "@salve-software/salvetron-react-native": "^1.1.5",
+    "phosphor-react-native": "^3.0.6",
     "react": "19.2.8",
     "react-native": "0.86.0",
     "react-native-nitro-modules": "0.36.1",
-    "react-native-safe-area-context": "^5.5.2"
+    "react-native-safe-area-context": "^5.5.2",
+    "react-native-svg": "^15.15.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
