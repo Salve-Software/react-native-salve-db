@@ -318,7 +318,7 @@ export function SyncTestScreen({ accessToken }: SyncTestScreenProps): React.JSX.
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
 
       <ScreenHeader

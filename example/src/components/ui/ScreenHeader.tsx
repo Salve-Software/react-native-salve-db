@@ -21,7 +21,7 @@ export function ScreenHeader({ title, subtitle }: ScreenHeaderProps): React.JSX.
 }
 
 const styles = StyleSheet.create({
-  wrapper: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm, gap: spacing.xxs },
+  wrapper: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: spacing.xxs },
   title: { fontSize: 24, fontWeight: '800', color: colors.ink, letterSpacing: -0.3 },
   subtitle: { fontSize: 13, fontWeight: '500', color: colors.muted },
 });

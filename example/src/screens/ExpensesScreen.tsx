@@ -154,7 +154,7 @@ export function ExpensesScreen(): React.JSX.Element {
   const overBudget = budget ? budget.spentCents >= budget.limitCents : false;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
 
       <ScreenHeader

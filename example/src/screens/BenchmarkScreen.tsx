@@ -118,7 +118,7 @@ export function BenchmarkScreen(): React.JSX.Element {
   const maxCompareMs = result ? Math.max(result.indexedSelectMs, result.unindexedScanMs, 1) : 1;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
 
       <ScreenHeader

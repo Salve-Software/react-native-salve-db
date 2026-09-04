@@ -72,7 +72,7 @@ export function InfiniteQueryScreen(): React.JSX.Element {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.canvas} />
 
       <View style={styles.headerRow}>
