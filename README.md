@@ -270,7 +270,7 @@ Salve DB ships with a companion **Studio** — a local, live-connected UI (Prism
 From the repo root:
 
 ```bash
-npm run db:studio
+npx salve-db-studio
 ```
 
 This starts the Studio server ([`packages/salve-db-studio`](packages/salve-db-studio)) — an Express + WebSocket relay on **port 7377** serving a React UI — and opens it in your browser.
