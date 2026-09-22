@@ -63,7 +63,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "@babel/preset-react": "^7.29.7",
+    "@babel/preset-react": "^8.0.1",
     "@jamesacarr/eslint-formatter-github-actions": "^0.2.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
